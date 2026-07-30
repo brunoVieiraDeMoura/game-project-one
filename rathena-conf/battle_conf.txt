@@ -1,0 +1,17 @@
+// game-project — override de conf/battle/*.conf
+//
+// Só o que este projeto muda; o resto continua sendo o padrão do rAthena.
+
+// ---- monstros -------------------------------------------------------------
+// Nome do mob vem com HP e nível (1 = HP atual/máx, 4 = nível → 5 = os dois).
+// É assim que o cliente fica sabendo a vida do monstro: com show_mob_info
+// desligado o rAthena NÃO manda ZC.NOTIFY_MONSTER_HP, e a barra do alvo ficava
+// sempre vazia.
+show_mob_info: 5
+
+// Respawn quase imediato (100 = o tempo normal do mob_db, em %). Campo de
+// teste repõe o monstro assim que ele morre — esperar o timer do mapa oficial
+// só atrapalha quem está testando combate.
+mob_spawn_delay: 1
+plant_spawn_delay: 1
+boss_spawn_delay: 1

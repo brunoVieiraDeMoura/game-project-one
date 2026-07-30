@@ -1,0 +1,178 @@
+//===== game-project ==========================================
+//= NPC de desenvolvimento — "Mestre do Teste"
+//===========================================================
+//= Deixa o personagem no maximo instantaneamente, na classe
+//= escolhida, para testar habilidades sem precisar evoluir.
+//=
+//= Nao precisa saber o level maximo de cada classe: o
+//= @blvl/@jlvl do rAthena ja limita ao teto do job
+//= (src/map/atcommand.cpp:1673), entao mandamos 999 e ele
+//= corta no maximo certo, concedendo os pontos de status e
+//= de trait corretos no caminho.
+//=
+//= O comando de script atcommand() roda com privilegio de GM
+//= independente do grupo do jogador.
+//===========================================================
+
+prt_fild08,170,373,4	script	Mestre do Teste#idlenarok	4_M_ALCHE_C,{
+	mes "[Mestre do Teste]";
+	mes "NPC de desenvolvimento.";
+	mes "Escolho uma classe e te deixo no maximo na hora.";
+	next;
+
+	switch (select(
+		"Classe de 3a (base 200 / job 70)",
+		"Classe de 4a (base 275)",
+		"So maximizar a classe que eu ja sou",
+		"Resetar para Novico nivel 1",
+		"Cancelar")) {
+
+	case 1:
+		.@job = callsub(S_Pick3rd);
+		if (.@job == -1) close;
+		callsub(S_MaxOut, .@job);
+		close;
+
+	case 2:
+		.@job = callsub(S_Pick4th);
+		if (.@job == -1) close;
+		callsub(S_MaxOut, .@job);
+		close;
+
+	case 3:
+		callsub(S_MaxOut, Class);
+		close;
+
+	case 4:
+		jobchange JOB_NOVICE;
+		resetlvl 1;
+		mes "[Mestre do Teste]";
+		mes "Pronto, do zero de novo.";
+		close;
+
+	case 5:
+		close;
+	}
+
+S_Pick3rd:
+	switch (select(
+		"Rune Knight", "Royal Guard", "Ranger", "Warlock",
+		"Sorcerer", "Arch Bishop", "Guillotine Cross",
+		"Shadow Chaser", "Mechanic", "Genetic", "Sura",
+		"Minstrel", "Wanderer", "Voltar")) {
+	case 1:  return JOB_RUNE_KNIGHT;
+	case 2:  return JOB_ROYAL_GUARD;
+	case 3:  return JOB_RANGER;
+	case 4:  return JOB_WARLOCK;
+	case 5:  return JOB_SORCERER;
+	case 6:  return JOB_ARCH_BISHOP;
+	case 7:  return JOB_GUILLOTINE_CROSS;
+	case 8:  return JOB_SHADOW_CHASER;
+	case 9:  return JOB_MECHANIC;
+	case 10: return JOB_GENETIC;
+	case 11: return JOB_SURA;
+	case 12: return JOB_MINSTREL;
+	case 13: return JOB_WANDERER;
+	case 14: return -1;
+	}
+
+S_Pick4th:
+	switch (select(
+		"Dragon Knight", "Imperial Guard", "Windhawk", "Arch Mage",
+		"Elemental Master", "Cardinal", "Shadow Cross", "Abyss Chaser",
+		"Meister", "Biolo", "Inquisitor", "Troubadour", "Trouvere",
+		"Sky Emperor", "Night Watch", "Hyper Novice", "Voltar")) {
+	case 1:  return JOB_DRAGON_KNIGHT;
+	case 2:  return JOB_IMPERIAL_GUARD;
+	case 3:  return JOB_WINDHAWK;
+	case 4:  return JOB_ARCH_MAGE;
+	case 5:  return JOB_ELEMENTAL_MASTER;
+	case 6:  return JOB_CARDINAL;
+	case 7:  return JOB_SHADOW_CROSS;
+	case 8:  return JOB_ABYSS_CHASER;
+	case 9:  return JOB_MEISTER;
+	case 10: return JOB_BIOLO;
+	case 11: return JOB_INQUISITOR;
+	case 12: return JOB_TROUBADOUR;
+	case 13: return JOB_TROUVERE;
+	case 14: return JOB_SKY_EMPEROR;
+	case 15: return JOB_NIGHT_WATCH;
+	case 16: return JOB_HYPER_NOVICE;
+	case 17: return -1;
+	}
+
+// getarg(0) = id da classe alvo. Troca de classe primeiro, porque o teto de
+// level depende do job atual.
+S_MaxOut:
+	.@job = getarg(0);
+	if (.@job != Class) {
+		jobchange .@job;
+	}
+	atcommand "@blvl 999";
+	atcommand "@jlvl 999";
+	atcommand "@allskill";
+	atcommand "@allstats";
+	percentheal 100, 100;
+
+	mes "[Mestre do Teste]";
+	mes "Pronto.";
+	mes "Classe: ^0000FF" + jobname(Class) + "^000000";
+	mes "Base ^0000FF" + BaseLevel + "^000000 / Job ^0000FF" + JobLevel + "^000000";
+	mes "Todas as habilidades e status no maximo.";
+	return;
+
+// Marca no log do map-server que este arquivo carregou, para dar para
+// conferir sem entrar no jogo.
+OnInit:
+	debugmes "[game-project] devmenu.txt carregado (Mestre do Teste)";
+	end;
+}
+
+// Copia em Prontera, para nao depender de estar no campo de Poring.
+prontera,155,181,4	duplicate(Mestre do Teste#idlenarok)	Mestre do Teste#prt	4_M_ALCHE_C
+
+//===========================================================
+//= @xp <base%> <job%> — põe a experiência numa fração do
+//= nível, para conferir as barras da skillbar sem farmar.
+//=
+//= O rAthena não tem atcommand que ESCREVA experiência: o
+//= @exp só mostra (atcommand.cpp, ACMD_FUNC(exp)). Então vai
+//= por script, onde BaseExp/JobExp são graváveis e
+//= NextBaseExp/NextJobExp dizem quanto falta para o próximo
+//= nível (doc/script_commands.txt:601).
+//=
+//= A conta é `Next / 100 * pct`, nessa ordem de propósito:
+//= no nível alto Next chega a 99.999.999 e multiplicar antes
+//= de dividir estoura a faixa.
+//===========================================================
+-	script	xpcmd#game-project	-1,{
+OnInit:
+	bindatcmd "xp", strnpcinfo(3) + "::OnAtcommand", 60, 60;
+	debugmes "[game-project] @xp registrado (devmenu.txt)";
+	end;
+
+OnAtcommand:
+	if (.@atcmd_numparameters < 1) {
+		dispbottom "Uso: @xp <base%> [job%] — ex.: @xp 50 30";
+		end;
+	}
+	.@b = atoi(.@atcmd_parameters$[0]);
+	.@j = (.@atcmd_numparameters > 1) ? atoi(.@atcmd_parameters$[1]) : .@b;
+	if (.@b < 0) .@b = 0;
+	if (.@b > 99) .@b = 99;   // 100% subiria de nível e zeraria a barra
+	if (.@j < 0) .@j = 0;
+	if (.@j > 99) .@j = 99;
+
+	if (NextBaseExp > 0) {
+		set BaseExp, NextBaseExp / 100 * .@b;
+	} else {
+		dispbottom "Nivel de base no maximo: nao ha proximo nivel para medir.";
+	}
+	if (NextJobExp > 0) {
+		set JobExp, NextJobExp / 100 * .@j;
+	} else {
+		dispbottom "Nivel de classe no maximo: nao ha proximo nivel para medir.";
+	}
+	dispbottom "XP base " + .@b + "% / classe " + .@j + "%.";
+	end;
+}

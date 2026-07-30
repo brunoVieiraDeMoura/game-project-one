@@ -1,0 +1,29 @@
+1 - movimentação
+
+2 - atack base (relativos ao atack)
+
+
+
+3 - skills (todos comportamentos [single,aoe etc])
+4 - atack do monstro (todos comportamentos [skill,atack etc..])
+5 - drop em geral [mostrar na tela] (refresh do drop no ivintário em tempo real)
+6 - block colision do mapa
+7- barra de skill = ragnarok (bloquear comandos f1-f12[habilidades em tile mode f1-f12~os mesmos atalhos do ragnarok])
+8- checar ivintário e seus comportamentos [drop,equipar itens para slot de equipamentos etc.. ] (botão para organizar itens por categoria[ex: dentro de consumiveis, organizar e ordenar poções, depois consumiveis, depois itens para captura])
+
+9- todas as abas que abrir invintory , status, hab, mapas, quests, friends, config
+[devem ter drag and drop], para arrastar dentro da área do canva.
+
+10- atributos e equipamentos (double click para desequipar algo, drag and drop para arrastar)
+ao equipar algum item, mostrar 
+
+11- skills, [descrição , separar elas por classes em tabs, ex: noviço, mago, wizard, high wizzard, warlock e suas respectivas skills da classe]
+
+
+
+
+
+
+
+
+Tooltip com descrição para tudo [skill, itens, equipamentos etc..]

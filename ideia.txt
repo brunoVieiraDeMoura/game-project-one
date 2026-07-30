@@ -1,0 +1,184 @@
+IDEIA DO PROJETO — game-project
+=================================
+(escrito em 2026-07-27, sintetizado do CLAUDE.md, roadmap, memórias de
+sessão e do código atual — reflete a visão do Bruno pra esse projeto)
+
+
+O QUE É
+-------
+Migração completa de um servidor privado de Ragnarok Online (rAthena, C++)
+pra uma engine própria, web, em TypeScript. Não é um clone visual — é uma
+RECONSTRUÇÃO: a lógica de jogo (fórmulas de dano, stats, drops, skills,
+movimento) é portada com fidelidade ao C++ original, mas os visuais são
+recriados do zero (assets 3D low-poly modernos, não sprites 2D do cliente
+original) e o cliente roda no navegador (Three.js/React Three Fiber), sem
+instalar nada.
+
+Documento mestre de requisitos: soul.txt (fidelidade da lógica de jogo —
+toda fórmula incerta é marcada `needsReview: true`/`UNCLEAR-FORMULA` e
+perguntada, nunca adivinhada).
+
+
+POR QUE
+-------
+- rAthena é C++ antigo, difícil de estender/hospedar, cliente pesado
+  (instalação, patches, .grf).
+- Web = zero-install, roda em qualquer navegador, mais fácil de atrair
+  gente pra testar/jogar.
+- Ter o servidor + o admin + o conteúdo (29 mil itens, 175 classes, 1635
+  skills, 2675 monstros, 24 mil NPCs — tudo migrado do rAthena real) dá
+  uma base de conteúdo gigante pronta, só falta a camada de jogo em cima.
+
+
+ARQUITETURA (monorepo pnpm + turborepo)
+----------------------------------------
+apps/game       Vite + React Three Fiber + Rapier (física) + Zustand —
+                cliente 3D do jogo (porta 3001). Editor de mapas embutido
+                aqui (`/editor`), preview jogável (`/play`).
+apps/admin      Next.js + Tailwind — dashboard de administração de TODO
+                o conteúdo do jogo (porta 3000): itens, classes, skills,
+                monstros, npcs, balanceamento, usuários, config global,
+                editor do game (física/câmera/escala), editor de mapas
+                (embute o do game via iframe).
+apps/api        Fastify + zod — REST usada pelo admin e pelo game (porta
+                4000). Única camada que fala com o banco.
+apps/gateway    Socket.IO ↔ TCP rAthena — ponte binária pro servidor
+                original (ainda NÃO ligada — reservado pra multiplayer
+                real / eventualmente conectar num rAthena de verdade).
+packages/game-data     schemas zod (fonte da verdade dos tipos): Item,
+                       JobClass, Skill, Monster, Npc, Status, Balancing,
+                       ServerConfig.
+packages/engine-core   lógica de jogo PURA (sem render): fórmulas de dano/
+                       stats/reduções extraídas linha a linha do
+                       battle.cpp/status.cpp do rAthena original, com
+                       testes de paridade contra valores calculados à mão
+                       do C; MovementController (grid clássico RO ou
+                       livre WASD, trocável em runtime).
+packages/map-format    schema GameMap — fonte de verdade de como um mapa
+                       é representado (heightmap, colisão, superfície,
+                       props, spawns, triggers, rampas, iluminação).
+tools/legacy-migration parsers OFFLINE que leem os arquivos originais do
+                       rAthena (db/re/*.yml, npc/*.txt, map_cache.dat) e
+                       geram JSON migrado — roda 1x, não é runtime.
+rathena/        código-fonte original do rAthena, SOMENTE LEITURA — é a
+                referência autoritativa pra qualquer fórmula/comportamento.
+
+
+BANCO
+-----
+Supabase hosted (Postgres). API escolhe entre repositório Supabase ou
+JSON local pela presença das envs — mesma interface, então trocar de
+backend não muda rota nem UI. Configs "singleton" (balancing,
+server_config) ficam numa linha só (id=1) em jsonb, com hot-reload de
+cache curto (~5s) — dá pra reeditar taxas/física sem reiniciar nada.
+
+
+CONTEÚDO MIGRADO (fidelidade ao rAthena renewal)
+--------------------------------------------------
+Tudo já rodou pelos parsers e está seedado no banco, editável no admin:
+- 29.356 itens (item_db, scripts convertidos em efeitos tipados)
+- 175 classes (job_stats + árvore de skills)
+- 1.635 skills (skill_db — fórmulas de dano ainda em revisão, ver abaixo)
+- 1.019 status (status.yml, catálogo pra dropdown em item/skill)
+- 2.675 monstros + 13.339 drops (mob_db + scripts_monsters.conf)
+- 24.133 NPCs (diálogos convertidos, shops, warps — scripts_main.conf)
+- 8 mapas legados (heightmap/colisão de map_cache.dat)
+
+Fórmulas de status derivado (HIT/FLEE/ATK/DEF/crit/HP/SP etc.) já estão
+extraídas fielmente do C com testes de paridade. Fórmulas de DANO DE SKILL
+específicas (que vivem espalhadas em battle.cpp/skill.cpp, não no YAML)
+ainda estão marcadas `needsReview` — é trabalho de uma fase de
+balanceamento dedicada, não deve ser adivinhado.
+
+
+O JOGO EM SI (cliente 3D)
+--------------------------
+- Personagem com specs REAIS vinculadas ao admin (ex.: Knight 3D usando
+  as stats/skills/status do Swordman migrado, não valores fake).
+- Dois modos de movimento trocáveis: clique-pra-andar em grid (estilo RO
+  clássico) ou WASD livre — o `MovementController` da engine-core decide,
+  configurável por servidor ou por personagem.
+- Combate estilo RO: clicar no alvo aproxima e ataca automático no ritmo
+  do ASPD (Basic Attack é um TOGGLE — ativa/desativa, não é automático
+  por padrão); skills em hotkey com cooldown; HP/dano flutuante/anéis de
+  alvo no chão.
+- Assets 3D low-poly (KayKit — personagens, monstros esqueleto, natureza,
+  hexágonos medievais) com rig compartilhado entre personagens/monstros.
+- Câmera, velocidade, física de pulo/gravidade, escala do personagem,
+  distância de render/névoa — tudo editável ao vivo em `/game-editor`
+  (não hardcoded no cliente).
+
+
+EDITOR DE MAPAS 3D HEXAGONAL (o maior pedaço construído até agora)
+---------------------------------------------------------------------
+Mundo em grid HEXAGONAL (não quadrado) — tiles KayKit Medieval Hexagon,
+pointy-top, todos do MESMO tamanho físico nativo (por isso terreno,
+estrada, rio, costa e rampa encaixam exatos uns nos outros sem gap nem
+overlap). Editor em `apps/game/src/editor` (`/editor`), embutido no admin
+via iframe autenticado.
+
+Geração procedural (o núcleo do trabalho recente):
+- Relevo: colinas por ruído (fbm), lagos com praia automática na margem.
+- Rios e estradas: caminhos serpenteantes conectados (rede MST entre nós),
+  virando peças de tile REAIS (reta/curva/T/cruz/ponta) escolhidas pela
+  conectividade dos vizinhos — a topologia foi extraída amostrando o
+  atlas de textura dos modelos (não tem dado pronto pra isso, foi
+  reverse-engineering visual).
+- Rampas: sobem/descem exatamente 1 nível, orientadas automaticamente;
+  estrada sobre morro vira degrau com rampa em vez de parede seca.
+- Pontes de verdade onde estrada cruza rio (prop 3D real, não textura).
+- Vegetação/construções/montanhas: geração por categoria tipo "pincel
+  procedural" — densidade por slider, cada asset individual liga/desliga,
+  nunca empilha em cima de outro asset nem de estrada/rio/construção.
+- Colisão física por categoria (árvore/pedra/montanha/construção colidem;
+  grama/arbusto/rampa/estrada/ponte não; água bloqueia exceto vau/ponte).
+- "Solda" visual dos tiles: o chão hexagonal não mostra a costura entre
+  blocos — parece terreno contínuo, não um tabuleiro de hexágonos.
+- Escala do mundo (`hexScale`) e do personagem (`charScale`) são diais
+  independentes em `/game-editor` — dá pra fazer o mapa "parecer maior"
+  sem mexer na proporção do personagem.
+- Iluminação (sol/ambiente) ajustada no editor é salva no mapa e usada
+  de verdade no `/play` (bate visualmente com o que foi desenhado).
+- Ferramentas de edição: pincéis de terreno, paleta de props com
+  categorias, prefabs (carimbar grupos), gatilhos de área (warp/dano/
+  cura/save), rotas de patrulha pra NPC, medição, desfazer/refazer,
+  seleção múltipla, mover por arrasto OU por setinha (1 hex por vez,
+  relativo à câmera).
+
+
+DECISÕES TÉCNICAS QUE IMPORTAM
+---------------------------------
+- Scripts do rAthena NUNCA viram string livre no schema novo: efeito
+  reconhecido → tipo específico; resto → `unmappedEffects[]` flagged pra
+  revisão manual (nunca descartado, nunca adivinhado).
+- Fórmula incerta → `needsReview: true` + pergunta ao Bruno, nunca chute.
+- Divisão inteira do C replicada com `Math.trunc` (inclusive imprecisão
+  de double onde o C original tinha — fidelidade de verdade, não só
+  "parecido").
+- Todo módulo do admin segue o mesmo padrão: tabela paginada + busca +
+  form completo, auth por Bearer token + `group_level >= 10` em mutação,
+  toda mutação audita em log.
+- `rathena/` (código original) é só leitura — nunca editado, é a régua.
+
+
+ESTADO ATUAL (2026-07-27)
+----------------------------
+Roadmap original (Fases 1-9: banco, classes, skills, monstros, npcs,
+balanceamento, config global, usuários, editor de mapas) — COMPLETO.
+
+Fase seguinte ("mundo 3D jogável", pós-roadmap) em andamento: fundação 3D,
+movimento duplo, combate básico funcionando, personagem vinculado às
+specs reais do Swordman — falta ainda criação de conta/personagem de
+verdade (hoje é um Knight fixo de demonstração) e o pente-fino do editor
+de mapas procedural (que é onde a maior parte do trabalho recente foi).
+
+
+PRÓXIMOS PASSOS NATURAIS
+----------------------------
+- Sistema de conta/personagem de verdade no cliente (hoje é demo fixa).
+- Extrair as fórmulas de dano de skill específicas (fase de balanceamento
+  dedicada — hoje estão com needsReview).
+- Rios/costas com a mesma qualidade de topologia que as estradas já têm.
+- Ligar o gateway (Socket.IO ↔ TCP) se algum dia quiser conversar com um
+  rAthena de verdade rodando ao lado, ou multiplayer real entre
+  jogadores.

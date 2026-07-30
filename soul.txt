@@ -1,0 +1,80 @@
+PROMPT MESTRE — Migração rAthena → Engine Web Própria
+
+1. Contexto do projeto
+Estou migrando a base de um servidor privado rAthena (Ragnarok Online) para uma engine própria, web-based, totalmente editável, mantendo a lógica de jogo (regras, fórmulas, estruturas de dados) mas trocando:
+Linguagem/runtime: C++ (rAthena) → TypeScript/Node
+Cliente: cliente RO original → cliente 3D web (React Three Fiber)
+Sprites/mapas: serão recriados/substituídos (não precisa migrar assets visuais, só a lógica e os dados estruturados)
+Locomoção: deve suportar dois modos alternáveis — grid/tile (estilo RO clássico, movimento em blocos) e livre WASD (estilo WoW). Isso deve ser uma configuração de personagem/servidor, não uma escolha hardcoded.
+Duas aplicações separadas neste monorepo:
+Game client — onde eu jogo/assisto o jogo rodando (3D, R3F)
+Admin dashboard — painel administrativo separado para gerenciar todo o conteúdo do jogo
+
+
+
+
+
+
+2. Stack obrigatória
+Monorepo (pnpm workspaces ou turborepo)
+├── apps/
+│   ├── game/              → Vite + React Three Fiber + Three.js + Rapier + Zustand + zundo
+│   ├── admin/              → Next.js + Tailwind + shadcn/ui
+│   ├── gateway/             → Node.js — bridge TCP (rAthena) ↔ WebSocket (Socket.IO)
+│   └── api/                → Node.js/TypeScript — API REST/tRPC usada pelo admin e pelo game
+├── packages/
+│   ├── game-data/           → schemas e tipos compartilhados (itens, classes, skills, mobs, npcs, balancing)
+│   ├── engine-core/          → lógica de jogo migrada do rAthena (fórmulas de status, cálculo de dano, etc)
+│   └── map-format/           → schema JSON de mapa (heightmap, props, spawns, colisão)
+└── tools/
+    └── legacy-migration/     → scripts Node offline: parseiam bases originais do rAthena (item_db, mob_db, skill_db, job db, npc scripts, gnd/rsw/gat) e geram JSON no novo formato
+Banco de dados: manter compatível com o schema relacional do rAthena migrar para SUPABASE mantendo os mesmos relacionamentos 
+3. Requisito transversal: preservar a lógica de jogo
+Toda a lógica que já existe no rAthena (fórmulas de status, cálculo de dano, ATK/MATK, hard def/soft def, flee/hit, ASPD, cálculo de drop rate, condições de skill, requisitos de equipamento por classe, etc.) deve ser extraída e reescrita em TypeScript dentro de packages/engine-core, não reinventada. Onde a fórmula original não estiver clara, sinalize explicitamente em vez de assumir um valor — is aqui é a parte que mais precisa de fidelidade ao original.
+Ao final da extração, cada fórmula migrada deve ter um teste unitário comparando input/output esperado, para eu conseguir validar contra o comportamento do servidor original antes de trocar de fato.
+
+4. Sistema de locomoção dupla
+Implemente como uma abstração no engine-core: uma interface MovementController com duas implementações:
+GridMovementController — movimento por tile, snap a grid, direção em 8 posições (estilo RO)
+FreeMovementController — movimento livre baseado em input contínuo + física do Rapier (estilo WoW/WASD)
+O modo deve ser trocável em runtime (config de personagem ou flag de servidor), sem duplicar lógica de colisão — ambos os controllers devem consumir o mesmo heightfield collider do Rapier.
+
+5. Dashboard administrativo — módulos
+Todos os módulos abaixo seguem o mesmo padrão de UI: tabela paginada (limite configurável de itens por página), busca por nome (filtro), e CRUD completo (criar/editar/excluir) com formulário cobrindo todos os campos possíveis da entidade, não um subconjunto.
+Comece pela implementação completa do módulo Itens nesta primeira rodada (prova de conceito ponta a ponta: API + banco + tabela + form + validação). Para os demais módulos, gere o schema de dados completo + a rota de API + o esqueleto de tela, e documente no CLAUDE.md que a UI completa deles é uma fase seguinte.
+5.1 Itens
+Campos a extrair da base original (item_db) e replicar no novo schema: ID, nome interno (aegis name), nome de exibição, tipo (cura, consumível, etc, armadura, arma, carta, ovo de pet, munição, cash), preço de compra/venda, peso, ATK, MATK, defesa, alcance, slots, restrição de classe (bitmask → converter para array legível), restrição de tipo de personagem (normal/baby/transcendente), restrição de gênero, local de equipamento, nível de arma, nível mínimo requerido, refinável (sim/não), sprite de visualização, script de efeito ao usar/equipar/desequipar (represente como uma estrutura de "efeitos" tipada, não como string de script livre, já que a linguagem de script do rAthena não existe no novo motor).
+5.2 Classes
+Campos: ID da classe, nome, atributos base e curva de crescimento por nível, HP/SP base e fórmula de crescimento, peso máximo carregável, armas/armaduras permitidas (converter bitmask em array), lista de skills disponíveis (com nível máximo por skill), modificadores de ASPD por arma.
+5.3 Skills
+Campos: ID, nome, nível máximo, tipo (dano/suporte/em área/auto-buff), tipo de acerto, herança de elemento, alcance, número de hits, custo de SP por nível, tempo de cast (variável e fixo), cooldown, cancelável ou não, requisitos (item consumido, equipamento, estado do personagem), alvo (inimigo/aliado/chão/self), fórmula de dano associada, efeitos de status aplicados (buff/debuff, com duração e magnitude).
+Para associar um efeito existente a uma skill, use um seletor (dropdown) que lista os efeitos já cadastrados no sistema de status/buffs, não campo de texto livre.
+5.4 Monstros
+Campos: ID, nome, nível, HP/SP, exp base e exp de job, atributos base (str/agi/vit/int/dex/luk), alcance de ataque, defesa/defesa mágica, flee/hit, velocidade de movimento, modo de IA (agressivo/passivo/perseguição), raça, elemento, tamanho, tabela de drop (item + taxa, múltiplas entradas), flag de MVP, lista de skills usadas pelo monstro (com condição de uso), dados de spawn (mapa, quantidade, tempo de respawn).
+5.5 NPCs
+Campos: nome, sprite, mapa e coordenadas, árvore de diálogo (estruturada, não script livre), gatilhos de quest, recompensas de quest, integração com sistema de loja (lista de itens vendidos), sistema de warps, sistema de recompensa tipo "Eden" (se aplicável ao seu design).
+5.6 Balanceamento
+Aqui o requisito principal é a granularidade de edição: os atributos base (STR, AGI, VIT, INT, DEX, LUK) afetam múltiplos sub-atributos derivados (ex: STR afeta ATK e peso carregável; VIT afeta HP e defesa; AGI afeta ASPD e flee). A tela deve permitir editar cada sub-atributo derivado individualmente (ex: alterar só o multiplicador de ATK vindo de STR, sem mexer no multiplicador de peso). Represente isso como uma tabela de "regras de derivação" editável (atributo base → atributo derivado → fórmula/multiplicador), não como constantes fixas no código.
+Inclua também os campos centrais de combate: hard def, soft def, mdef, fórmula de flee/hit, fórmula de crítico.
+5.7 Gerenciador global
+Painel de configurações gerais do servidor: multiplicadores globais de EXP (base/job) e drop rate, aplicáveis geral ou por categoria (ex: +20% exp geral, ou +50% drop só de cartas). Deve refletir em tempo real no engine-core sem precisar reiniciar o servidor de jogo (config lida de banco/cache, não hardcoded).
+5.8 Usuários
+Tabela paginada de contas criadas, busca por nome, e ação de banir (com motivo e duração — permanente ou temporária). Considere também: histórico de login, personagens vinculados à conta, e log de ações administrativas (quem baniu, quando, por quê) — auditoria é importante num painel admin.
+
+6. Cliente do jogo — "path para eu assistir"
+A apps/game deve subir localmente com um modo "spectator/observer": uma rota onde eu consigo abrir o navegador e ver o mundo renderizado em tempo real (câmera livre, sem necessariamente estar logado como jogador), útil pra eu acompanhar o resultado de mudanças no editor de mapas e no balanceamento sem precisar simular gameplay completo a cada teste.
+
+7. O que eu espero como entregável desta primeira rodada
+Estrutura de monorepo criada e rodando (apps/game, apps/admin, apps/api, apps/gateway, packages/*)
+CLAUDE.md na raiz documentando: decisões de banco de dados, convenções de código, comandos de desenvolvimento, e o plano de fases restante
+Skills criadas em .claude/skills/ para: schema de mapa, convenções do engine-core, formato de dados migrados do rAthena
+Módulo Itens completo e funcional (API + banco + tabela paginada com busca + CRUD com todos os campos)
+Schemas de dados completos (TypeScript types) para Classes, Skills, Monstros, NPCs e Balanceamento — mesmo que a UI deles ainda não exista
+Script inicial de migração em tools/legacy-migration capaz de ler pelo menos o item_db original e popular o novo schema (ponto de partida pra estender aos outros depois)
+MovementController implementado com as duas variantes (grid e livre) e um teste simples mostrando a troca de modo funcionando
+Um plano escrito (pode ser no próprio CLAUDE.md ou em docs/roadmap.md) com a ordem sugerida das próximas fases (Classes → Skills → Monstros → NPCs → Balanceamento → Gerenciador Global → Usuários → Editor de mapas)
+
+8. Instruções de execução
+Não tente gerar tudo em uma única resposta. Trabalhe em blocos, mostre progresso, e pare para eu revisar antes de avançar para o próximo bloco se algo parecer arriscado (ex: decisão de schema de banco).
+Onde precisar de uma fórmula ou regra do rAthena que não está clara pelo contexto, pergunte em vez de assumir.
+Priorize: (1) estrutura do monorepo rodando, (2) módulo Itens ponta a ponta, (3) schemas dos demais módulos, (4) migração legado do item_db, (5) movement controller, (6) plano de fases documentado.

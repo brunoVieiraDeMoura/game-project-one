@@ -1,0 +1,7 @@
+com o sentido de cada uma delas, procure na internet heuristicas para essas skills, crie ou adapte-a e adicione as minhas skills
+
+
+skill-map-format — descreve o schema JSON do seu mapa (heightmap, props, spawns, colisão) pra Claude nunca inventar campo errado
+skill-legacy-import — como rodar/estender o parser gnd/rsw/gat
+skill-r3f-conventions — padrões do seu projeto pra componentes R3F (como registrar um novo prop, como adicionar collider)
+skill-network-protocol — formato dos pacotes que trafegam entre gateway e rAthena, pra Claude não quebrar o protocolo binário

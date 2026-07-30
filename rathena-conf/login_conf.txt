@@ -1,0 +1,21 @@
+// game-project — override de conf/login_athena.conf
+
+// Portas proprias (6901/6122/5122). O mesmo WSL pode ter o idle-narok de pe
+// nas portas padrao (6900/6121/5121); com portas separadas os dois convivem e
+// nenhum precisa ser derrubado para testar o outro.
+login_port: 6901
+
+// Permite criar conta direto pela tela de login do cliente, usando o
+// sufixo _M (masculino) / _F (feminino) no nome de usuario.
+new_account: yes
+
+// Com PACKETVER >= 20181114 o rAthena usa 6 como minimo para nome de conta
+// e senha (src/login/login.cpp:759-761). Com isso, "teste_M" falha com
+// "Incorrect Password" em vez de criar a conta. Baixado para 4 em dev.
+acc_name_min_length: 4
+password_min_length: 4
+
+// Protecao anti-flood de registro. O default (1 registro por 10s) atrapalha
+// durante o desenvolvimento; afrouxado aqui.
+allowed_regs: 10
+time_allowed: 10

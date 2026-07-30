@@ -1,0 +1,37 @@
+{
+  "name": "@ragnarok/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "seed:items": "tsx src/scripts/seed-items.ts",
+    "create:admin": "tsx src/scripts/create-admin.ts",
+    "seed:jobs": "tsx src/scripts/seed-jobs.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "seed:statuses": "tsx src/scripts/seed-statuses.ts",
+    "seed:skills": "tsx src/scripts/seed-skills.ts",
+    "seed:monsters": "tsx src/scripts/seed-monsters.ts",
+    "seed:npcs": "tsx src/scripts/seed-npcs.ts",
+    "seed:maps": "tsx src/scripts/seed-maps.ts",
+    "link:legacy-map": "tsx src/scripts/link-legacy-map.ts"
+  },
+  "dependencies": {
+    "@fastify/compress": "^9.1.0",
+    "@fastify/cors": "^11.0.0",
+    "@ragnarok/game-data": "workspace:*",
+    "@ragnarok/map-format": "workspace:*",
+    "@supabase/supabase-js": "^2.110.7",
+    "fastify": "^5.3.0",
+    "mysql2": "^3.23.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}

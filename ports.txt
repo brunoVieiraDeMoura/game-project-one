@@ -1,0 +1,18 @@
+/clear
+/review
+/resume
+/context
+adicionar o mcp do que tiver para adicionar
+
+lembrar de usar o nextlates com a ia integrada
+
+fazer um tdd de teste para todas as áreas do código, para evitar bug/dup/gitch
+enquanto estiver substituindo a lógica do funcionamento do ragnarok para o código atual
+
+
+  pnpm --filter @ragnarok/api start    # :4000
+  pnpm --filter @ragnarok/admin dev    # :3000 → /items
+  pnpm --filter @ragnarok/game dev
+
+
+

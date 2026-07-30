@@ -1,0 +1,20 @@
+{
+  "name": "@ragnarok/ro-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "Codec do protocolo binario do rAthena (structs, tabelas de versao e enquadramento TCP), portado do roBrowserLegacy para Node.",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "echo \"(ro-protocol e JS puro; os tipos vivem em src/index.d.ts)\""
+  }
+}

@@ -1,0 +1,19 @@
+Runtime Error
+
+
+
+Jest worker encountered 2 child process exceptions, exceeding retry limit
+Call Stack
+5
+
+Hide 5 ignore-listed frame(s)
+ChildProcessWorker.initialize
+..\..\node_modules\.pnpm\next@16.2.10_react-dom@19.2.7_react@19.2.7__react@19.2.7\node_modules\next\dist\compiled\jest-worker\index.js (1:11580)
+ChildProcessWorker._onExit
+..\..\node_modules\.pnpm\next@16.2.10_react-dom@19.2.7_react@19.2.7__react@19.2.7\node_modules\next\dist\compiled\jest-worker\index.js (1:12545)
+ChildProcess.emit
+node:events (508:28)
+ChildProcess._handle.onexit
+node:internal/child_process (294:12)
+Process.callbackTrampoline
+node:internal/async_hooks (130:17)

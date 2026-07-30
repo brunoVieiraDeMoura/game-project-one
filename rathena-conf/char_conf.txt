@@ -1,0 +1,21 @@
+// game-project — override de conf/char_athena.conf
+// login_ip: onde o char-server acha o login-server (mesmo WSL).
+// char_ip: endereco que o CLIENTE recebe para conectar no char-server.
+//          127.0.0.1 funciona porque o WSL2 espelha as portas no localhost
+//          do Windows, e o browser roda no Windows.
+login_ip: 127.0.0.1
+char_ip: 127.0.0.1
+
+// Portas proprias — ver rathena-conf/login_conf.txt.
+login_port: 6901
+char_port: 6122
+
+// Personagem novo nasce no campo de Poring, nao no chao de treino da Ilha
+// Novice (iz_int*). E la que o mapa 3D de teste (novo_ms4yewiz) representa e
+// onde o "Mestre do Teste" (npc-idle/devmenu.txt) fica.
+start_point: prt_fild08,170,373
+start_zeny: 5000
+
+// PIN de 4 digitos na selecao de personagem. Nao faz sentido num idle e
+// atrapalha o login automatico — desligado.
+pincode_enabled: no

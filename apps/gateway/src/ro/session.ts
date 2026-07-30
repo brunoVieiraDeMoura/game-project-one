@@ -1,0 +1,1464 @@
+/**
+ * Uma sessao de jogo: login (6901) -> char (6122) -> map (5122).
+ *
+ * Sao tres conexoes TCP em sequencia, nao uma. Cada etapa entrega credencial
+ * para a proxima (AuthCode/AID vindos do login; GID e endereco do map vindos do
+ * char). A ordem e os dois pontos de "bytes crus" foram tirados do
+ * roBrowserLegacy (client/src/Engine/{Login,Char,Map}Engine.js) — sem eles o
+ * parser desanda ou o servidor derruba a conexao.
+ */
+import { EventEmitter } from "node:events";
+import { PACKET, PACKETVER, RoConnection, initProtocol, longToIP } from "@ragnarok/ro-protocol";
+import type {
+	CharSummary,
+	Cell,
+	ChatScope,
+	EntitySnapshot,
+	InventoryItem,
+	GroundItem,
+	NpcDialog,
+	PlayerSkill,
+	SessionStage,
+	SkillCast,
+	SkillCasting,
+	SkillGround,
+	StatusBlock,
+} from "../protocol.js";
+import { entityKindFromObjectType } from "./entity-kind.js";
+import { statName } from "./stat-names.js";
+
+export interface SessionOptions {
+	host: string;
+	loginPort: number;
+	packetver: number;
+	/** clienttype/langtype do CA.LOGIN; 12 e o que o roBrowser usa por padrao */
+	langType?: number;
+	/** version do CA.LOGIN */
+	clientVersion?: number;
+	debug?: boolean;
+	/**
+	 * O endereco que o char/map server devolve vem de dentro do pacote e pode ser
+	 * inalcancavel (0.0.0.0 quando o servidor escuta em tudo). Com isto ligado
+	 * usamos sempre `host` e so aproveitamos a porta — equivale ao
+	 * `forceUseAddress` do roBrowser.
+	 */
+	forceHost?: boolean;
+}
+
+interface PendingAuth {
+	resolve: () => void;
+	reject: (err: Error) => void;
+}
+
+/** quantas perguntas de nome saem por rodada e de quanto em quanto tempo */
+const NAME_QUERIES_PER_TICK = 4;
+const NAME_QUERY_INTERVAL_MS = 120;
+/** tentativas por entidade e espera antes de repetir (ver `queryName`) */
+const NAME_QUERY_TRIES = 2;
+const NAME_RETRY_DELAY_MS = 1500;
+
+export declare interface RoSession {
+	on(event: "chars", listener: (chars: CharSummary[], slots: number) => void): this;
+	on(
+		event: "map-enter",
+		listener: (info: { mapName: string; x: number; y: number; dir: number; gid: number }) => void,
+	): this;
+	on(event: "entity-spawn", listener: (entity: EntitySnapshot) => void): this;
+	on(
+		event: "entity-move",
+		listener: (payload: { gid: number; from: Cell; to: Cell; speed: number }) => void,
+	): this;
+	on(event: "entity-stop", listener: (payload: { gid: number; x: number; y: number }) => void): this;
+	on(event: "entity-vanish", listener: (payload: { gid: number; reason: number }) => void): this;
+	on(event: "entity-name", listener: (payload: { gid: number; name: string }) => void): this;
+	on(event: "entity-level", listener: (payload: { gid: number; level: number }) => void): this;
+	on(
+		event: "entity-action",
+		listener: (payload: {
+			gid: number;
+			targetGid: number;
+			damage: number;
+			count: number;
+			action: number;
+		}) => void,
+	): this;
+	on(event: "entity-hp", listener: (payload: { gid: number; hp: number; maxHp: number }) => void): this;
+	on(
+		event: "self-move",
+		listener: (payload: { from: Cell; to: Cell; startTime: number }) => void,
+	): this;
+	/** o servidor REPOSICIONOU o personagem (teleporte, empurrão, fixpos) */
+	on(event: "self-warp", listener: (payload: Cell) => void): this;
+	on(
+		event: "stat",
+		listener: (payload: { name: string; id: number; value: number; bonus?: number }) => void,
+	): this;
+	on(event: "status", listener: (payload: StatusBlock) => void): this;
+	on(event: "inventory", listener: (payload: InventoryItem[]) => void): this;
+	on(event: "item-add", listener: (payload: InventoryItem) => void): this;
+	on(event: "item-remove", listener: (payload: { index: number; amount: number }) => void): this;
+	on(event: "skills", listener: (payload: PlayerSkill[]) => void): this;
+	on(event: "skill-cast", listener: (payload: SkillCast) => void): this;
+	on(event: "skill-casting", listener: (payload: SkillCasting) => void): this;
+	on(event: "skill-ground", listener: (payload: SkillGround) => void): this;
+	on(event: "skill-ground-gone", listener: (payload: { gid: number }) => void): this;
+	on(event: "skill-cooldown", listener: (payload: { skillId: number; durationMs: number }) => void): this;
+	on(event: "npc-dialog", listener: (payload: NpcDialog) => void): this;
+	on(event: "ground-item", listener: (payload: GroundItem) => void): this;
+	on(event: "ground-item-gone", listener: (payload: { gid: number }) => void): this;
+	on(event: "char-error", listener: (payload: { reason: string }) => void): this;
+	on(event: "chat", listener: (payload: { gid?: number; text: string; scope: ChatScope }) => void): this;
+	on(event: "closed", listener: (payload: { stage: SessionStage; reason: string }) => void): this;
+	on(event: "error", listener: (err: Error) => void): this;
+}
+
+export class RoSession extends EventEmitter {
+	private readonly options: Required<Pick<SessionOptions, "host" | "loginPort" | "packetver">> &
+		SessionOptions;
+
+	stage: SessionStage = "idle";
+	accountId = 0;
+	authCode = 0;
+	userLevel = 0;
+	sex = 0;
+	gid = 0;
+	chars: CharSummary[] = [];
+
+	/**
+	 * Último estado conhecido do personagem.
+	 *
+	 * O rAthena despeja HP, SP, peso, exp, inventário e a janela de status
+	 * INTEIRA logo depois do CZ.ENTER — bem antes de a cena 3D existir no
+	 * navegador. Sem guardar, o HUD abre zerado e só se corrige no próximo
+	 * pacote (que pode demorar minutos, porque só chega quando algo muda).
+	 */
+	private readonly stats = new Map<string, { id: number; value: number; bonus?: number }>();
+	private statusBlock: StatusBlock | null = null;
+	private inventory: InventoryItem[] = [];
+	private readonly skills = new Map<number, PlayerSkill>();
+	/**
+	 * Entidades já vistas neste mapa.
+	 *
+	 * O map-server anuncia os NPCs e mobs UMA VEZ, logo depois do
+	 * NOTIFY_ACTORINIT — quem não estava escutando naquele instante nunca mais
+	 * recebe (só quando a entidade se mexer). Como a cena 3D monta depois,
+	 * guardamos e reenviamos.
+	 */
+	private readonly entities = new Map<number, EntitySnapshot>();
+
+	private login: RoConnection | null = null;
+	private char: RoConnection | null = null;
+	private map: RoConnection | null = null;
+	private charServer: { ip: number; port: number } | null = null;
+	private pendingAuth: PendingAuth | null = null;
+
+	constructor(options: SessionOptions) {
+		super();
+		this.options = { langType: 12, clientVersion: 25, forceHost: true, ...options };
+		initProtocol(options.packetver);
+	}
+
+	/** Autentica e ja pede a lista de personagens (evento "chars"). */
+	async authenticate(username: string, password: string): Promise<void> {
+		if (this.stage !== "idle") {
+			throw new Error(`sessao ja em uso (stage=${this.stage})`);
+		}
+
+		this.stage = "login";
+		const conn = new RoConnection({
+			host: this.options.host,
+			port: this.options.loginPort,
+			label: "login",
+			debug: this.options.debug,
+		});
+		this.login = conn;
+
+		conn.on("error", (err) => this.emit("error", err));
+		conn.on("close", () => {
+			if (this.stage === "login") {
+				this.fail("login", "conexao com o login-server caiu");
+			}
+		});
+
+		const done = new Promise<void>((resolve, reject) => {
+			this.pendingAuth = { resolve, reject };
+		});
+
+		this.hookLoginPackets(conn);
+		await conn.connect();
+
+		const pkt = new PACKET.CA.LOGIN();
+		pkt.ID = username;
+		pkt.Passwd = password;
+		pkt.Version = this.options.clientVersion;
+		pkt.clienttype = this.options.langType;
+		conn.send(pkt);
+
+		// O login-server derruba conexao ociosa; o roBrowser manda este a cada 10s.
+		conn.startPing(() => conn.send(new PACKET.CA.CONNECT_INFO_CHANGED()));
+
+		return done;
+	}
+
+	private hookLoginPackets(conn: RoConnection): void {
+		const accept = (pkt: any) => {
+			this.accountId = pkt.AID;
+			this.authCode = pkt.AuthCode;
+			this.userLevel = pkt.userLevel;
+			this.sex = pkt.Sex;
+
+			const server = pkt.ServerList?.[0];
+			if (!server) {
+				this.fail("login", "login aceito mas nenhum char-server na lista");
+				return;
+			}
+
+			this.charServer = { ip: server.ip, port: server.port };
+			void this.connectChar().catch((err) => this.fail("login", String(err)));
+		};
+
+		conn.hook(PACKET.AC.ACCEPT_LOGIN, accept);
+		if (PACKET.AC.ACCEPT_LOGIN3) {
+			conn.hook(PACKET.AC.ACCEPT_LOGIN3, accept);
+		}
+
+		const refuse = (pkt: any) => {
+			this.fail("login", refuseReason(pkt.ErrorCode ?? pkt.errorCode), pkt.ErrorCode);
+		};
+		for (const name of [
+			"REFUSE_LOGIN",
+			"REFUSE_LOGIN_R2",
+			"REFUSE_LOGIN3",
+			"REFUSE_LOGIN_EX",
+		] as const) {
+			if (PACKET.AC[name]) {
+				conn.hook(PACKET.AC[name], refuse);
+			}
+		}
+	}
+
+	private async connectChar(): Promise<void> {
+		if (!this.charServer) {
+			throw new Error("sem char-server");
+		}
+
+		this.stage = "char";
+		const host = this.options.forceHost ? this.options.host : longToIP(this.charServer.ip);
+		const conn = new RoConnection({
+			host,
+			port: this.charServer.port,
+			label: "char",
+			debug: this.options.debug,
+		});
+		this.char = conn;
+
+		conn.on("error", (err) => this.emit("error", err));
+		conn.on("close", () => {
+			if (this.stage === "char") {
+				this.fail("char", "conexao com o char-server caiu");
+			}
+		});
+
+		this.hookCharPackets(conn);
+		await conn.connect();
+
+		// O char-server responde com 4 bytes CRUS de account id antes de qualquer
+		// pacote. Sem consumir, o parser leria o AID como opcode.
+		conn.readRaw((fp: any) => {
+			this.accountId = fp.readLong();
+		});
+
+		const pkt = new PACKET.CH.ENTER();
+		pkt.AID = this.accountId;
+		pkt.AuthCode = this.authCode;
+		pkt.userLevel = this.userLevel;
+		pkt.Sex = this.sex;
+		pkt.clientType = this.options.langType;
+		conn.send(pkt);
+
+		conn.startPing(() => conn.send(new PACKET.CZ.PING()));
+	}
+
+	private hookCharPackets(conn: RoConnection): void {
+		const onCharList = (pkt: any) => {
+			this.chars = (pkt.charInfo ?? []).map(toCharSummary);
+			const slots = pkt.TotalSlotNum ?? this.chars.length;
+
+			if (this.pendingAuth) {
+				this.pendingAuth.resolve();
+				this.pendingAuth = null;
+			}
+			this.emit("chars", this.chars, slots);
+		};
+
+		conn.hook(PACKET.HC.ACCEPT_ENTER_NEO_UNION, onCharList);
+		if (PACKET.HC.ACCEPT_ENTER_NEO_UNION_LIST) {
+			conn.hook(PACKET.HC.ACCEPT_ENTER_NEO_UNION_LIST, onCharList);
+		}
+
+		if (PACKET.HC.REFUSE_ENTER) {
+			conn.hook(PACKET.HC.REFUSE_ENTER, (pkt: any) => {
+				this.fail("char", `char-server recusou (codigo ${pkt.ErrorCode ?? "?"})`);
+			});
+		}
+
+		conn.hook(PACKET.HC.NOTIFY_ZONESVR, (pkt: any) => {
+			this.gid = pkt.GID;
+			void this.connectMap(pkt.addr, pkt.mapName).catch((err) => this.fail("char", String(err)));
+		});
+
+		if (PACKET.HC.NOTIFY_ZONESVR2) {
+			conn.hook(PACKET.HC.NOTIFY_ZONESVR2, (pkt: any) => {
+				this.gid = pkt.GID;
+				void this.connectMap(pkt.addr, pkt.mapName).catch((err) => this.fail("char", String(err)));
+			});
+		}
+
+		// O char-server NAO reenvia a lista inteira depois de criar (um segundo
+		// CH.ENTER e simplesmente ignorado) — quem traz o personagem novo e o
+		// proprio 0x6d, com o mesmo bloco de char da lista. Entao emendamos na
+		// lista local e reemitimos.
+		for (const name of ["ACCEPT_MAKECHAR_NEO_UNION", "ACCEPT_MAKECHAR"] as const) {
+			if (!PACKET.HC[name]) {
+				continue;
+			}
+			conn.hook(PACKET.HC[name], (pkt: any) => {
+				const info = pkt.charinfo ?? pkt.charInfo;
+				if (!info) {
+					return;
+				}
+				const created = toCharSummary(info, this.chars.length);
+				this.chars = [...this.chars.filter((c) => c.slot !== created.slot), created].sort(
+					(a, b) => a.slot - b.slot,
+				);
+				this.emit("chars", this.chars, this.chars.length);
+			});
+		}
+
+		for (const name of ["REFUSE_MAKECHAR", "REFUSE_MAKECHAR2"] as const) {
+			if (PACKET.HC[name]) {
+				conn.hook(PACKET.HC[name], (pkt: any) => {
+					this.emit("char-error", { reason: makeCharRefuseReason(pkt.ErrorCode ?? pkt.errorCode) });
+				});
+			}
+		}
+
+		for (const name of ["ACCEPT_DELETECHAR", "REFUSE_DELETECHAR"] as const) {
+			if (PACKET.HC[name]) {
+				conn.hook(PACKET.HC[name], () => this.emit("chars", this.chars, this.chars.length));
+			}
+		}
+	}
+
+	selectChar(slot: number): void {
+		if (!this.char) {
+			throw new Error("sem conexao com o char-server");
+		}
+		const pkt = new PACKET.CH.SELECT_CHAR();
+		pkt.CharNum = slot;
+		this.char.send(pkt);
+	}
+
+	createChar(params: { slot: number; name: string; hair: number; hairColor: number }): void {
+		if (!this.char) {
+			throw new Error("sem conexao com o char-server");
+		}
+
+		// Qual pacote vale e decidido pelo PACKETVER, nao por "o mais novo que
+		// existe": o char-server so aceita UM formato, o do #if com que foi
+		// compilado (rathena/src/common/packets.hpp:120-155). Mandar o 0xa39 num
+		// build 2013 faz o servidor derrubar a conexao sem dizer nada.
+		//   >= 20151001 -> 0xa39 (manda job e sexo)
+		//   >= 20120307 -> 0x970 (atributos e job vem do servidor)
+		//   senao       -> 0x67  (os 6 atributos vao no pacote)
+		const ver = PACKETVER.value;
+		const Make =
+			ver >= 20151001 && PACKET.CH.MAKE_CHAR3
+				? PACKET.CH.MAKE_CHAR3
+				: ver >= 20120307 && PACKET.CH.MAKE_CHAR2
+					? PACKET.CH.MAKE_CHAR2
+					: PACKET.CH.MAKE_CHAR;
+
+		const pkt = new Make();
+		pkt.name = params.name;
+		pkt.CharNum = params.slot;
+		pkt.head = params.hair;
+		pkt.headPal = params.hairColor;
+
+		if (Make === PACKET.CH.MAKE_CHAR) {
+			// 0x67 exige os atributos; 5 em cada da os 30 pontos do Novice.
+			pkt.Str = 5;
+			pkt.Agi = 5;
+			pkt.Vit = 5;
+			pkt.Int = 5;
+			pkt.Dex = 5;
+			pkt.Luk = 5;
+		}
+		if (Make === PACKET.CH.MAKE_CHAR3) {
+			pkt.Job = 0; // Novice
+			pkt.Sex = this.sex;
+		}
+
+		this.char.send(pkt);
+	}
+
+	deleteChar(gid: number, email: string): void {
+		if (!this.char) {
+			throw new Error("sem conexao com o char-server");
+		}
+		// Mesma regra do createChar: de 20040419 em diante o pacote e 0x1fb com
+		// chave de 50 bytes (packets.hpp:158-165); antes disso 0x68 com 40.
+		const Delete =
+			PACKETVER.value >= 20040419 && PACKET.CH.DELETE_CHAR2
+				? PACKET.CH.DELETE_CHAR2
+				: PACKET.CH.DELETE_CHAR;
+		const pkt = new Delete();
+		pkt.GID = gid;
+		pkt.key = email;
+		this.char.send(pkt);
+	}
+
+	private async connectMap(addr: { ip: number; port: number }, mapName: string): Promise<void> {
+		this.stage = "map";
+		const host = this.options.forceHost ? this.options.host : longToIP(addr.ip);
+		const conn = new RoConnection({
+			host,
+			port: addr.port,
+			label: "map",
+			debug: this.options.debug,
+		});
+		this.map = conn;
+
+		conn.on("error", (err) => this.emit("error", err));
+		conn.on("close", () => {
+			if (this.stage === "map") {
+				this.fail("map", "conexao com o map-server caiu");
+			}
+		});
+
+		this.hookMapPackets(conn, mapName);
+		await conn.connect();
+
+		// Ate o packetver 20070521 o map-server tambem prefixa o stream com um AID
+		// cru. Depois disso nao — ler a toa comeria o inicio de um pacote de verdade.
+		if (PACKETVER.value < 20070521) {
+			conn.readRaw((fp: any) => {
+				this.gid = fp.readLong();
+			});
+		}
+
+		const Enter = PACKETVER.value >= 20180307 && PACKET.CZ.ENTER2 ? PACKET.CZ.ENTER2 : PACKET.CZ.ENTER;
+		const pkt = new Enter();
+		pkt.AID = this.accountId;
+		pkt.GID = this.gid;
+		pkt.AuthCode = this.authCode;
+		// O build() do roBrowser le `ClientTime` (maiusculo) e o construtor cria
+		// `clientTime`; preenchemos os dois para nao mandar 0.
+		pkt.clientTime = Date.now();
+		pkt.ClientTime = pkt.clientTime;
+		pkt.Sex = this.sex;
+		conn.send(pkt);
+
+		const Ping = PACKETVER.value >= 20180307 && PACKET.CZ.REQUEST_TIME2 ? PACKET.CZ.REQUEST_TIME2 : PACKET.CZ.REQUEST_TIME;
+		conn.startPing(() => {
+			const ping = new Ping();
+			ping.clientTime = Date.now();
+			ping.ClientTime = ping.clientTime;
+			conn.send(ping);
+		});
+	}
+
+	private hookMapPackets(conn: RoConnection, mapNameFromChar: string): void {
+		let mapName = normalizeMapName(mapNameFromChar);
+
+		const onAcceptEnter = (pkt: any) => {
+			const [x, y, dir] = pkt.PosDir ?? [0, 0, 0];
+			this.emit("map-enter", { mapName, x, y, dir, gid: this.gid });
+		};
+		conn.hook(PACKET.ZC.ACCEPT_ENTER, onAcceptEnter);
+		for (const name of ["ACCEPT_ENTER2", "ACCEPT_ENTER3"] as const) {
+			if (PACKET.ZC[name]) {
+				conn.hook(PACKET.ZC[name], onAcceptEnter);
+			}
+		}
+
+		if (PACKET.ZC.NPCACK_MAPMOVE) {
+			conn.hook(PACKET.ZC.NPCACK_MAPMOVE, (pkt: any) => {
+				// mapa novo, mundo novo: o que estava em volta ficou para trás
+				this.entities.clear();
+				const destino = normalizeMapName(pkt.mapName);
+				const mesmoMapa = destino === mapName;
+				mapName = destino;
+				this.emit("map-enter", { mapName, x: pkt.xPos, y: pkt.yPos, dir: 0, gid: this.gid });
+				// `pc_setpos` manda este pacote TAMBÉM quando o destino é o mesmo
+				// mapa (pc.cpp:7118) — é o caso de `@jump`, de warp de NPC interno
+				// e da Asa de Borboleta. Sem reposicionar aqui, a cena continuava
+				// desenhando o personagem na célula velha: ele "não saía do
+				// lugar" e todo pedido de andar partia de onde ele não estava.
+				if (mesmoMapa) this.emit("self-warp", { x: pkt.xPos, y: pkt.yPos });
+			});
+		}
+
+		// Spawn: o rAthena tem uma geracao de pacote de spawn por epoca de cliente
+		// (STANDENTRY, NEWENTRY, ACTENTRY, MOVEENTRY + numeradas ate 11). Qual
+		// chega depende do PACKETVER, entao enganchamos TODAS as registradas e
+		// normalizamos — igual ao roBrowser, que joga as 31 no mesmo handler.
+		for (const key of Object.keys(PACKET.ZC)) {
+			if (!/^NOTIFY_(STANDENTRY|NEWENTRY|ACTENTRY|MOVEENTRY)\d*$/.test(key)) {
+				continue;
+			}
+			const Struct = PACKET.ZC[key];
+			if (!Struct?.id) {
+				continue;
+			}
+			conn.hook(Struct, (pkt: any) => {
+				const entity = toEntity(pkt);
+				const isNew = !this.entities.has(entity.gid);
+				this.entities.set(entity.gid, entity);
+				this.emit("entity-spawn", entity);
+
+				// Pergunta o nome de TODA entidade nova, mesmo das que já vieram
+				// nomeadas no spawn: é a RESPOSTA (ACK_REQNAMEALL) que carrega
+				// "Lv. 1 | HP: 55/55" — sem perguntar, a plaquinha fica só com o
+				// nome e a barra de HP do mob nunca aparece.
+				if (isNew) {
+					this.queryName(entity.gid);
+				}
+
+				// MOVEENTRY = a entidade entrou no seu campo de visão JÁ ANDANDO, e
+				// o pacote traz o trecho inteiro (de onde saiu → para onde vai). Sem
+				// reemitir isso como movimento, o mob aparece congelado no destino
+				// até o próximo NOTIFY_MOVE — que só vem quando ele escolher outro
+				// caminho.
+				if (Array.isArray(pkt.MoveData)) {
+					const [fromX, fromY, toX, toY] = pkt.MoveData;
+					this.emit("entity-move", {
+						gid: entity.gid,
+						from: { x: fromX, y: fromY },
+						to: { x: toX, y: toY },
+						speed: entity.speed,
+					});
+				}
+			});
+		}
+
+		conn.hook(PACKET.ZC.NOTIFY_PLAYERMOVE, (pkt: any) => {
+			const [fromX, fromY, toX, toY] = pkt.MoveData;
+			this.emit("self-move", {
+				from: { x: fromX, y: fromY },
+				to: { x: toX, y: toY },
+				startTime: pkt.moveStartTime,
+			});
+		});
+
+		conn.hook(PACKET.ZC.NOTIFY_MOVE, (pkt: any) => {
+			const [fromX, fromY, toX, toY] = pkt.MoveData;
+			this.emit("entity-move", {
+				gid: pkt.GID,
+				from: { x: fromX, y: fromY },
+				to: { x: toX, y: toY },
+				speed: pkt.speed ?? 0,
+			});
+		});
+
+		// ZC_STOPMOVE (0x88) é o "fixpos" do rAthena: parou de andar, levou
+		// empurrão, ou foi TELEPORTADO dentro do mesmo mapa (@jump, warp de NPC,
+		// Fly Wing — `clif_fixpos`, clif.cpp:2203). Quando o AID é o do próprio
+		// jogador, ele reposiciona QUEM JOGA: sem isso o cliente seguia achando
+		// que estava na célula velha, e todo pedido de andar saía de um lugar
+		// onde o personagem não estava mais.
+		conn.hook(PACKET.ZC.STOPMOVE, (pkt: any) => {
+			if (this.isSelf(pkt.AID)) this.emit("self-warp", { x: pkt.xPos, y: pkt.yPos });
+			else this.emit("entity-stop", { gid: pkt.AID, x: pkt.xPos, y: pkt.yPos });
+		});
+
+		// ZC_HIGHJUMP (`clif_slide`) — teleporte visual instantâneo, mandado
+		// junto do fixpos em knockback/backslide.
+		if (PACKET.ZC.HIGHJUMP) {
+			conn.hook(PACKET.ZC.HIGHJUMP, (pkt: any) => {
+				const gid = pkt.AID;
+				if (this.isSelf(gid)) this.emit("self-warp", { x: pkt.xPos, y: pkt.yPos });
+				else this.emit("entity-stop", { gid, x: pkt.xPos, y: pkt.yPos });
+			});
+		}
+
+		conn.hook(PACKET.ZC.NOTIFY_VANISH, (pkt: any) => {
+			this.entities.delete(pkt.GID);
+			this.emit("entity-vanish", { gid: pkt.GID, reason: pkt.type });
+		});
+
+		for (const name of ["ACK_REQNAME", "ACK_REQNAMEALL", "ACK_REQNAMEALL2"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				const gid = pkt.GID ?? pkt.AID;
+				const label = cleanText(pkt.CName ?? pkt.name ?? "");
+				this.emit("entity-name", { gid, name: label });
+				// guarda no snapshot: quem entra na cena depois (o replay do
+				// `world:ready`) tem que receber a entidade JÁ nomeada — a
+				// resposta do REQNAME chega antes de a cena 3D existir e não se
+				// repete.
+				const known = this.entities.get(gid);
+				if (known && label) known.name = label;
+
+				// Com `show_mob_info` ligado, o rAthena manda "Lv. 1 | HP: 55/55"
+				// no campo de NOME DE PARTY do mesmo pacote (clif.cpp:10036-10061)
+				// — é o truque que o cliente oficial usa para mostrar a vida do
+				// monstro sem um pacote próprio. Aproveitamos os números.
+				const info = cleanText(pkt.PName ?? "");
+				if (!info) return;
+
+				const hp = info.match(/HP:\s*(\d+)\s*\/\s*(\d+)/i);
+				if (hp) {
+					if (known) {
+						known.hp = Number(hp[1]);
+						known.maxHp = Number(hp[2]);
+					}
+					this.emit("entity-hp", { gid, hp: Number(hp[1]), maxHp: Number(hp[2]) });
+				}
+				const level = info.match(/Lv\.?\s*(\d+)/i);
+				if (level) {
+					if (known) known.level = Number(level[1]);
+					this.emit("entity-level", { gid, level: Number(level[1]) });
+				}
+			});
+		}
+
+		for (const name of ["NOTIFY_ACT", "NOTIFY_ACT2", "NOTIFY_ACT3"] as const) {
+			if (PACKET.ZC[name]) {
+				conn.hook(PACKET.ZC[name], (pkt: any) => {
+					this.emit("entity-action", {
+						gid: pkt.GID,
+						targetGid: pkt.targetGID,
+						damage: pkt.damage,
+						count: pkt.count,
+						action: pkt.action,
+					});
+				});
+			}
+		}
+
+		for (const name of ["NOTIFY_MONSTER_HP", "HP_INFO_TINY"] as const) {
+			if (PACKET.ZC[name]) {
+				conn.hook(PACKET.ZC[name], (pkt: any) => {
+					const gid = pkt.GID ?? pkt.AID;
+					const known = this.entities.get(gid);
+					if (known) {
+						known.hp = pkt.hp;
+						known.maxHp = pkt.maxhp;
+					}
+					this.emit("entity-hp", { gid, hp: pkt.hp, maxHp: pkt.maxhp });
+				});
+			}
+		}
+
+		// "o parâmetro X virou Y". É por aqui que passam HP, SP, zeny, exp, peso,
+		// nível — o rAthena não manda um "bloco de personagem", manda diferenças.
+		for (const name of ["PAR_CHANGE", "LONGPAR_CHANGE", "LONGLONGPAR_CHANGE"] as const) {
+			if (PACKET.ZC[name]) {
+				conn.hook(PACKET.ZC[name], (pkt: any) => {
+					const value = Number(pkt.count ?? pkt.amount ?? 0);
+					this.pushStat({ name: statName(pkt.varID), id: pkt.varID, value });
+				});
+			}
+		}
+
+		// STATUS_CHANGE (0xbc) é o par "atributo base / custo do próximo ponto";
+		// COUPLESTATUS separa o valor base do bônus de equipamento (ATK 50 + 12).
+		if (PACKET.ZC.STATUS_CHANGE) {
+			conn.hook(PACKET.ZC.STATUS_CHANGE, (pkt: any) => {
+				this.pushStat({ name: statName(pkt.statusID), id: pkt.statusID, value: pkt.value });
+			});
+		}
+		if (PACKET.ZC.COUPLESTATUS) {
+			conn.hook(PACKET.ZC.COUPLESTATUS, (pkt: any) => {
+				this.pushStat({
+					name: statName(pkt.statusType),
+					id: pkt.statusType,
+					value: pkt.defaultStatus,
+					bonus: pkt.plusStatus,
+				});
+			});
+		}
+
+		// 0xbd: a janela de status inteira de uma vez (chega no login e a cada
+		// mudança grande). Vale como "verdade" — os PAR_CHANGE ajustam por cima.
+		if (PACKET.ZC.STATUS) {
+			conn.hook(PACKET.ZC.STATUS, (pkt: any) => {
+				this.pushStatus({
+					statusPoint: pkt.point,
+					str: pkt.str,
+					agi: pkt.agi,
+					vit: pkt.vit,
+					int: pkt.Int,
+					dex: pkt.dex,
+					luk: pkt.luk,
+					upStr: pkt.standardStr,
+					upAgi: pkt.standardAgi,
+					upVit: pkt.standardVit,
+					upInt: pkt.standardInt,
+					upDex: pkt.standardDex,
+					upLuk: pkt.standardLuk,
+					atk: pkt.attPower,
+					atkBonus: pkt.refiningPower,
+					matkMin: pkt.min_mattPower,
+					matkMax: pkt.max_mattPower,
+					def: pkt.itemdefPower,
+					defBonus: pkt.plusdefPower,
+					mdef: pkt.mdefPower,
+					mdefBonus: pkt.plusmdefPower,
+					hit: pkt.hitSuccessValue,
+					flee: pkt.avoidSuccessValue,
+					fleeBonus: pkt.plusAvoidSuccessValue,
+					critical: pkt.criticalSuccessValue,
+					aspd: pkt.ASPD,
+				});
+			});
+		}
+
+		// Inventário: o rAthena manda a lista inteira ao entrar e depois só o
+		// que muda (pegou/usou/caiu). Cada geração de cliente tem seu pacote de
+		// lista, então enganchamos todas as registradas.
+		for (const key of Object.keys(PACKET.ZC)) {
+			if (!/^(NORMAL_ITEMLIST|EQUIPMENT_ITEMLIST|INVENTORY_ITEMLIST_NORMAL|INVENTORY_ITEMLIST_EQUIP)\d*$/.test(key)) {
+				continue;
+			}
+			const Struct = PACKET.ZC[key];
+			if (!Struct?.id) continue;
+			conn.hook(Struct, (pkt: any) => {
+				const list = (pkt.itemInfo ?? pkt.ItemInfo ?? pkt.list ?? []).map(toInventoryItem);
+				if (!list.length) return;
+				// Equipamento e consumível vêm em pacotes SEPARADOS: mesclar em vez
+				// de substituir, senão a segunda lista apaga a primeira.
+				const byIndex = new Map(this.inventory.map((i) => [i.index, i]));
+				for (const item of list) byIndex.set(item.index, item);
+				this.inventory = [...byIndex.values()].sort((a, b) => a.index - b.index);
+				this.emit("inventory", this.inventory);
+			});
+		}
+
+		for (const key of Object.keys(PACKET.ZC)) {
+			if (!/^ITEM_PICKUP_ACK\d*$/.test(key)) continue;
+			const Struct = PACKET.ZC[key];
+			if (!Struct?.id) continue;
+			conn.hook(Struct, (pkt: any) => {
+				// result !== 0 = não pegou (peso, inventário cheio…)
+				if (pkt.result !== 0) return;
+				const item = toInventoryItem(pkt);
+				const existing = this.inventory.find((i) => i.index === item.index);
+				if (existing) existing.amount += item.amount;
+				else this.inventory.push(item);
+				this.emit("item-add", item);
+			});
+		}
+
+		if (PACKET.ZC.ITEM_THROW_ACK) {
+			conn.hook(PACKET.ZC.ITEM_THROW_ACK, (pkt: any) => {
+				this.forgetItem(pkt.Index ?? pkt.index, pkt.count);
+			});
+		}
+		if (PACKET.ZC.DELETE_ITEM_FROM_BODY) {
+			conn.hook(PACKET.ZC.DELETE_ITEM_FROM_BODY, (pkt: any) => {
+				this.forgetItem(pkt.index, pkt.count);
+			});
+		}
+
+		// Árvore de habilidades: a lista chega inteira ao entrar; ADD_SKILL avisa
+		// quando uma nova é aprendida e SKILLINFO_UPDATE quando muda de nível.
+		for (const key of Object.keys(PACKET.ZC)) {
+			if (!/^SKILLINFO_LIST\d*$/.test(key)) continue;
+			const Struct = PACKET.ZC[key];
+			if (!Struct?.id) continue;
+			conn.hook(Struct, (pkt: any) => {
+				const list = (pkt.skillList ?? []).map(toSkill);
+				for (const skill of list) this.skills.set(skill.id, skill);
+				this.emit("skills", [...this.skills.values()]);
+			});
+		}
+
+		for (const name of ["ADD_SKILL", "SKILLINFO_UPDATE", "SKILLINFO_UPDATE2"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				const raw = pkt.data ?? pkt;
+				const id = raw.SKID ?? raw.skid ?? 0;
+				if (!id) return;
+				const prev = this.skills.get(id);
+				this.skills.set(id, {
+					...(prev ?? { id, name: raw.skillName ?? `skill_${id}`, spCost: 0, range: 0, upgradable: false }),
+					...toSkill({ ...raw, SKID: id, skillName: raw.skillName ?? prev?.name ?? `skill_${id}` }),
+				});
+				this.emit("skills", [...this.skills.values()]);
+			});
+		}
+
+		// --- VFX de skill ---------------------------------------------------
+		// "fulano usou a skill X em beltrano": é o que vira efeito visual no
+		// cliente. Dano de skill vem no mesmo pacote (NOTIFY_SKILL).
+		for (const name of ["NOTIFY_SKILL", "NOTIFY_SKILL2"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				this.emit("skill-cast", {
+					skillId: pkt.SKID,
+					level: pkt.level ?? 1,
+					sourceGid: pkt.AID,
+					targetGid: pkt.targetID,
+					damage: pkt.damage ?? 0,
+					count: pkt.count ?? 1,
+					kind: "target",
+				});
+			});
+		}
+
+		// skill sem dano (buff, cura): o servidor manda ZC.USE_SKILL
+		for (const name of ["USE_SKILL", "USE_SKILL2"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				if (!pkt.result) return; // 0 = falhou
+				this.emit("skill-cast", {
+					skillId: pkt.SKID,
+					level: pkt.level ?? 1,
+					sourceGid: pkt.srcAID,
+					targetGid: pkt.targetAID,
+					damage: 0,
+					count: 0,
+					kind: "buff",
+				});
+			});
+		}
+
+		// barra de conjuração (o "castando…" do RO)
+		for (const name of ["USESKILL_ACK", "USESKILL_ACK2", "USESKILL_ACK3"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				this.emit("skill-casting", {
+					skillId: pkt.SKID,
+					sourceGid: pkt.AID,
+					targetGid: pkt.targetID,
+					x: pkt.xPos,
+					y: pkt.yPos,
+					durationMs: pkt.delayTime ?? 0,
+				});
+			});
+		}
+
+		// área no chão (Storm Gust, armadilha, Safety Wall…)
+		for (const key of Object.keys(PACKET.ZC)) {
+			if (!/^SKILL_ENTRY\d*$/.test(key)) continue;
+			const Struct = PACKET.ZC[key];
+			if (!Struct?.id) continue;
+			conn.hook(Struct, (pkt: any) => {
+				this.emit("skill-ground", {
+					gid: pkt.AID,
+					creatorGid: pkt.creatorAID,
+					x: pkt.xPos,
+					y: pkt.yPos,
+					// `job` aqui é o id da UNIDADE de skill, não da skill em si
+					unitId: pkt.job,
+					visible: pkt.isVisible !== 0,
+				});
+			});
+		}
+
+		if (PACKET.ZC.SKILL_DISAPPEAR) {
+			conn.hook(PACKET.ZC.SKILL_DISAPPEAR, (pkt: any) => {
+				this.emit("skill-ground-gone", { gid: pkt.AID ?? pkt.GID });
+			});
+		}
+
+		// Recarga da skill: quem manda o tempo é o servidor (clif.cpp:6033,
+		// `043d <skill ID>.W <tick>.L`). O cliente não tem como calcular — a
+		// duração sai do skill_db e de modificadores de status.
+		if (PACKET.ZC.SKILL_POSTDELAY) {
+			conn.hook(PACKET.ZC.SKILL_POSTDELAY, (pkt: any) => {
+				this.emit("skill-cooldown", { skillId: pkt.SKID, durationMs: pkt.DelayTM });
+			});
+		}
+
+		// --- itens no chão ----------------------------------------------------
+		// ITEM_ENTRY = item que já estava lá quando cheguei; ITEM_FALL_ENTRY = item
+		// que acabou de cair (drop de mob). Os dois têm a mesma carga.
+		for (const name of ["ITEM_ENTRY", "ITEM_FALL_ENTRY", "ITEM_FALL_ENTRY2", "ITEM_FALL_ENTRY3"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				this.emit("ground-item", {
+					gid: pkt.ITAID,
+					itemId: pkt.ITID,
+					amount: pkt.count ?? 1,
+					x: pkt.xPos,
+					y: pkt.yPos,
+					identified: Boolean(pkt.IsIdentified ?? 1),
+					// deslocamento dentro da célula: no RO dois itens na mesma
+					// célula não ficam empilhados no mesmo pixel
+					subX: pkt.subX ?? 0,
+					subY: pkt.subY ?? 0,
+				});
+			});
+		}
+
+		if (PACKET.ZC.ITEM_DISAPPEAR) {
+			conn.hook(PACKET.ZC.ITEM_DISAPPEAR, (pkt: any) => {
+				this.emit("ground-item-gone", { gid: pkt.ITAID });
+			});
+		}
+
+		// --- diálogo de NPC ---------------------------------------------------
+		if (PACKET.ZC.SAY_DIALOG) {
+			conn.hook(PACKET.ZC.SAY_DIALOG, (pkt: any) => {
+				this.emit("npc-dialog", { gid: pkt.NAID, kind: "text", text: cleanText(pkt.msg) });
+			});
+		}
+		if (PACKET.ZC.WAIT_DIALOG) {
+			conn.hook(PACKET.ZC.WAIT_DIALOG, (pkt: any) => {
+				this.emit("npc-dialog", { gid: pkt.NAID, kind: "next" });
+			});
+		}
+		if (PACKET.ZC.CLOSE_DIALOG) {
+			conn.hook(PACKET.ZC.CLOSE_DIALOG, (pkt: any) => {
+				this.emit("npc-dialog", { gid: pkt.NAID, kind: "close" });
+			});
+		}
+		if (PACKET.ZC.MENU_LIST) {
+			conn.hook(PACKET.ZC.MENU_LIST, (pkt: any) => {
+				// o rAthena manda as opções numa string só, separadas por ":"
+				this.emit("npc-dialog", {
+					gid: pkt.NAID,
+					kind: "menu",
+					options: cleanText(pkt.msg)
+						.split(":")
+						.map((o: string) => o.trim())
+						.filter(Boolean),
+				});
+			});
+		}
+
+		if (PACKET.ZC.NOTIFY_PLAYERCHAT) {
+			conn.hook(PACKET.ZC.NOTIFY_PLAYERCHAT, (pkt: any) => {
+				this.emit("chat", { text: pkt.msg ?? "", scope: "self" });
+			});
+		}
+		if (PACKET.ZC.NOTIFY_CHAT) {
+			conn.hook(PACKET.ZC.NOTIFY_CHAT, (pkt: any) => {
+				this.emit("chat", { gid: pkt.GID, text: pkt.msg ?? "", scope: "public" });
+			});
+		}
+		if (PACKET.ZC.BROADCAST) {
+			conn.hook(PACKET.ZC.BROADCAST, (pkt: any) => {
+				this.emit("chat", { text: pkt.msg ?? "", scope: "announce" });
+			});
+		}
+		// Party e guilda têm pacote PRÓPRIO (clif.cpp:13968 e 14584); sem
+		// enganchá-los a fala desses canais simplesmente não chegava, e as abas
+		// do chat ficavam vazias para sempre.
+		if (PACKET.ZC.NOTIFY_CHAT_PARTY) {
+			conn.hook(PACKET.ZC.NOTIFY_CHAT_PARTY, (pkt: any) => {
+				this.emit("chat", { gid: pkt.AID, text: pkt.msg ?? "", scope: "party" });
+			});
+		}
+		if (PACKET.ZC.GUILD_CHAT) {
+			conn.hook(PACKET.ZC.GUILD_CHAT, (pkt: any) => {
+				this.emit("chat", { text: pkt.msg ?? "", scope: "guild" });
+			});
+		}
+		// Canais (#global, #trade) chegam TODOS por 0x2c1; quem separa é o
+		// apelido que `channel_send` põe na frente (channel.cpp:466).
+		if (PACKET.ZC.NPC_CHAT) {
+			conn.hook(PACKET.ZC.NPC_CHAT, (pkt: any) => {
+				const text = String(pkt.msg ?? "");
+				this.emit("chat", { text, scope: scopeDoCanal(text) });
+			});
+		}
+	}
+
+	/**
+	 * Avisa o map-server que a cena carregou — sem isto o mundo nao "liga" — e
+	 * devolve ao cliente o estado que já tinha chegado antes dele estar pronto.
+	 */
+	notifyReady(): void {
+		this.map?.send(new PACKET.CZ.NOTIFY_ACTORINIT());
+
+		for (const stat of this.stats.values()) {
+			this.emit("stat", stat);
+		}
+		if (this.statusBlock) {
+			this.emit("status", this.statusBlock);
+		}
+		if (this.inventory.length) {
+			this.emit("inventory", this.inventory);
+		}
+		if (this.skills.size) {
+			this.emit("skills", [...this.skills.values()]);
+		}
+		for (const entity of this.entities.values()) {
+			this.emit("entity-spawn", entity);
+		}
+	}
+
+	private pushStat(stat: { name: string; id: number; value: number; bonus?: number }): void {
+		this.stats.set(stat.name, stat);
+		this.emit("stat", stat);
+	}
+
+	private pushStatus(block: StatusBlock): void {
+		this.statusBlock = block;
+		this.emit("status", block);
+	}
+
+	/** tira do inventário GUARDADO (o snapshot que reenviamos no world:ready) */
+	private forgetItem(index: number, amount: number): void {
+		const item = this.inventory.find((i) => i.index === index);
+		if (item) {
+			item.amount -= amount;
+			if (item.amount <= 0) {
+				this.inventory = this.inventory.filter((i) => i.index !== index);
+			}
+		}
+		this.emit("item-remove", { index, amount });
+	}
+
+	/** Envia pelo socket do mapa, com erro claro quando ainda não há mundo. */
+	private sendMap(packet: { build: () => { buffer: ArrayBuffer } }): void {
+		if (!this.map) {
+			throw new Error("sem conexao com o map-server");
+		}
+		this.map.send(packet);
+	}
+
+	moveTo(cell: Cell): void {
+		if (!this.map) {
+			throw new Error("sem conexao com o map-server");
+		}
+		const Move = PACKETVER.value >= 20180307 && PACKET.CZ.REQUEST_MOVE2 ? PACKET.CZ.REQUEST_MOVE2 : PACKET.CZ.REQUEST_MOVE;
+		const pkt = new Move();
+		pkt.dest = [cell.x, cell.y];
+		this.map.send(pkt);
+	}
+
+	attack(gid: number, continuous = true): void {
+		if (!this.map) {
+			throw new Error("sem conexao com o map-server");
+		}
+		const Act = PACKETVER.value >= 20180307 && PACKET.CZ.REQUEST_ACT2 ? PACKET.CZ.REQUEST_ACT2 : PACKET.CZ.REQUEST_ACT;
+		const pkt = new Act();
+		pkt.targetGID = gid;
+		pkt.action = continuous ? 7 : 0;
+		this.map.send(pkt);
+	}
+
+	useItem(index: number): void {
+		const Use = PACKETVER.value >= 20180307 && PACKET.CZ.USE_ITEM2 ? PACKET.CZ.USE_ITEM2 : PACKET.CZ.USE_ITEM;
+		const pkt = new Use();
+		pkt.index = index;
+		pkt.AID = this.accountId;
+		this.sendMap(pkt);
+	}
+
+	equipItem(index: number, position = 0): void {
+		const pkt = new PACKET.CZ.REQ_WEAR_EQUIP();
+		pkt.index = index;
+		// 0 = "onde couber": o servidor escolhe o slot certo pelo item_db. Mandar
+		// uma posição chutada faz o rAthena recusar em silêncio.
+		pkt.wearLocation = position;
+		this.sendMap(pkt);
+	}
+
+	unequipItem(index: number): void {
+		const pkt = new PACKET.CZ.REQ_TAKEOFF_EQUIP();
+		pkt.index = index;
+		this.sendMap(pkt);
+	}
+
+	/** Joga um item do inventário no chão (CZ.ITEM_THROW). */
+	dropItem(index: number, amount: number): void {
+		const Throw =
+			PACKETVER.value >= 20180307 && PACKET.CZ.ITEM_THROW2 ? PACKET.CZ.ITEM_THROW2 : PACKET.CZ.ITEM_THROW;
+		const pkt = new Throw();
+		pkt.Index = index;
+		pkt.count = amount;
+		this.sendMap(pkt);
+	}
+
+	pickUp(gid: number): void {
+		const Pick =
+			PACKETVER.value >= 20180307 && PACKET.CZ.ITEM_PICKUP2 ? PACKET.CZ.ITEM_PICKUP2 : PACKET.CZ.ITEM_PICKUP;
+		const pkt = new Pick();
+		pkt.ITAID = gid;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Gasta 1 ponto num atributo. Os ids são os mesmos do enum `_sp`
+	 * (map.hpp:499) — 13=STR … 18=LUK.
+	 */
+	raiseStat(stat: "str" | "agi" | "vit" | "int" | "dex" | "luk"): void {
+		const ids = { str: 13, agi: 14, vit: 15, int: 16, dex: 17, luk: 18 } as const;
+		const pkt = new PACKET.CZ.STATUS_CHANGE();
+		pkt.statusID = ids[stat];
+		pkt.changeAmount = 1;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Este bloco é o próprio personagem?
+	 *
+	 * Dentro do mapa, o rAthena identifica um PC pelo ACCOUNT id — o `gid` que o
+	 * char-server devolveu (o id do personagem) só vale no handshake. Comparar
+	 * com ele fazia o teleporte do próprio jogador (`@jump`, warp de NPC) ser
+	 * tratado como movimento de OUTRA entidade: o mundo seguia desenhando o
+	 * personagem na célula velha e todo pedido de andar saía do lugar errado.
+	 */
+	private isSelf(blockId: number): boolean {
+		return blockId === this.accountId || blockId === this.gid;
+	}
+
+	/**
+	 * Pergunta o nome de uma entidade (CZ.REQNAME).
+	 *
+	 * Os pacotes de spawn antigos não trazem nome; o do rAthena com
+	 * `show_mob_info` ligado devolve nome + HP + nível na mesma string. É assim
+	 * que o cliente oficial preenche a plaquinha em cima da cabeça.
+	 */
+	requestName(gid: number): void {
+		const Req = PACKETVER.value >= 20180307 && PACKET.CZ.REQNAME2 ? PACKET.CZ.REQNAME2 : PACKET.CZ.REQNAME;
+		const pkt = new Req();
+		pkt.AID = gid;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Pergunta o nome sem afogar o servidor.
+	 *
+	 * O pacote de spawn de mob JÁ traz o nome — mas é só o nome. O `Lv.`/`HP:`
+	 * que a plaquinha mostra vem do ACK_REQNAMEALL (`show_mob_info`), ou seja,
+	 * só de quem pergunta. Perguntar de todo mundo no instante do spawn é um
+	 * pico de pacotes ao entrar num mapa cheio, então a pergunta entra numa fila
+	 * drenada aos poucos — o cliente oficial também espalha no tempo.
+	 */
+	private nameQueue: number[] = [];
+	private nameTimer: NodeJS.Timeout | null = null;
+	private nameTries = new Map<number, number>();
+
+	queryName(gid: number): void {
+		if (this.nameQueue.includes(gid)) return;
+		this.nameQueue.push(gid);
+		if (this.nameTimer) return;
+		this.nameTimer = setInterval(() => {
+			for (let i = 0; i < NAME_QUERIES_PER_TICK; i++) {
+				const gid = this.nameQueue.shift();
+				if (gid === undefined) break;
+				const entity = this.entities.get(gid);
+				if (!entity) continue;
+				this.requestName(gid);
+
+				// Perguntado cedo demais, o mob responde só com o nome: o bloco
+				// "Lv. 1 | HP: 55/55" ainda não existe no instante do spawn. Uma
+				// segunda pergunta, mais tarde, volta completa — e é ela que
+				// preenche a barra de vida sem o jogador ter que clicar.
+				const tries = (this.nameTries.get(gid) ?? 0) + 1;
+				this.nameTries.set(gid, tries);
+				if (tries < NAME_QUERY_TRIES && entity.hp === undefined) {
+					setTimeout(() => {
+						if (this.entities.get(gid)?.hp === undefined) this.queryName(gid);
+					}, NAME_RETRY_DELAY_MS);
+				}
+			}
+			if (this.nameQueue.length === 0 && this.nameTimer) {
+				clearInterval(this.nameTimer);
+				this.nameTimer = null;
+			}
+		}, NAME_QUERY_INTERVAL_MS);
+	}
+
+	/** Fala com um NPC (o clique no boneco). */
+	contactNpc(gid: number): void {
+		const pkt = new PACKET.CZ.CONTACTNPC();
+		pkt.NAID = gid;
+		pkt.type = 1;
+		this.sendMap(pkt);
+	}
+
+	/** Botão "próximo" do diálogo. */
+	npcNext(gid: number): void {
+		const pkt = new PACKET.CZ.REQ_NEXT_SCRIPT();
+		pkt.NAID = gid;
+		this.sendMap(pkt);
+	}
+
+	/** Escolhe uma opção do menu (1-based, como o rAthena espera). */
+	npcMenu(gid: number, choice: number): void {
+		const pkt = new PACKET.CZ.CHOOSE_MENU();
+		pkt.NAID = gid;
+		pkt.num = choice;
+		this.sendMap(pkt);
+	}
+
+	npcClose(gid: number): void {
+		const pkt = new PACKET.CZ.CLOSE_DIALOG();
+		pkt.NAID = gid;
+		this.sendMap(pkt);
+	}
+
+	/** Usa skill num alvo (ou em si mesmo, quando targetGid é o próprio). */
+	useSkill(skillId: number, level: number, targetGid: number): void {
+		const Use = PACKETVER.value >= 20180307 && PACKET.CZ.USE_SKILL2 ? PACKET.CZ.USE_SKILL2 : PACKET.CZ.USE_SKILL;
+		const pkt = new Use();
+		pkt.SKID = skillId;
+		pkt.selectedLevel = level;
+		pkt.targetID = targetGid;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Usa skill numa célula do chão (área).
+	 *
+	 * SEMPRE pela tabela de versão (`USE_SKILL_TOGROUND`), nunca pela variante
+	 * "2": ela escreve o opcode 0x0366 CRAVADO no código, e nesta faixa de
+	 * cliente 0x0366 é outro pacote, de 90 bytes. O map-server lia o cabeçalho,
+	 * via 10 bytes onde esperava 90 e DERRUBAVA A SESSÃO
+	 * ("clif_parse: Received packet 0x0366 with expected packet length 90") —
+	 * de dentro do jogo parecia que o servidor tinha caído ao usar Storm Gust.
+	 * Em 20130618 o pacote certo é 0x096a, que a tabela já sabe.
+	 */
+	useSkillOnGround(skillId: number, level: number, cell: Cell): void {
+		const Use = PACKET.CZ.USE_SKILL_TOGROUND;
+		const pkt = new Use();
+		pkt.SKID = skillId;
+		pkt.selectedLevel = level;
+		pkt.xPos = cell.x;
+		pkt.yPos = cell.y;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Fala num canal.
+	 *
+	 * Cada canal tem um caminho DIFERENTE no protocolo, e usar o pacote errado
+	 * faz a mensagem simplesmente sumir:
+	 *  - mapa/geral: CZ_REQUEST_CHAT (0x8c)
+	 *  - party:      CZ_REQUEST_CHAT_PARTY (0x108)
+	 *  - guilda:     CZ_GUILD_CHAT (0x17e)
+	 *  - #global e #trade: são CANAIS, e o rAthena os recebe pelo pacote de
+	 *    SUSSURRO com o nome do canal no lugar do destinatário
+	 *    (clif.cpp:11916). Ele ainda entra no canal sozinho se a pessoa não
+	 *    estiver nele e não houver senha, então não é preciso `@join`.
+	 *
+	 * Os três primeiros exigem o texto como "Nome : mensagem" numa string só —
+	 * `clif_process_message` valida esse prefixo e descarta o que vier fora do
+	 * formato. O do canal vai com a mensagem crua, porque o nome entra pelo
+	 * campo do destinatário.
+	 */
+	say(text: string, charName: string, scope?: ChatScope): void {
+		if (!this.map) {
+			throw new Error("sem conexao com o map-server");
+		}
+		const comNome = `${charName} : ${text}`;
+
+		if (scope === "party") {
+			const pkt = new PACKET.CZ.REQUEST_CHAT_PARTY();
+			pkt.msg = comNome;
+			this.map.send(pkt);
+			return;
+		}
+		if (scope === "guild") {
+			const pkt = new PACKET.CZ.GUILD_CHAT();
+			pkt.msg = comNome;
+			this.map.send(pkt);
+			return;
+		}
+		if (scope === "global" || scope === "trade") {
+			const pkt = new PACKET.CZ.WHISPER();
+			pkt.receiver = scope === "global" ? "#global" : "#trade";
+			pkt.msg = text;
+			this.map.send(pkt);
+			return;
+		}
+
+		const pkt = new PACKET.CZ.REQUEST_CHAT();
+		pkt.msg = comNome;
+		this.map.send(pkt);
+	}
+
+	private fail(stage: SessionStage, reason: string, code?: number): void {
+		if (this.pendingAuth) {
+			this.pendingAuth.reject(new Error(reason));
+			this.pendingAuth = null;
+		}
+		this.emit("closed", { stage, reason, code });
+		this.close();
+	}
+
+	close(): void {
+		if (this.nameTimer) {
+			clearInterval(this.nameTimer);
+			this.nameTimer = null;
+		}
+		this.nameQueue = [];
+		this.nameTries.clear();
+		this.login?.close();
+		this.char?.close();
+		this.map?.close();
+		this.login = null;
+		this.char = null;
+		this.map = null;
+		this.stage = "idle";
+	}
+}
+
+function toCharSummary(info: any, index: number): CharSummary {
+	return {
+		slot: info.CharNum ?? index,
+		gid: info.GID,
+		name: info.name,
+		job: info.job,
+		level: info.level,
+		jobLevel: info.joblevel,
+		baseExp: info.exp,
+		jobExp: info.jobexp,
+		zeny: info.money,
+		hp: info.hp,
+		maxHp: info.maxhp,
+		sp: info.sp,
+		maxSp: info.maxsp,
+		str: info.Str,
+		agi: info.Agi,
+		vit: info.Vit,
+		int: info.Int,
+		dex: info.Dex,
+		luk: info.Luk,
+		head: info.head,
+		headPalette: info.headpalette,
+		bodyPalette: info.bodypalette,
+		weapon: info.weapon,
+		shield: info.shield,
+		mapName: normalizeMapName(info.lastMap ?? ""),
+	};
+}
+
+function toEntity(pkt: any): EntitySnapshot {
+	// STANDENTRY traz PosDir (parado); MOVEENTRY traz MoveData (andando) e a
+	// posicao util e o destino.
+	let x = 0;
+	let y = 0;
+	let dir = 0;
+
+	if (Array.isArray(pkt.PosDir)) {
+		[x, y, dir] = pkt.PosDir;
+	} else if (Array.isArray(pkt.MoveData)) {
+		// Entrou no campo de visão andando: a posição do spawn é de ONDE ele saiu.
+		// O trecho até o destino sai logo depois como entity-move.
+		x = pkt.MoveData[0];
+		y = pkt.MoveData[1];
+	}
+
+	return {
+		gid: pkt.GID ?? pkt.AID ?? 0,
+		kind: entityKindFromObjectType(pkt.objecttype),
+		job: pkt.job ?? 0,
+		name: pkt.name || undefined,
+		x,
+		y,
+		dir,
+		speed: pkt.speed ?? 150,
+		// O pacote de spawn manda -1 quando NÃO SABE o HP (é o padrão para mob;
+		// só GvG/boss trazem valor). Repassar o -1 apagava o HP verdadeiro que a
+		// resposta do REQNAME já tinha trazido — "desconhecido" tem que sair
+		// como ausente, não como número.
+		hp: typeof pkt.hp === "number" && pkt.hp >= 0 ? pkt.hp : undefined,
+		maxHp: typeof pkt.maxhp === "number" && pkt.maxhp > 0 ? pkt.maxhp : undefined,
+	};
+}
+
+/** Texto do rAthena vem com   no fim e códigos de cor ^RRGGBB. */
+function cleanText(raw: unknown): string {
+	return String(raw ?? "")
+		.replace(/ .*$/s, "")
+		.replace(/\^[0-9a-fA-F]{6}/g, "");
+}
+
+/**
+ * Apelido do canal → escopo.
+ *
+ * `channel_send` monta a linha como "%s %s : %s" = apelido, nome, mensagem
+ * (channel.cpp:466), e o apelido é o de `conf/channels.conf` — "[Global]",
+ * "[Trade]", "[Support]", "[Ally]". Tudo o mais que chega por 0x2c1 é fala de
+ * NPC ou aviso do servidor, e cai em `system`.
+ */
+function scopeDoCanal(texto: string): ChatScope {
+	const apelido = /^\[([^\]]+)\]/.exec(texto)?.[1]?.toLowerCase();
+	if (apelido === "global") return "global";
+	if (apelido === "trade") return "trade";
+	return "system";
+}
+
+function toSkill(raw: any): PlayerSkill {
+	return {
+		id: raw.SKID,
+		name: String(raw.skillName ?? "").replace(/\0.*$/, ""),
+		level: raw.level ?? 0,
+		spCost: raw.spcost ?? 0,
+		range: raw.attackRange ?? 0,
+		/** o rAthena marca aqui se ainda dá para subir com ponto de habilidade */
+		upgradable: Boolean(raw.upgradable),
+	};
+}
+
+/**
+ * Item do inventário. Os pacotes mudam de nome de campo entre gerações (index
+ * vs Index, count vs amount), mas o miolo é sempre o mesmo — daí normalizar
+ * aqui em vez de espalhar `??` pelo cliente.
+ */
+function toInventoryItem(raw: any): InventoryItem {
+	return {
+		index: raw.index ?? raw.Index ?? 0,
+		itemId: raw.ITID ?? 0,
+		amount: raw.count ?? raw.amount ?? 1,
+		type: raw.type ?? 0,
+		identified: Boolean(raw.IsIdentified ?? 1),
+		refine: raw.RefiningLevel ?? 0,
+		equipped: (raw.WearState ?? raw.location ?? 0) !== 0,
+		cards: [raw.slot?.card1 ?? 0, raw.slot?.card2 ?? 0, raw.slot?.card3 ?? 0, raw.slot?.card4 ?? 0],
+	};
+}
+
+/** "prt_fild08.gat\0..." -> "prt_fild08" */
+function normalizeMapName(raw: string): string {
+	return String(raw ?? "")
+		.replace(/\0.*$/, "")
+		.replace(/\.gat$/i, "");
+}
+
+function makeCharRefuseReason(code: number | undefined): string {
+	switch (code) {
+		case 0x00:
+			return "nome ja em uso";
+		case 0x01:
+			return "nome proibido";
+		case 0x02:
+			return "voce nao tem direito a esse slot";
+		case 0x03:
+			return "nivel de conta insuficiente";
+		default:
+			return `criacao recusada (codigo ${code ?? "?"})`;
+	}
+}
+
+function refuseReason(code: number | undefined): string {
+	switch (code) {
+		case 0:
+			return "conta inexistente";
+		case 1:
+			return "senha incorreta";
+		case 2:
+			return "conta expirada";
+		case 3:
+			return "servidor recusou (rejected from server)";
+		case 4:
+			return "conta bloqueada";
+		case 5:
+			return "versao de cliente incompativel";
+		case 6:
+			return "conta banida temporariamente";
+		case 8:
+			return "servidor cheio";
+		default:
+			return `login recusado (codigo ${code ?? "?"})`;
+	}
+}

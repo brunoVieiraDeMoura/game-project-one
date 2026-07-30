@@ -1,0 +1,8 @@
+1- sobre movimentação. 
+quero que a movimentação aconteça em square igual ao ragnarok, só que em 3d,
+estou tendo alguns problemas com a movimentação atual, estou imaginando que pelo mapa ser em hexagonal 
+ele está usando como referencia "andar em hexagonal" embora a estética parece em square,
+me da alternativas para resolver isso e conseguir andar igual ao ragnarok só que em 3d,
+quero também manter a proporção dos mapas/tamanho dos mobs/personagem igual ao do ragnarok 
+
+ex: prt_fild08 é 400x400 e esse mapa que estou no play é 32x32, embora pareça grande está muito diferente

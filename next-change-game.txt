@@ -1,0 +1,5 @@
+as velocidades entre wasd e click estão diferentes, quero que os 2 estejam iguais
+
+square para target do chao do clique-tile, está quadrado, quero ele em hexagonal e menor, do tamanho do personagem
+
+falar no chat "wasd | 1234 | atalhos para ivintario,mapa etc." nao podem ser usados enquanto digita.

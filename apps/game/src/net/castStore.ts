@@ -1,0 +1,34 @@
+import { create } from "zustand";
+
+/**
+ * Conjuração EM ANDAMENTO do próprio personagem.
+ *
+ * Como no `cooldownStore`, guarda-se o INSTANTE em que termina e não o que
+ * falta: o restante muda a cada quadro e passar isso por `setState` repintaria
+ * o HUD 60 vezes por segundo. Quem desenha a barra lê o fim e anima sozinho.
+ *
+ * Só o próprio personagem entra aqui — a conjuração dos outros já vira efeito
+ * na cena (`vfx`), e uma barra por monstro no HUD não faria sentido.
+ */
+export interface CastAtual {
+  skillId: number;
+  /** performance.now() em que a conjuração acaba */
+  fim: number;
+  duracaoMs: number;
+}
+
+interface CastState {
+  atual: CastAtual | null;
+  comecar: (skillId: number, duracaoMs: number) => void;
+  /** conjuração terminou, foi interrompida ou a sessão acabou */
+  parar: () => void;
+}
+
+export const useCastStore = create<CastState>((set) => ({
+  atual: null,
+  comecar: (skillId, duracaoMs) =>
+    // Skill instantânea chega com duração 0 (e muitas com 1–2 quadros): piscar
+    // a barra nesse caso é pior que não mostrar nada.
+    set(duracaoMs >= 150 ? { atual: { skillId, fim: performance.now() + duracaoMs, duracaoMs } } : { atual: null }),
+  parar: () => set({ atual: null }),
+}));

@@ -1,0 +1,38 @@
+leia o README de C:\Users\Bruno\Desktop\idle-narok para entender o arquivo
+
+eu quero que a lógica de ter um editor total para controle dos itens/classes/skills/monstros do rathena no mysql 
+pelo painel http://localhost:3000/
+
+quero usar todo backend e lógica do C:\Users\Bruno\Desktop\idle-narok
+só que no frontend para http://localhost:3001/play 
+(fazer tela de login própria [usar base do ragnarok ja feita] criar char/logar)
+
+
+coisas que quero manter do http://localhost:3001/play
+interface, 3d, movimentação wasd, o resto quero herdar tudo do outro 
+(C:\Users\Bruno\Desktop\idle-narok), tentar vincular na ui as coisas exatamente como são no ragnarok
+
+usar de teste o mapa 3d criado pelo editor "novo_ms4yewiz", adicionar um esqueleto como sprite, para servir os mesmos status e drops do poring em prt_field08
+
+
+fazer um plano de migração para:
+
+1 sprites do mapa -> mapa 3d
+(usar o mapa base criado 3d novo_ms4yewiz)
+2 sprites de monstros -> monstros 3d
+(como nao tenho model usar os esqueletos por hora)
+3 sprite de skills para -> VFX skills (monstros e players)
+(como nao tenho model usar um gradient [circulo comum] para área, para buff, faz um efeito simples em css msm até adicionar) 
+4 sprite de characters & animações-> 3d model + animation
+(como nao tenho todos models usa o espadchim como se fosse o gm, depois eu adiciono para cada classe)
+5 sprite de itens -> model itens
+(como nao tenho model usar uma box)
+6 sprite de npc -> modelo de npc
+(usar um outro modelo tipo o espadachin por hora.)
+7 tenata deixar a ui do jogo 3d http://localhost:3001/play -> com o posicionamento de onde fica as coisas no ragnarok mais parecido o possivel, incluindo os path ex: alt+a (abrir status e estar lá todos os astributos e especificações)
+mas mantenha também a diferenciação na estilização da ui.
+8 ao implantar habilidades /hit/movimentação comece pelo tile igual ao do ragnarok original, e depois adapte para wasd (adaptando a base atual)
+
+tirando o editor de mapas (feito para salvar novos mapas do game em 3d [a nova cara do ragnarok])
+você não precisa se prender se precisar fazer alguma alteração ou deletar algo que estja sendo irrelevante no código
+

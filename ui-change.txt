@@ -1,0 +1,24 @@
+la em cima na direita tem o minimapa
+a referencia que eu quero está em "ref"
+
+mini-map-background (aonde dentro da bola, vai ficar o minimapa)
+
+zoom-in(ao clicar da zoom no mapa)
+zoom-out(ao clicar tira zoom no mapa)
+obss: deixa um limite para zoom in e out, (o zoom in deve ir sempre centralizando aonde seu personagem está)
+
+
+ring-level( vai ser o circulo para o bell ficar dentro, posicione ele a direita na parte de cima do minimapa)
+
+
+sun/moon(sun aparece de 6:00 am até 18:00pm, depois troca para moon [bota o icone | horario])
+personagem(substituir a bolinha que marca o posicionamento atual do personagem no minimapa por isso)
+bell(botar o bell de notificações dentro do ring ao lado do minimapa,[ainda não criei funcionamento para ele, mas vai funcionar igual ao notification de um app de message, então crie uma bolinha vermelha com "2" mensagem mockup ficticias, ao clicar nela vai abrir um popup de notificação[vou criar abaixo as regras desse popup])
+
+popup[curva-das-bordas-barra-hp-sp , para as laterais e reta-barra-hp-sp para extender o popup, crie uma mensagem falando que tem um pedido de amizade, e outra dizendo que foi vendido um item na Feira de Vendas]
+tab-off para fechar o popup e para fechar a mensagem em si, também bote o "x", e caso tenha várias mensagens, criar o scrolldown com
+
+rolling-bar-and-downside (inverte para a parte de cima)
+rolling-bar-mid (extende a scrollbar)
+background-rolling-bar(background da scrollbar)
+arrow(arrow esta virada para baixo, inverta e bota também em cima da scrollbar.

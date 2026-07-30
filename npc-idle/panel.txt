@@ -1,0 +1,62 @@
+//===== game-project ==========================================
+//= Fila de recarga do painel admin
+//===== Descrição: ===========================================
+//= O admin (localhost:3000) edita item_db_re/mob_db_re no MySQL. O map-server
+//= já leu essas tabelas para a memória na inicialização, então a edição só
+//= aparece no jogo depois de um @reloaditemdb / @reloadmobdb.
+//=
+//= Este NPC olha uma fila (`panel_reload_queue`) a cada 2 segundos e executa o
+//= reload pedido. É um NPC e não um comando externo porque o rAthena não tem
+//= porta de administração: o único jeito de falar com o map-server rodando é
+//= de dentro dele.
+//=
+//= `atcommand` funciona SEM jogador atachado: quando st->rid == 0 o rAthena usa
+//= um personagem fantasma com permissão total (src/map/script.cpp:15736-15771).
+//= Por isso o OnTimer pode recarregar o servidor sozinho, sem ninguém logado.
+//============================================================
+
+-	script	PainelReload	-1,{
+	end;
+
+OnInit:
+	// tabela da fila; o painel (apps/api) insere uma linha por pedido
+	query_sql("CREATE TABLE IF NOT EXISTS `panel_reload_queue` ("
+		+ "`id` int(11) unsigned NOT NULL AUTO_INCREMENT,"
+		+ "`kind` varchar(20) NOT NULL,"
+		+ "`requested_at` datetime NOT NULL DEFAULT current_timestamp(),"
+		+ "`done_at` datetime DEFAULT NULL,"
+		+ "PRIMARY KEY (`id`), KEY `pendentes` (`done_at`)"
+		+ ") ENGINE=MyISAM DEFAULT CHARSET=utf8mb4");
+
+	debugmes "[game-project] panel.txt carregado (fila de reload)";
+	initnpctimer;
+	end;
+
+OnTimer2000:
+	.@rows = query_sql("SELECT `id`, `kind` FROM `panel_reload_queue` WHERE `done_at` IS NULL ORDER BY `id` LIMIT 5", .@id, .@kind$);
+
+	for (.@i = 0; .@i < .@rows; .@i++) {
+		// Lista fechada de propósito: a fila vem de fora, e o `atcommand` aqui
+		// roda com permissão de GM. Nada de montar o comando com o texto do
+		// banco.
+		if (.@kind$[.@i] == "itemdb") {
+			atcommand "@reloaditemdb";
+		} else if (.@kind$[.@i] == "mobdb") {
+			atcommand "@reloadmobdb";
+		} else if (.@kind$[.@i] == "skilldb") {
+			atcommand "@reloadskilldb";
+		} else if (.@kind$[.@i] == "script") {
+			atcommand "@reloadscript";
+		} else if (.@kind$[.@i] == "battleconf") {
+			atcommand "@reloadbattleconf";
+		} else {
+			debugmes "[game-project] reload desconhecido: " + .@kind$[.@i];
+		}
+
+		query_sql("UPDATE `panel_reload_queue` SET `done_at` = NOW() WHERE `id` = " + .@id[.@i]);
+		debugmes "[game-project] reload aplicado: " + .@kind$[.@i];
+	}
+
+	initnpctimer;
+	end;
+}

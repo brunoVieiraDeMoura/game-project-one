@@ -1,0 +1,53 @@
+# --- deps / build ---
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+.vite/
+*.tsbuildinfo
+coverage/
+.eslintcache
+
+# --- segredos ---
+.env
+.env.local
+.env.*.local
+!.env.example
+pw.txt
+
+# --- fonte upstream do rAthena (105 MB, re-obtido com git clone) ---
+rathena/
+
+# --- packs de asset brutos (177 MB, licenciados; as cópias usadas vivem em apps/game/public) ---
+assets-new/
+
+# --- saída de ferramentas / gerado ---
+tools/legacy-migration/output/
+apps/api/data/
+rathena-db-import/
+.playwright-mcp/
+
+# --- capturas de tela e prints de referência (raiz) ---
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+
+# --- logs / temporários ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+*.tmp
+*.bak
+*.orig
+
+# --- editor / SO ---
+.claude/settings.local.json
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

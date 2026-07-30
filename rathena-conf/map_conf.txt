@@ -1,0 +1,13 @@
+// game-project — override de conf/map_athena.conf
+char_ip: 127.0.0.1
+map_ip: 127.0.0.1
+
+// Portas proprias — ver rathena-conf/login_conf.txt.
+char_port: 6122
+map_port: 5122
+
+// Nossos NPCs. Ficam em npc-idle/ no repo e chegam aqui por symlink
+// (npc/game-project), criado pelo scripts/wsl-setup.sh. Carregar por aqui
+// evita editar qualquer arquivo dentro de rathena/.
+npc: npc/game-project/devmenu.txt
+npc: npc/game-project/panel.txt

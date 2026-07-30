@@ -1,0 +1,21 @@
+Animação de atack do personagem
+
+tab está indo até o target no modo wasd, esse comportamento está errado só deve acontecer no target tile.
+
+target/wasd, aumentar o click do target ao tentar clicar no monstro.
+
+ao clicar no monstro em configure tile, deixar o target mostrando la em cima. 
+ao clicar no monstro em wasd ( deixar o target ativado, mas remover o atack automatico)
+
+atacar apenas se clicar em 1 Basic atack ( se clicar em 1 ele deixa o atack ativado, sempre ataca o hit base até o fim do combate)
+ao ativar o atack deixar um circle no basick atack, (clicar novamente desabilita a ação)
+
+
+vincular ao jogo real os itens, classes, skills, status,monstros, npcs e balanceamento existentes,
+deixe como exemplo, esse personagem kight porém deixe eles usando as específicações reais do 	Swordman em [http://localhost:3000/classes]
+com as skills do swordman vinculada, status e balanceamento.
+
+
+
+
+em http://localhost:3000/balancing : está faltando o atributo de dex

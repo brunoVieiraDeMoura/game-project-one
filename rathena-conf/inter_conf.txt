@@ -1,0 +1,37 @@
+// game-project — override de conf/inter_athena.conf
+// Tudo (MariaDB + login/char/map) roda dentro do mesmo WSL2.
+login_server_ip: 127.0.0.1
+ipban_db_ip: 127.0.0.1
+char_server_ip: 127.0.0.1
+map_server_ip: 127.0.0.1
+log_db_ip: 127.0.0.1
+web_server_ip: 127.0.0.1
+
+// Banco proprio. O mesmo WSL ja hospeda o banco "ragnarok" do idle-narok;
+// reusar aquele nome faria os dois projetos brigarem pelas mesmas contas e
+// personagens. Usuario/senha/base criados por scripts/wsl-db.sh.
+login_server_id: gameproject
+login_server_pw: gameproject
+login_server_db: gameproject
+ipban_db_id: gameproject
+ipban_db_pw: gameproject
+ipban_db_db: gameproject
+char_server_id: gameproject
+char_server_pw: gameproject
+char_server_db: gameproject
+map_server_id: gameproject
+map_server_pw: gameproject
+map_server_db: gameproject
+web_server_id: gameproject
+web_server_pw: gameproject
+web_server_db: gameproject
+log_db_id: gameproject
+log_db_pw: gameproject
+log_db_db: gameproject
+
+// Itens e monstros saem do BANCO, nao dos YAML em db/re/ — e assim que o
+// painel admin edita o jogo (e @reloaditemdb/@reloadmobdb aplicam sem
+// reiniciar). Popular as tabelas: scripts/wsl-db-content.sh.
+// Skills e classes continuam em YAML: o rAthena nao tem loader SQL para elas
+// (so existem 5 em src/map — item, mob e mob_skill).
+use_sql_db: yes

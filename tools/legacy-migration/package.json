@@ -1,0 +1,30 @@
+{
+  "name": "@ragnarok/legacy-migration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "migrate:items": "tsx src/migrate-items.ts",
+    "migrate:jobs": "tsx src/migrate-jobs.ts",
+    "migrate:statuses": "tsx src/migrate-statuses.ts",
+    "migrate:skills": "tsx src/migrate-skills.ts",
+    "migrate:monsters": "tsx src/migrate-monsters.ts",
+    "migrate:npcs": "tsx src/migrate-npcs.ts",
+    "migrate:maps": "tsx src/migrate-maps.ts",
+    "export:mapcache": "tsx src/export-mapcache.ts"
+  },
+  "dependencies": {
+    "@ragnarok/game-data": "workspace:*",
+    "@ragnarok/map-format": "workspace:*",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}
