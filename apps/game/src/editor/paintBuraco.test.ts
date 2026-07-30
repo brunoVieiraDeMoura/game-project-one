@@ -84,7 +84,9 @@ describe("pincel x buraco", () => {
 
   it('"subir" perto da ravina não grava altura nela (era o "some o buraco")', () => {
     const s = useEditorStore.getState();
-    s.setEditScope("all");
+    // "Dentro" é o escopo que POUPA o bloqueio; em "Tudo" o relevo molda a
+    // ravina de propósito (é o que o nome promete)
+    s.setEditScope("inside");
     s.setBrush("raise");
     s.setBrushSize(4);
     s.paintCell(7, 9); // disco alcança a ravina

@@ -297,6 +297,9 @@ pnpm --filter @ragnarok/api link:legacy-map <mapa3d> <mapaRO> <x> <y>  # janela 
     1/3 do canto = ~1/8 da altura). O trilho por baixo é recortado com
     `inset: border/3` e `border-radius: border × 0.66` — que é exatamente a
     curva INTERNA do desenho (canto 24, traço 8 → raio interno 16).
+  - **O fundo do medalhão é PRETO com opacidade**: a versão amarronzada competia
+    com a madeira do aro. O escuro translúcido deixa o mundo aparecer de leve e
+    faz o personagem destacar.
   - **Retrato = o próprio glb, não uma textura de rosto**
     (`hud/CharacterPortrait`): um canvas de ~94 px com o mesmo modelo do mundo,
     lente de 24° (os 50° da cena distorcem o rosto), ATRÁS da placa — o buraco
@@ -486,6 +489,117 @@ pnpm --filter @ragnarok/api link:legacy-map <mapa3d> <mapaRO> <x> <y>  # janela 
     script, onde `BaseExp`/`JobExp` são graváveis. A conta é `Next / 100 * pct`
     nessa ordem: no nível alto `Next` chega a 99.999.999 e multiplicar antes de
     dividir estoura a faixa.
+- **Minimapa pintado** (ui-change.txt): arte em `public/assets/ui/minimap/`,
+  medidas em `ui/minimap.ts`, desenho em `hud/Minimap.tsx` + `hud/NotificationBell`.
+  - **Metade do pacote é REPETIDA**: `ring-level`, `curva-das-bordas-barra-hp-sp`,
+    `reta-barra-hp-sp`, `tab-off`, `arrow`, `rolling-bar-*` e
+    `background-rolling-bar` são byte a byte (md5 conferido) os do chat e da
+    placa do personagem. Então o aro do sino usa o PNG de `character-frame/`, e
+    o popup e a rolagem usam os de `chat/` — só entram no repo os 7 arquivos
+    novos (fundo, sino, sol, lua, seta, zoom-in, zoom-out).
+  - **O círculo se mede pelo MAIOR VÃO de cada linha e coluna, não por varredura
+    radial**: as folhas que entram no aro cortam o raio cedo (dão 153 onde o vão
+    real passa de 170) e ainda puxam o centro para cima. Pelo vão o meio é
+    estável — 209,5..210 em toda linha e 236,5..237,5 em toda coluna, raio ≈174.
+    A coluna do MEIO é a única que discorda (222), porque ali quem corta o vão é
+    a placa do relógio e não o aro; foi ela que me fez cravar `cy: 228` na
+    primeira vez, e o círculo ficava 9 px alto com um vão de fundo embaixo. O
+    raio vai a 178 (4 acima do medido) para o mapa passar POR BAIXO da moldura,
+    como o retrato na placa do personagem.
+  - **A placa do relógio se centraliza pelo RECESSO, não pela caixa** (x≈90..336,
+    y 386..427 → centro 213×406): o desenho tem bisel, e usar a caixa externa
+    deixava o relógio alto e à direita dentro dele.
+  - **A colisão é pré-desenhada num canvas do TAMANHO DO MAPA**, uma vez por
+    mapa; o zoom só recorta um pedaço dele com `drawImage`. Redesenhar 160.000
+    células por quadro para seguir o personagem seria impagável.
+  - **A janela do zoom é presa às bordas do mapa**: sem a trava, no canto do
+    mapa metade da vista seria vazio. Por isso em zoom 1 (mapa inteiro) ela não
+    "segue" ninguém — não há para onde correr.
+  - **A seta do personagem fica FORA do canvas**: o container do mapa é
+    espelhado em X (herança do minimapa antigo, e é o que deixa a orientação
+    certa) e a seta sairia invertida junto. Ela é um `<img>` posicionado com
+    `lado - x`, que desfaz o espelho só para essa camada; o ângulo sai de
+    `atan2(-(dcol), drow)` — na tela, direita é coluna DECRESCENDO.
+  - **Sino e popup são MOCK** (`hud/notificationStore`): o gateway não emite
+    convite de amizade nem venda na feira. As duas mensagens são as do change e
+    estão marcadas no módulo; quando os eventos existirem é só chamar `add()` de
+    `useWorldEvents` e nada da tela muda.
+  - **O relógio é a hora REAL da máquina**: o rAthena não manda hora de jogo por
+    pacote nenhum. Sol das 6h às 18h, lua no resto.
+  - `ui/ScrollbarHider` isola a única regra CSS solta do app (esconder a barra
+    nativa): quem rola com arte própria monta ela, em vez de o popup depender do
+    chat estar montado.
+- **Inventário pintado** (ui-change.txt): arte em `public/assets/ui/bag/`,
+  medidas em `ui/bag.ts`, desenho em `hud/InventoryWindow.tsx`.
+  - **Ele NÃO entra no `Panel` genérico de `Windows.tsx`**: a arte já traz
+    moldura, faixa de título e botão de fechar, e a página pixel-art do
+    TravelBook por baixo brigaria com a madeira pintada. `Windows` desvia a
+    chave `inventory` para o componente próprio; as outras janelas seguem no
+    Panel.
+  - **Quase tudo é peça REPETIDA** (md5 conferido): `square-skill` é o canto dos
+    slots da barra de habilidades, `curva`/`reta` são as das barras de HP/SP,
+    `ring-level` é o aro da placa do personagem e `tab-off` é o "x" do chat. Só
+    entram no repo três arquivos: fundo, moeda e peso.
+  - As faixas saíram do perfil da coluna central do fundo: título em y 16..45,
+    campo em y 47..295 e a faixa das contagens em y 297..335. A grade é 5 × 4
+    como na referência.
+  - **Todo conteúdo sai de UM retângulo** (`BAG_CONTENT`, x 30..264): o campo
+    chapado da arte começa em x=14, mas isso é a BEIRADA, colada no bisel.
+    Enquanto as caixas iam de 20 a 274 elas encostavam na moldura e aba, slot e
+    contador pareciam estourados para fora.
+  - **Medida de dentro sai do CONTAINER, não da arte**: o lado do slot vem da
+    grade, e dele saem a espessura da moldura, o tamanho do ícone e o corpo do
+    número. Com o ícone num número fixo da arte (34) ele ficava MAIOR que o
+    miolo do slot e passava por cima da moldura ao aumentar a janela.
+  - **Peso sem casa decimal**: o rAthena manda em décimos e "112.1 / 311.0" não
+    cabia no contador; o inteiro é o que o jogador usa. Aba e contadores ainda
+    levam `ellipsis`/`overflow: hidden` como rede — nenhuma palavra pode
+    empurrar a moldura.
+  - **"Ouro" é o zeny**: só o nome muda. Peso vem em DÉCIMOS do rAthena
+    (`weight`/`maxWeight`), daí o `/10` na hora de mostrar.
+- **Janela de Status pintada** (ui-change.txt): arte em
+  `public/assets/ui/status/`, medidas em `ui/status.ts`, desenho em
+  `hud/StatusWindow.tsx`. Como o inventário, ela sai do `Panel` genérico —
+  `Windows` desvia `inventory` e `status` para os componentes próprios.
+  - A cena de floresta (fundo do personagem) ocupa x 24..263 do PNG, medida
+    pelo verde saturado, que só existe ali; o painel escuro é o resto até a
+    moldura. A divisória entre "Status" e "Atributos" veio da proporção da
+    referência (0,483 da largura do painel).
+  - **A cena de floresta é OPACA**, diferente do medalhão da placa do
+    personagem: o retrato vai POR CIMA da placa, não atrás. Atrás dela ele
+    simplesmente não aparecia — a cena é o cenário, o boneco é o que fica na
+    frente.
+  - **Classe vem do SERVIDOR**: o id está em `stats.class` (semeado da lista de
+    personagens) e o nome sai do enum `e_job` via `character/jobNames`. Usar o
+    `jobName` da ficha local mostrava a classe do demo.
+  - As divisórias (entre Nível/Classe e HP-SP, entre HP-SP e os derivados, entre
+    Atributos e a dica, e a vertical entre as colunas) são a peça
+    `reta-barra-hp-sp` com opacidade, não `border` — assim o traço é o mesmo do
+    resto da arte. A vertical gira um filho que nasce DEITADO: `backgroundSize:
+    100% 100%` numa caixa já em pé mapearia a espessura no comprimento e
+    esmagaria o traço.
+  - **Arrastar no avatar gira o personagem** (`CharacterPortrait giravel`), só
+    no eixo Y: girar em X deitaria o boneco e o enquadramento — que sai do osso
+    da cabeça — deixaria de valer. Meia volta a cada ~180 px de arrasto, aplicada
+    por QUADRO mutando `scene.rotation.y`; passar o ângulo por `setState`
+    repintaria o HUD a cada pixel de mouse.
+  - **A dica mora num "?"** ao lado dos pontos livres, não em texto solto: as
+    quatro linhas dela empurravam a coluna para além do fundo e os botões
+    Cancelar/Confirmar caíam para fora da moldura.
+  - **Teto de 130 por atributo**: no máximo o "+" fica CINZA (`grayscale`), não
+    some — sumir tiraria a coluna de alinhamento das outras linhas — e o número
+    esmaece junto.
+  - **Ponto de atributo é ESTAGIADO**: o "+" só soma na tela e o Confirmar é que
+    manda os pedidos. O rAthena não tem pacote de "subir N de uma vez" —
+    `CZ_STATUS_CHANGE` sobe um por vez —, então o lote vira uma sequência de
+    `stat:raise`. É o que a referência pede ("os pontos são fixados quando
+    confirmados"), e o Cancelar existe porque o valor na tela ainda não foi ao
+    servidor.
+  - O retrato reusa `hud/CharacterPortrait` com `inteiro` (enquadra dos pés ao
+    topo em vez do busto) e `fundo={false}` — quem faz o fundo é a cena pintada.
+  - As descrições dos seis atributos são as do próprio pacote
+    (`especificação de cada status (str-int-etc).txt`), abertas pela seta ao
+    lado de cada linha.
 - **VFX de skill e NPC**: `vfx/` desenha o que o servidor manda — área/cast =
   disco com gradiente (shader), buff = anel + coluna, impacto = flash. Medidos
   em CÉLULAS (`cellSize`), senão o mesmo efeito some num hexScale e cobre a tela
@@ -595,6 +709,15 @@ pnpm --filter @ragnarok/api link:legacy-map <mapa3d> <mapaRO> <x> <y>  # janela 
     cinturão da borda**. Classificando por localização, o escopo "Buraco"
     alcançava 593 células — o relato de que ele "funcionava só numa parte pequena
     do buraco". Divisão medida hoje: buraco 7.899, borda 56.676, dentro 95.425.
+  - **Só "Dentro" poupa o bloqueio; "Tudo" alcança as três regiões**: o relevo
+    (pincel e procedural) entra em parede e buraco em Borda, Buraco e Tudo —
+    antes a permissão era exclusiva de Borda/Buraco e "Tudo" acabava se
+    comportando igual a "Dentro", o que contradizia o próprio nome. Medido em
+    `prt_fild08`, uma pincelada de raio 6 no mesmo ponto: "Dentro" altera 40
+    células (todas do miolo), "Tudo" altera 121 (40 dentro + 75 borda + 6
+    buraco), e a colisão não muda em nenhum dos dois. O LAGO procedural é a
+    exceção que poupa bloqueio em todo escopo: ele grava `collision: "water"`,
+    que é andável no rAthena, e cavar dentro da moldura abriria passagem.
   - **Borda e buraco são CENÁRIO, nunca passagem**: pincel de superfície, peça de
     chão, rio, estrada, relevo procedural e "Limpar terreno bloqueado" foram todos
     fechados para não converter `wall`/`cliff` em andável — o rio era o pior,

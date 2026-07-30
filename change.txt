@@ -1,8 +1,2 @@
-dentro de http://localhost:3001/play 
-na ui do game, eu coloquei na pasta C:\Users\Bruno\Desktop\game-project\assets-new\ui_definitiva\character-up-left
-a referencia de como eu quero que fique a parte de cima da esquerda aonde está o personagem com barra de hp e lvl
-referencia-pronto.jpg é a referencia
-
-
-para fazer a barra de hp e de vida usa curva-das-bordas-barra-hp-sp nas bordas, só iverter e rotacionar para virar um retangulo, e adicionar reta-barra-hp-sp caso necessite extender
-ring-level.png é para colocar o lvl de base e outro é o job (atual 200/70), se tiver como colocar o rosto do char no local do avatar também.
+no escopo global de "Tudo" em "Editar em: Dentro | Borda | Buraco | Tudo" , o tudo não está funcionando em tudo, eu por exemplo nao consigo usar a ferramenta
+"B" para suavizar e pegar a parte de "dentro ,borda e buraco " juntas [aparentemente "tudo" só esta modificando a parte de dentro"

@@ -6,6 +6,8 @@ import { usePlayerStore } from "../net/playerStore";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { gateway } from "../net/gateway";
 import { Panel, IconSquare, RpgButton, Slot, UI_PACK_CREDIT } from "../ui/rpg";
+import { InventoryWindow } from "./InventoryWindow";
+import { StatusWindow as StatusArtWindow } from "./StatusWindow";
 
 /** janela central genérica: título + fechar. Conteúdo por chave. */
 export function Windows() {
@@ -14,6 +16,19 @@ export function Windows() {
   if (!open) return null;
   const meta = TITLES[open];
   const Content = CONTENT[open];
+
+  // Inventário e Status têm arte PRÓPRIA — moldura, título e botão de fechar
+  // vêm no desenho —, então não entram no `Panel` genérico: a página pixel-art
+  // do TravelBook por baixo brigaria com a madeira pintada deles.
+  const comArte = open === "inventory" ? <InventoryWindow /> : open === "status" ? <StatusArtWindow /> : null;
+  if (comArte) {
+    return (
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+        <div style={{ pointerEvents: "auto" }}>{comArte}</div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
       <div style={{ pointerEvents: "auto" }}>
@@ -245,89 +260,6 @@ function EquipSlot({ label }: { label: string }) {
     <Slot size={40} title={label}>
       {label}
     </Slot>
-  );
-}
-
-// ---- Inventário: 3 categorias + grid ----
-/**
- * Categorias do inventário do RO por `type` do item_db
- * (rathena/src/map/itemdb.hpp, enum item_types): 0 healing, 2 usable, 11 delay
- * consume, 18 cash → consumível; 4 armor, 5 weapon, 8 ammo → equipamento; o
- * resto (3 etc, 6 card, 7 pet egg, 10 pet armor) cai em Etc.
- */
-const CONSUMABLE_TYPES = new Set([0, 2, 11, 18]);
-const EQUIP_TYPES = new Set([4, 5, 8]);
-
-function InventoryWindow() {
-  const [cat, setCat] = useState<"Consumíveis" | "Equipamentos" | "Etc">("Consumíveis");
-  const online = usePlayerStore((s) => s.known);
-  const inventory = usePlayerStore((s) => s.inventory);
-
-  const items = inventory.filter((it) =>
-    cat === "Consumíveis"
-      ? CONSUMABLE_TYPES.has(it.type)
-      : cat === "Equipamentos"
-        ? EQUIP_TYPES.has(it.type)
-        : !CONSUMABLE_TYPES.has(it.type) && !EQUIP_TYPES.has(it.type),
-  );
-
-  // Consumível: usa. Equipamento: veste/tira. O servidor responde com o
-  // inv:remove / a lista nova — nada muda na tela por conta própria.
-  const activate = (item: (typeof inventory)[number]) => {
-    if (EQUIP_TYPES.has(item.type)) {
-      gateway().emit(item.equipped ? "item:unequip" : "item:equip", { index: item.index });
-      return;
-    }
-    if (CONSUMABLE_TYPES.has(item.type)) {
-      gateway().emit("item:use", { index: item.index });
-    }
-  };
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        {(["Consumíveis", "Equipamentos", "Etc"] as const).map((c) => (
-          <RpgButton key={c} color="blue" active={cat === c} onClick={() => setCat(c)}>
-            {c}
-          </RpgButton>
-        ))}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(46px, 1fr))", gap: 6, justifyItems: "center" }}>
-        {items.map((it) => (
-          <div
-            key={it.index}
-            onClick={() => activate(it)}
-            // Botão direito joga no chão, como no RO (lá é arrastar para fora
-            // da janela; aqui o menu de contexto do navegador atrapalharia).
-            onContextMenu={(e) => {
-              e.preventDefault();
-              gateway().emit("item:drop", { index: it.index, amount: 1 });
-            }}
-            draggable
-            onDragStart={(e) => e.dataTransfer.setData("application/x-ro-item", String(it.index))}
-            title={`#${it.itemId}${it.refine ? ` +${it.refine}` : ""} — clique usa/equipa, botão direito joga no chão`}
-            style={{ cursor: "pointer", position: "relative" }}
-          >
-            <Slot size={46} title={`#${it.itemId}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""}`}>
-              <IconSquare seed={`item-${it.itemId}`} size={38} label={String(it.itemId)} />
-            </Slot>
-            {it.amount > 1 && (
-              <span style={{ position: "absolute", right: 2, bottom: 2, font: "700 10px system-ui", color: "#493333", textShadow: "0 1px 2px #000" }}>
-                {it.amount}
-              </span>
-            )}
-          </div>
-        ))}
-        {Array.from({ length: Math.max(0, 24 - items.length) }).map((_, i) => (
-          <Slot key={`empty-${i}`} size={46} />
-        ))}
-      </div>
-      <p style={{ font: "10px system-ui", color: "#8a7868", marginTop: 8 }}>
-        {online
-          ? "Clique usa/equipa; botão direito joga no chão. Quem decide é o servidor."
-          : "Sem sessão: inventário só existe com o personagem logado no rAthena."}
-      </p>
-    </div>
   );
 }
 

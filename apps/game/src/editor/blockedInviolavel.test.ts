@@ -100,13 +100,47 @@ describe("altura em borda e buraco", () => {
     expect(bloqueiosIntactos()).toEqual([]);
   });
 
-  it('em "Tudo" o relevo NÃO entra no bloqueio (protege ravina de pincelada larga)', () => {
+  it('"Tudo" alcança dentro, borda E buraco de uma vez', () => {
+    // é o que o nome promete: antes "Tudo" poupava o bloqueio e acabava se
+    // comportando igual a "Dentro" — suavizar pegava só o miolo
     st().setEditScope("all");
     st().setBrush("raise");
     st().setBrushSize(5);
+    st().setBrushStrength(1);
+    st().paintCell(11, 11); // em cima da ravina
+    st().paintCell(1, 8); // em cima da moldura
+    expect(mapa().heightmap[idx(11, 11)]).not.toBe(0); // buraco moldado
+    expect(mapa().heightmap[idx(1, 8)]).not.toBe(0); // borda moldada
+    // e nada disso abre passagem
+    expect(mapa().collision[idx(11, 11)]).toBe("cliff");
+    expect(mapa().collision[idx(1, 8)]).toBe("wall");
+    expect(bloqueiosIntactos()).toEqual([]);
+  });
+
+  it('"Dentro" continua sendo o escopo que POUPA o bloqueio', () => {
+    st().setEditScope("inside");
+    st().setBrush("raise");
+    st().setBrushSize(5);
+    st().setBrushStrength(1);
     st().paintCell(9, 9); // disco alcança a ravina em (11,11)
     expect(mapa().heightmap[idx(11, 11)]).toBe(0);
     expect(mapa().collision[idx(11, 11)]).toBe("cliff");
+  });
+
+  it('suavizar em "Tudo" alcança a célula de buraco', () => {
+    // ravina com altura própria: suavizar tem que puxá-la para a média dos
+    // vizinhos. Antes o pincel simplesmente pulava a célula bloqueada.
+    const m = mapaImportado();
+    (m.heightmap as number[])[idx(11, 11)] = 5;
+    st().init(m);
+    st().setEditScope("all");
+    st().setBrush("smooth");
+    st().setBrushSize(3);
+    st().setBrushStrength(1);
+    st().paintCell(11, 11);
+    expect(mapa().heightmap[idx(11, 11)]).toBeLessThan(5);
+    expect(mapa().collision[idx(11, 11)]).toBe("cliff");
+    expect(bloqueiosIntactos()).toEqual([]);
   });
 });
 

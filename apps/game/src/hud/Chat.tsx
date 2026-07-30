@@ -4,6 +4,7 @@ import { gateway } from "../net/gateway";
 import { usePlayerStore } from "../net/playerStore";
 import { FRAME_FONT } from "../ui/charFrame";
 import { CurvedBox } from "../ui/CurvedBox";
+import { ScrollbarHider } from "../ui/ScrollbarHider";
 import { ChatFrame } from "./ChatFrame";
 import { ChatScrollbar } from "./ChatScrollbar";
 import {
@@ -155,10 +156,7 @@ export function Chat() {
 
   return (
     <div style={{ position: "relative", width: LARGURA, height: ALTURA }}>
-      {/* A barra nativa não aceita imagem de fundo; escondê-la é a única forma
-          de a barra desenhada (ChatScrollbar) valer. Precisa de pseudo-elemento,
-          que estilo inline não alcança — daí a regra solta. */}
-      <style>{`.chat-scroll{scrollbar-width:none;-ms-overflow-style:none}.chat-scroll::-webkit-scrollbar{width:0;height:0}`}</style>
+      <ScrollbarHider />
 
       <div style={{ position: "absolute", inset: 0, background: CHAT_BG.panel, borderRadius: 10 }} />
       <ChatFrame />

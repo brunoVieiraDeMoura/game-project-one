@@ -115,6 +115,9 @@ function generateTerrain(
   const clamp = (v: number) => Math.max(0, Math.min(12, v));
   const noEscopo = (col: number, row: number) => !editar || cellInScope(map, scope, col, row);
   const bloqueada = (i: number) => collision[i] === "wall" || collision[i] === "cliff";
+  // mesma regra do pincel: só "Dentro" poupa o bloqueio; nos outros escopos o
+  // relevo molda mata e ravina também (a colisão nunca muda)
+  const pouparBloqueio = scope === "inside";
 
   // colinas: fbm suave escalado pela %
   if (f.hill > 0) {
@@ -123,9 +126,7 @@ function generateTerrain(
     for (let row = 0; row < H; row++)
       for (let col = 0; col < W; col++) {
         const i = row * W + col;
-        // mesma regra do pincel: relevo não passa por cima de bloqueio, senão a
-        // altura autorada mata o afundamento do buraco (ver visualLevel)
-        if (!noEscopo(col, row) || (editar && bloqueada(i))) continue;
+        if (!noEscopo(col, row) || (editar && pouparBloqueio && bloqueada(i))) continue;
         const nz = fbm(col * freq, row * freq, seeds.hill);
         heightmap[i] = clamp(Math.round(nz * amp));
       }
@@ -145,6 +146,10 @@ function generateTerrain(
           const d = Math.hypot(col - cc, row - cr);
           if (d > beach) continue;
           const i = row * W + col;
+          // O lago poupa o bloqueio em TODO escopo, inclusive "Tudo": ele grava
+          // `collision: "water"`, que no rAthena é ANDÁVEL (tipo 3) — cavar um
+          // lago dentro da moldura abriria passagem por ela. Altura é livre nos
+          // outros escopos; passagem, nunca.
           if (!noEscopo(col, row) || (editar && bloqueada(i))) continue;
           heightmap[i] = 0;
           rampAt.delete(i); // lago/praia afogou a trilha aqui
@@ -2165,7 +2170,20 @@ export const useEditorStore = create<EditorState>((set) => ({
       // com PESO por célula: o pincel de relevo é proporcional (ver brushFalloff);
       // superfície e colisão ignoram o peso — pintar é tudo-ou-nada
       const cells = cellsWithFalloff(W, H, col, row, s.brushSize);
-      const escopoBloqueio = s.editScope === "border" || s.editScope === "hole";
+      /**
+       * O relevo pode entrar em célula BLOQUEADA?
+       *
+       * Só "Dentro" protege. Antes a permissão era exclusiva de "Borda"/"Buraco",
+       * e "Tudo" acabava se comportando igual a "Dentro" — suavizar com "Tudo"
+       * escolhido pegava o miolo e ignorava mata e ravina, que é o oposto do que
+       * o nome promete. "Dentro" continua sendo o escopo seguro: lá o pincel de
+       * relevo não encosta em bloqueio, o que protege a ravina de uma pincelada
+       * larga no campo.
+       *
+       * A COLISÃO segue intocada em qualquer escopo: mexer na altura de uma
+       * parede não abre passagem nela.
+       */
+      const escopoBloqueio = s.editScope !== "inside";
       const target = orig[cellIndex(map, col, row)] ?? 0; // p/ flatten
       // o piso vai abaixo de zero por causa do BURACO: uma ravina é terreno
       // negativo, e travar em 0 não deixaria desenhá-la
