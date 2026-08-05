@@ -8,8 +8,6 @@ export const DEFAULT_SERVER_CONFIG: ServerConfig = {
   dropRate: 1,
   dropRateOverrides: [],
   expRateOverrides: [],
-  defaultMovementMode: "grid",
-  allowMovementModeSwitch: true,
   gameplay: {
     moveSpeed: 20,
     jumpHeight: 1.1,
@@ -27,9 +25,11 @@ export const DEFAULT_SERVER_CONFIG: ServerConfig = {
     groundColor: "#bfc537",
     groundTextureScale: 2.5,
     groundTextureStrength: 0.35,
-    renderDistance: 140,
-    fogNear: 90,
-    fogFar: 135,
+    // a névoa é FRAÇÃO do raio (ver server-config.ts): 130 × 0,92 = 120, que é
+    // onde ela já fechava — e agora nada é desenhado depois disso
+    renderDistance: 130,
+    fogNearFrac: 0.69,
+    fogFarFrac: 0.92,
   },
   version: 1,
   updatedAt: "2026-07-19T00:00:00.000Z",

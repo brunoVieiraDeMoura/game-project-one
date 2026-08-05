@@ -9,6 +9,7 @@ import { RetroFilter } from "../scene/RetroFilter";
 import { hexToWorld, worldToHex, levelToY, setHexScale, HEX_W, HEX_V } from "../hex/hexGrid";
 import { gridFor } from "../grid";
 import { SquareTerrain } from "../grid/SquareTerrain";
+import { EscopoOverlay } from "./EscopoOverlay";
 import { useEditorViewCenter } from "./useEditorViewCenter";
 import { useEditorStore, nextPropId, layerOfProp, triggerColor } from "./editorStore";
 import type { MapTrigger } from "@ragnarok/map-format";
@@ -78,6 +79,8 @@ export function EditorScene() {
   const measurePoint = useEditorStore((s) => s.measurePoint);
   const measure = useEditorStore((s) => s.measure);
   const hiddenLayers = useEditorStore((s) => s.hiddenLayers);
+  /** o escopo da TopBar — sombreia o que ele deixa de fora (ver EscopoOverlay) */
+  const escopoAtivo = useEditorStore((s) => s.editScope);
   const retroPreview = useEditorStore((s) => s.retroPreview);
   // visual do chão: o que está salvo no server_config, com o preview local do
   // painel Cena por cima (pra comparar atlas/cor/textura sem salvar)
@@ -220,7 +223,7 @@ export function EditorScene() {
       lastCell.current = `${col},${row}`;
       // rampa e grab precisam saber DE ONDE o gesto saiu: na rampa é a ponta de
       // baixo, no grab é o centro da região que vai ser puxada
-      if (brush === "ramp" || brush === "grab") beginRamp(col, row);
+      if (brush === "ramp" || brush === "grab" || brush === "ledge") beginRamp(col, row);
       paintCell(col, row);
     } else if (tool === "place" && currentAsset) {
       e.stopPropagation();
@@ -315,6 +318,35 @@ export function EditorScene() {
   const el = (lighting.sunElevation * Math.PI) / 180;
   const R = 140;
   const sun: [number, number, number] = [Math.cos(el) * Math.sin(az) * R, Math.sin(el) * R, Math.cos(el) * Math.cos(az) * R];
+  /**
+   * Props DENTRO do alcance de visão — o mesmo centro e raio que o terreno usa.
+   *
+   * O terreno era cullado e os props não: `map.props.map(...)` desenhava TODOS,
+   * e cada um é uma cópia da cena do glTF (sem instanciar). Num mapa com
+   * vegetação gerada isso é o custo dominante do editor — desenho, sombra e
+   * reconciliação de React de milhares de nós que nem estão na tela.
+   *
+   * O raio acompanha o zoom (`useEditorViewCenter`), então afastar para ver o
+   * mapa inteiro traz todos de volta: aí eles estão em cena porque estão sendo
+   * OLHADOS. A folga de um chunk existe para o prop não sumir exatamente na
+   * borda do chão desenhado.
+   */
+  const propsVisiveis = useMemo(() => {
+    if (!map) return [];
+    const r = view.radius + cellW * 32;
+    const r2 = r * r;
+    const out: { prop: (typeof map.props)[number]; index: number }[] = [];
+    map.props.forEach((p, index) => {
+      const layer = layerOfProp(p.assetId, p.tags?.[0] === "_gen" ? p.tags[1] : undefined);
+      if (hiddenLayers.includes(layer)) return;
+      const dx = p.position[0] - view.center.x;
+      const dz = p.position[2] - view.center.z;
+      if (dx * dx + dz * dz > r2) return;
+      out.push({ prop: p, index });
+    });
+    return out;
+  }, [map, hiddenLayers, view.center.x, view.center.z, view.radius, cellW]);
+
   const terrainHidden = hiddenLayers.includes("terrain");
   const spawnsHidden = hiddenLayers.includes("spawns");
 
@@ -323,7 +355,18 @@ export function EditorScene() {
       {/* fundo gradiente escuro (estúdio) — combina com a UI dark e destaca o mapa */}
       <GradientSky top="#141a26" bottom="#3a465b" />
       <ambientLight intensity={lighting.ambient} />
-      <directionalLight position={sun} intensity={lighting.sunIntensity} castShadow shadow-mapSize={[2048, 2048]} />
+      {/*
+        SEM `castShadow` — e isso não tira sombra nenhuma da tela.
+        A luz tinha `castShadow` com `shadow-mapSize` de 2048², mas sem
+        `shadow-camera` própria: o frustum padrão do three é ortográfico de ±5
+        unidades em volta da ORIGEM. Num mapa de 800 unidades de lado, isso é uma
+        mancha de 10 unidades no canto — ou seja, o mapa de sombra era desenhado
+        inteiro a cada quadro para iluminar praticamente nada.
+        Sombra de verdade aqui exigiria uma câmera de sombra acompanhando o
+        centro de visão (é o que o `SunRig` do /play faz com o jogador); enquanto
+        isso não existir, o certo é não pagar o passo.
+      */}
+      <directionalLight position={sun} intensity={lighting.sunIntensity} />
 
       <group onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}>
         {/* Mapa autorado: peças hexagonais, mapa inteiro (são 32×32).
@@ -338,6 +381,9 @@ export function EditorScene() {
               <SquareTerrain map={map} center={view.center} radius={view.radius} ground={gameplay} />
             ))}
         </group>
+        {/* o que o escopo deixa de fora fica sombreado — sem isso a regra é
+            invisível e o pincel "não funcionando" parece bug (ver EscopoOverlay) */}
+        {!terrainHidden && <EscopoOverlay map={map} escopo={escopoAtivo} />}
         {/* plano-base invisível pra capturar cliques em áreas sem tile alto */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.02, cz]}>
           <planeGeometry args={[cellW * map.size.width + cellW, cellD * map.size.height + cellD]} />
@@ -346,15 +392,11 @@ export function EditorScene() {
       </group>
 
       {/* props (respeitando camadas ocultas). Cada um com Suspense próprio. */}
-      {map.props.map((p, i) => {
-        const layer = layerOfProp(p.assetId, p.tags?.[0] === "_gen" ? p.tags[1] : undefined);
-        if (hiddenLayers.includes(layer)) return null;
-        return (
-          <Suspense key={p.id} fallback={null}>
-            <EditorProp prop={p} index={i} />
-          </Suspense>
-        );
-      })}
+      {propsVisiveis.map(({ prop: p, index: i }) => (
+        <Suspense key={p.id} fallback={null}>
+          <EditorProp prop={p} index={i} />
+        </Suspense>
+      ))}
 
       {/* marcadores de spawn (player verde, monstro vermelho, npc azul) */}
       {!spawnsHidden &&

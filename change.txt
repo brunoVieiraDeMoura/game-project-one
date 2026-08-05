@@ -1,2 +1,8 @@
-no escopo global de "Tudo" em "Editar em: Dentro | Borda | Buraco | Tudo" , o tudo não está funcionando em tudo, eu por exemplo nao consigo usar a ferramenta
-"B" para suavizar e pegar a parte de "dentro ,borda e buraco " juntas [aparentemente "tudo" só esta modificando a parte de dentro"
+em C:\Users\Bruno\Desktop\ref 
+tem algumas referencias de como eu queria produzir o mapa e suas texturas
+coinsiderações: 
+1- palheta com texturização um pouco mais suave para gramas/pedra/ etc.. assim como em reftexture (qual farremanta fazer? como usar? da pra implementar para que fique parecido com as imagens de referencia?
+2- montanhas e rios texturizadas bonitas como nas referencias (adendo: implementar em montanhas e rios a especificações de não poder andar, como implementar ? como separar morrinhos andáveis, de morros [montanhas] não andáveis? qual ferramenta usar? da pra implementar no editor?
+
+
+

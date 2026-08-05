@@ -1,7 +1,8 @@
-import { Suspense, useLayoutEffect, useRef } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { CHARACTER_URLS, useCharacter, type CharacterKey } from "../assets";
+import { SondaDeCanvas, SondaDeMontagem, SondaDeSuspense } from "../core/diagnostics/SondaDeCanvas";
 
 /**
  * Retrato do personagem no buraco do aro da placa (change.txt: "se tiver como
@@ -22,6 +23,37 @@ import { CHARACTER_URLS, useCharacter, type CharacterKey } from "../assets";
 const FOV = 24; // lente de retrato: distorce menos o rosto que os 50° da cena
 /** quanto de ombro entra abaixo do pescoço, em alturas-de-cabeça */
 const OMBRO = 0.3;
+
+/**
+ * A quantos quadros por segundo o retrato desenha.
+ *
+ * Este componente é um CONTEXTO WebGL À PARTE, com um personagem skinado
+ * inteiro e um `AnimationMixer` próprio dentro. Ele é montado sempre pela placa
+ * do personagem, de novo pela placa do ALVO quando há algo mirado, e de novo
+ * pela janela de Status quando ela está aberta — ou seja, até três cenas 3D
+ * completas rodando a 60 Hz ao lado do jogo, para animar um `idle` num círculo
+ * de ~94 px.
+ *
+ * 24 Hz é o bastante para o busto respirar e para o arrasto da janela de Status
+ * acompanhar o mouse, e corta ~60% dos quadros desenhados por retrato.
+ */
+const RETRATO_FPS = 24;
+
+/**
+ * Pede um quadro em intervalo fixo — o motor do `frameloop="demand"`.
+ *
+ * Com `demand`, o R3F só desenha quando alguém chama `invalidate()`. Sem isto o
+ * retrato ficaria congelado no primeiro quadro: quem o anima é o `useFrame` do
+ * mixer, e `useFrame` só roda em quadro que existe.
+ */
+function Pulso() {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const id = setInterval(() => invalidate(), 1000 / RETRATO_FPS);
+    return () => clearInterval(id);
+  }, [invalidate]);
+  return null;
+}
 
 function Bust({
   url,
@@ -79,7 +111,16 @@ export function CharacterPortrait({
   inteiro,
   fundo,
   giravel,
+  dono = "?",
 }: {
+  /**
+   * QUEM montou este retrato — "jogador", "alvo", "status", "char-select".
+   *
+   * São até três contextos WebGL vivos ao mesmo tempo e todos se chamavam
+   * "retrato" no laudo, então "qual deles nasceu" não tinha resposta. Só
+   * diagnóstico: nada aqui muda o que é desenhado.
+   */
+  dono?: string;
   characterKey?: CharacterKey;
   /** enquadra o corpo todo (janela de status) em vez do busto (medalhão) */
   inteiro?: boolean;
@@ -134,16 +175,41 @@ export function CharacterPortrait({
         touchAction: giravel ? "none" : undefined,
       }}
     >
+      {/* FORA do `<Canvas>`: marca o momento em que o React montou o
+          componente, que é ANTES de o contexto WebGL existir. A distância entre
+          este evento e o `contexto-criado` é o que separa "o React remontou" de
+          "criar o contexto custou". */}
+      {import.meta.env.DEV && <SondaDeMontagem nome={`retrato:${dono}`} dados={{ characterKey, inteiro: !!inteiro }} />}
       <Canvas
         camera={{ fov: FOV, near: 0.01, far: 100 }}
-        dpr={[1, 1.5]}
-        gl={{ alpha: true, antialias: true }}
+        /**
+         * Um retrato NÃO merece o orçamento de uma cena.
+         *
+         * `dpr` 1: o medalhão tem ~94 px de lado; a 1,5 seriam 2,25× de pixels
+         * para desenhar a mesma cabeça. `antialias: false`: MSAA 4× num busto
+         * desse tamanho custa e quase não se vê — a silhueta é escondida pelo
+         * aro de madeira da placa, que é o recorte que o olho segue.
+         * `frameloop="demand"` + `Pulso`: 24 Hz em vez de 60 (ver RETRATO_FPS).
+         */
+        dpr={1}
+        gl={{ alpha: true, antialias: false, powerPreference: "low-power" }}
+        frameloop="demand"
         style={{ position: "absolute", inset: 0 }}
       >
+        <Pulso />
+        {/* Um contexto WebGL à parte, e foi o vai-e-vem deles que estourou o
+            teto do Chrome e derrubou o contexto do JOGO. A sonda os põe na
+            coluna `contextosVivos` do flight recorder; ela não dispara captura
+            (ver `SondaDeCanvas`). Um ponto só cobre os três usos: placa do
+            personagem, placa do alvo e janela de Status. */}
+        {import.meta.env.DEV && <SondaDeCanvas nome={`retrato:${dono}`} />}
         <ambientLight intensity={1.5} />
         <directionalLight position={[2, 3, 4]} intensity={2.2} />
         <directionalLight position={[-3, 1, -2]} intensity={0.8} color="#9fb4d8" />
-        <Suspense fallback={null}>
+        {/* nomeado para o laudo distinguir ESTE boundary do da cena: o busto
+            também carrega um .glb, e os dois suspendendo juntos seriam
+            indistinguíveis com um sinal anônimo */}
+        <Suspense fallback={import.meta.env.DEV ? <SondaDeSuspense nome="retrato" /> : null}>
           <Bust url={CHARACTER_URLS[characterKey]} inteiro={inteiro} giro={giravel ? giro : undefined} />
         </Suspense>
       </Canvas>

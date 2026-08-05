@@ -10,8 +10,20 @@
  * (que existe para recolorir a grama do ATLAS das peças KayKit por matiz).
  */
 export const GROUND_NOISE_GLSL = `
+// Hash SEM \`sin\`.
+//
+// O clássico \`fract(sin(dot(p, k)) * grande)\` custa uma transcendental por
+// amostra, e aqui são QUATRO amostras por oitava, TRÊS oitavas — doze \`sin\` em
+// cada pixel de chão, e o chão cobre a tela inteira. Esta versão usa só
+// multiplicação e \`fract\`, que a GPU faz na unidade comum.
+//
+// Não é a mesma sequência de números da anterior (nenhum hash é), mas é a mesma
+// COISA: ruído branco em [0,1) descorrelacionado entre células inteiras. O que
+// se vê continua sendo mancha larga de baixa amplitude.
 float groundHash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+  vec3 q = fract(vec3(p.xyx) * 0.1031);
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.x + q.y) * q.z);
 }
 float groundNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);

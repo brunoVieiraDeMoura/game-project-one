@@ -68,6 +68,7 @@ io.on("connection", (socket) => {
 		);
 		ro.on("self-move", (payload) => socket.emit("self:move", payload));
 		ro.on("self-warp", (payload) => socket.emit("self:warp", payload));
+		ro.on("attack-too-far", (payload) => socket.emit("attack:too-far", payload));
 		ro.on("entity-spawn", (entity) => socket.emit("entity:spawn", entity));
 		ro.on("entity-move", (payload) => socket.emit("entity:move", payload));
 		ro.on("entity-stop", (payload) => socket.emit("entity:stop", payload));
@@ -91,6 +92,13 @@ io.on("connection", (socket) => {
 		ro.on("ground-item", (payload) => socket.emit("ground:item", payload));
 		ro.on("ground-item-gone", (payload) => socket.emit("ground:item-gone", payload));
 		ro.on("chat", (payload) => socket.emit("chat:message", payload));
+		ro.on("friends", (payload) => socket.emit("friend:list", payload));
+		ro.on("friend-state", (payload) => socket.emit("friend:state", payload));
+		ro.on("friend-request", (payload) => socket.emit("friend:request", payload));
+		ro.on("friend-added", (payload) => socket.emit("friend:added", payload));
+		ro.on("friend-removed", (payload) => socket.emit("friend:removed", payload));
+		ro.on("guild-members", (payload) => socket.emit("guild:members", payload));
+		ro.on("ignore-list", (payload) => socket.emit("ignore:list", payload));
 		ro.on("closed", (payload) => {
 			socket.emit("session:closed", payload);
 			teardown();
@@ -204,6 +212,46 @@ io.on("connection", (socket) => {
 
 	socket.on("entity:info", (payload: { gid?: number }) => {
 		withSession((ro) => ro.requestName(Number(payload?.gid ?? 0)));
+	});
+
+	socket.on("friend:add", (payload: { name?: string }) => {
+		const name = String(payload?.name ?? "").trim();
+		if (!name) return;
+		withSession((ro) => ro.addFriend(name));
+	});
+
+	socket.on("friend:remove", (payload: { accountId?: number; charId?: number }) => {
+		withSession((ro) => ro.removeFriend(Number(payload?.accountId ?? 0), Number(payload?.charId ?? 0)));
+	});
+
+	socket.on("friend:answer", (payload: { accountId?: number; charId?: number; accept?: boolean }) => {
+		withSession((ro) =>
+			ro.answerFriendRequest(
+				Number(payload?.accountId ?? 0),
+				Number(payload?.charId ?? 0),
+				payload?.accept === true,
+			),
+		);
+	});
+
+	socket.on("skill:raise", (payload: { skillId?: number }) => {
+		const skillId = Number(payload?.skillId ?? 0);
+		if (!skillId) return;
+		withSession((ro) => ro.raiseSkill(skillId));
+	});
+
+	socket.on("guild:request", () => withSession((ro) => ro.requestGuildMembers()));
+
+	socket.on("ignore:add", (payload: { name?: string }) => {
+		const name = String(payload?.name ?? "").trim();
+		if (!name) return;
+		withSession((ro) => ro.setIgnored(name, true));
+	});
+
+	socket.on("ignore:remove", (payload: { name?: string }) => {
+		const name = String(payload?.name ?? "").trim();
+		if (!name) return;
+		withSession((ro) => ro.setIgnored(name, false));
 	});
 
 	socket.on("disconnect", teardown);

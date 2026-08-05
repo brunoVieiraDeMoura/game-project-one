@@ -118,16 +118,36 @@ describe("pincel x buraco", () => {
     expect(mapa().collision[idx(9, 9)]).toBe("cliff"); // bloqueio permanece
   });
 
-  it('escopo "Borda" não deixa o pincel entrar no miolo', () => {
+  it('escopo "Dentro" não deixa o pincel de superfície sair para a moldura', () => {
     const s = useEditorStore.getState();
-    s.setEditScope("border");
+    s.setEditScope("inside");
     // "water" e não "grass": ao criar `surface` vazia o store preenche tudo com
     // grama, então grama não distingue quem recebeu a pincelada de quem não
     s.setBrush("water");
     s.setBrushSize(3);
     s.paintCell(2, 2); // disco pega moldura e miolo
-    expect(mapa().surface[idx(0, 2)]).toBe("water"); // moldura recebeu
-    expect(mapa().surface[idx(4, 4)]).toBe("grass"); // miolo, não
+    expect(mapa().surface[idx(2, 2)]).toBe("water"); // miolo recebeu
+    expect(mapa().surface[idx(0, 2)]).toBe("grass"); // moldura, não
     expect(mapa().collision[idx(0, 2)]).toBe("wall"); // e continua parede
+  });
+
+  it("superfície NÃO pinta célula bloqueada, em escopo nenhum", () => {
+    // Não é só a colisão que fica de fora: a APARÊNCIA também. Desde que a
+    // paleta tem pincel de pedra, pintar "stone" numa mata importada a deixaria
+    // idêntica a uma montanha nossa — e o "Desfazer ⛏" reconhece montanha por
+    // `surface === "stone"`, o que viraria porta dos fundos para abrir a mata.
+    for (const escopo of ["all", "inside", "border", "hole"] as const) {
+      useEditorStore.getState().init(mapaQuadradoComBuraco());
+      const s = useEditorStore.getState();
+      s.setEditScope(escopo);
+      s.setBrush("stone");
+      s.setBrushSize(3);
+      s.paintCell(0, 2); // moldura (wall)
+      s.paintCell(9, 9); // ravina (cliff)
+      expect(mapa().surface[idx(0, 2)], `escopo ${escopo}`).not.toBe("stone");
+      expect(mapa().surface[idx(9, 9)], `escopo ${escopo}`).not.toBe("stone");
+      expect(mapa().collision[idx(0, 2)], `escopo ${escopo}`).toBe("wall");
+      expect(mapa().collision[idx(9, 9)], `escopo ${escopo}`).toBe("cliff");
+    }
   });
 });

@@ -98,4 +98,27 @@ describe("editScope com buraco", () => {
     // e a mata em volta continua sendo borda
     expect(cellInScope(m2, "border", 2, 2)).toBe(true);
   });
+
+  it("rio fundo atravessando o mapa NÃO vira borda", () => {
+    // O canal fundo é `wall`, encosta na moldura nas duas pontas e corta o mapa
+    // ao meio. Contado como bloqueio comum, o flood fill da moldura corria por
+    // dentro dele e levava o rio inteiro para o escopo "Borda" — o miolo do mapa
+    // saía do escopo "Dentro" ao desenhar um rio.
+    const W = map.size.width;
+    const collision = [...(map.collision as string[])];
+    const surface = [...(map.surface as string[])];
+    const i = (c: number, r: number) => r * W + c;
+    for (let c = 0; c < W; c++) {
+      collision[i(c, 5)] = "wall";
+      surface[i(c, 5)] = "river";
+    }
+    const m2 = { ...map, collision, surface } as unknown as GameMap;
+    for (let c = 1; c < W - 1; c++) {
+      expect(cellInScope(m2, "border", c, 5), `célula ${c},5`).toBe(false);
+      expect(cellInScope(m2, "inside", c, 5), `célula ${c},5`).toBe(true);
+    }
+    // e a moldura de verdade continua sendo borda dos dois lados do rio
+    expect(cellInScope(m2, "border", 0, 2)).toBe(true);
+    expect(cellInScope(m2, "border", 0, 8)).toBe(true);
+  });
 });

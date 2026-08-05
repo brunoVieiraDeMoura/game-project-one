@@ -15,6 +15,7 @@ const map: GameMap = {
   heightmap: [0, 0, 0, 7, 0, 0],
   collision: ["walkable", "wall", "walkable", "water", "cliff", "walkable"],
   surface: [],
+  terrainStyle: {},
   waterLevel: null,
   props: [],
   spawns: [],

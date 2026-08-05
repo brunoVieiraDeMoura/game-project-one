@@ -1,8 +1,10 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useCombatStore } from "../combat/combatStore";
 import { useCharacterStore } from "../character/characterStore";
 import { usePlayerStore } from "../net/playerStore";
 import { useWorldStore } from "../net/worldStore";
+import { fatiaDeRender } from "../net/entityRenderSlice";
 import { mobModel } from "../entities/mobModels";
 import { useHudStore } from "./hudStore";
 import { CurvedBar } from "../ui/CurvedBar";
@@ -298,7 +300,7 @@ export function PlayerFrame() {
       sp={{ atual: p.sp, max: p.maxSp }}
       jobLevel={online ? stats.jobLevel : localJobLevel}
       onJobClick={() => useHudStore.getState().setWindow("skills")}
-      portrait={<CharacterPortrait />}
+      portrait={<CharacterPortrait dono="jogador" />}
     />
   );
 }
@@ -319,37 +321,91 @@ export function PlayerFrame() {
  */
 export function TargetFrame() {
   const online = usePlayerStore((s) => s.known);
-  const netTarget = useWorldStore((s) => (s.target ? s.entities[s.target] : undefined));
+  /**
+   * Só a fatia de RENDER do alvo — nunca a entidade inteira.
+   *
+   * Assinando o objeto todo, cada pacote de movimento do mob alvejado
+   * re-renderizava esta placa junto com o `CharacterPortrait` dela, que é um
+   * `<Canvas>` WebGL próprio com um personagem skinado dentro. Um mob que anda
+   * manda ~1 pacote por célula: a placa repintava o tempo todo para mostrar
+   * exatamente os mesmos nome, nível e HP. Mesma regra do `net/NetEntity`.
+   */
+  const netTarget = useWorldStore(
+    useShallow((s) => {
+      const e = s.target ? s.entities[s.target] : undefined;
+      return e ? { gid: e.gid, ...fatiaDeRender(e) } : undefined;
+    }),
+  );
   const localTarget = useCombatStore((s) => (s.target ? s.monsters[s.target] : undefined));
 
-  if (online) {
-    if (!netTarget) return null;
+  /**
+   * A ÚLTIMA ficha vista, para a placa nunca precisar DESMONTAR.
+   *
+   * O retrato é um `<Canvas>` do R3F, e cada montagem cria um
+   * `WebGLRenderingContext` PRÓPRIO. Com `return null` sem alvo, selecionar e
+   * soltar alvo destruía e recriava um contexto a cada vez — e o `dispose()` do
+   * R3F não libera contexto (só `forceContextLoss()` libera, e mesmo assim o
+   * objeto fica pendurado até o GC). O Chrome mantém ~16 contextos vivos e, ao
+   * estourar, **força a perda do MAIS ANTIGO — que é o canvas do jogo**. Era
+   * essa a origem dos `THREE.WebGLRenderer: Context Lost` repetidos, e o
+   * engasgo que eles produzem é o gatilho do salto de posição (ver
+   * `worldStore.selfMove`).
+   *
+   * Guardando a última ficha, a placa continua montada e some por CSS — o
+   * conteúdo congelado não é visível, está sob `display: none`.
+   */
+  const ultima = useRef<FichaDeAlvo | null>(null);
+
+  let ficha = ultima.current;
+  if (online && netTarget) {
     const temHp = netTarget.hp !== undefined && netTarget.maxHp !== undefined && netTarget.maxHp > 0;
-    // aparência do alvo = a mesma tabela que a cena usa para desenhá-lo
-    const modelo: CharacterKey =
-      netTarget.kind === "mob" ? mobModel(netTarget.job).character : "knight";
-    return (
-      <StatPlate
-        width={TARGET_WIDTH}
-        name={netTarget.name ?? `#${netTarget.gid}`}
-        level={netTarget.level ?? "?"}
-        hp={temHp ? { atual: netTarget.hp!, max: netTarget.maxHp! } : undefined}
-        hpFill={ENEMY_FILL}
-        portrait={<CharacterPortrait characterKey={modelo} />}
-      />
-    );
+    ficha = {
+      name: netTarget.name ?? `#${netTarget.gid}`,
+      level: netTarget.level ?? "?",
+      hp: temHp ? { atual: netTarget.hp!, max: netTarget.maxHp! } : undefined,
+      // aparência do alvo = a mesma tabela que a cena usa para desenhá-lo
+      modelo: netTarget.kind === "mob" ? mobModel(netTarget.job).character : "knight",
+    };
+    ultima.current = ficha;
+  } else if (!online && localTarget && localTarget.alive) {
+    ficha = {
+      name: localTarget.name,
+      level: localTarget.level,
+      hp: { atual: localTarget.hp, max: localTarget.maxHp },
+      sp: localTarget.maxSp > 0 ? { atual: localTarget.sp, max: localTarget.maxSp } : undefined,
+      modelo: "skeleton_warrior",
+    };
+    ultima.current = ficha;
   }
 
-  if (!localTarget || !localTarget.alive) return null;
+  const visivel = online ? Boolean(netTarget) : Boolean(localTarget && localTarget.alive);
+  /**
+   * Nunca houve alvo nesta sessão: aí não há contexto a preservar, e montar um
+   * retrato invisível de ninguém seria pior que não montar nada — pagaria o
+   * contexto e a compilação de shader por algo que talvez nunca apareça.
+   */
+  if (!ficha) return null;
+
   return (
-    <StatPlate
-      width={TARGET_WIDTH}
-      name={localTarget.name}
-      level={localTarget.level}
-      hp={{ atual: localTarget.hp, max: localTarget.maxHp }}
-      sp={localTarget.maxSp > 0 ? { atual: localTarget.sp, max: localTarget.maxSp } : undefined}
-      hpFill={ENEMY_FILL}
-      portrait={<CharacterPortrait characterKey="skeleton_warrior" />}
-    />
+    <div style={{ display: visivel ? undefined : "none" }}>
+      <StatPlate
+        width={TARGET_WIDTH}
+        name={ficha.name}
+        level={ficha.level}
+        hp={ficha.hp}
+        sp={ficha.sp}
+        hpFill={ENEMY_FILL}
+        portrait={<CharacterPortrait dono="alvo" characterKey={ficha.modelo} />}
+      />
+    </div>
   );
+}
+
+/** o que a placa do alvo precisa saber — guardado para sobreviver ao "sem alvo" */
+interface FichaDeAlvo {
+  name: string;
+  level: number | string;
+  hp?: { atual: number; max: number };
+  sp?: { atual: number; max: number };
+  modelo: CharacterKey;
 }

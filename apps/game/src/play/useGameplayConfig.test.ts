@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameplayConfigSchema } from "@ragnarok/game-data";
+import { fogDistances, GameplayConfigSchema } from "@ragnarok/game-data";
 import { scaleToWorld } from "./useGameplayConfig";
 
 /**
@@ -21,15 +21,19 @@ describe("scaleToWorld", () => {
     const absurdo = scaleToWorld(cfg({ hexScale: 999 }));
     expect(absurdo.hexScale).toBe(12);
     const base = cfg({ hexScale: 1 });
-    expect(absurdo.fogFar).toBeCloseTo(base.fogFar * 12, 4);
+    // a névoa é fração do raio, então ela acompanha por tabela
+    expect(fogDistances(absurdo).far).toBeCloseTo(fogDistances(base).far * 12, 4);
   });
 
   it("escala névoa, alcance e pulo pelo tamanho do bloco", () => {
     const base = cfg({ hexScale: 1 });
     const big = scaleToWorld(cfg({ hexScale: 10 }));
-    for (const k of ["renderDistance", "fogNear", "fogFar", "moveSpeed", "jumpHeight", "gravity"] as const) {
+    for (const k of ["renderDistance", "moveSpeed", "jumpHeight", "gravity"] as const) {
       expect(big[k]).toBeCloseTo(base[k] * 10, 5);
     }
+    // a névoa não tem campo próprio em unidades: ela sai do raio, que escalou
+    expect(fogDistances(big).near).toBeCloseTo(fogDistances(base).near * 10, 5);
+    expect(fogDistances(big).far).toBeCloseTo(fogDistances(base).far * 10, 5);
   });
 
   it("personagem e câmera acompanham o tamanho do bloco", () => {
@@ -66,6 +70,6 @@ describe("scaleToWorld", () => {
     const big = scaleToWorld(cfg({ hexScale: 10 }));
     expect(big.cameraDistance).toBeGreaterThan(10);
     // e a névoa não pode fechar antes de alguns hexágonos (largura = 2×escala)
-    expect(big.fogNear).toBeGreaterThan(2 * 10);
+    expect(fogDistances(big).near).toBeGreaterThan(2 * 10);
   });
 });

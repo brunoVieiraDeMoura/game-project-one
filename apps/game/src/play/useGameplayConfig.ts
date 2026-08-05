@@ -36,9 +36,8 @@ export function scaleToWorld(cfg: GameplayConfig): GameplayConfig {
     hexScale: s,
     charScale: cfg.charScale * s,
     cameraDistance: cameraDistanceFor(cfg),
+    // a névoa NÃO é escalada à parte: ela é fração do raio, e o raio já escalou
     renderDistance: cfg.renderDistance * s,
-    fogNear: cfg.fogNear * s,
-    fogFar: cfg.fogFar * s,
     moveSpeed: cfg.moveSpeed * s,
     jumpHeight: cfg.jumpHeight * s,
     gravity: cfg.gravity * s,

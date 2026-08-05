@@ -17,6 +17,33 @@ export type SurfaceType = z.infer<typeof SurfaceTypeSchema>;
 /** altura de 1 degrau de bloco (unidades de mundo) — subir/descer no editor */
 export const BLOCK_STEP = 2;
 
+/**
+ * Como cada superfície é DESENHADA neste mapa.
+ *
+ * Só aparência: nada aqui muda colisão, altura ou passagem. Existe porque a
+ * mesma superfície quer texturas diferentes de mapa para mapa — a grama de um
+ * campo aberto não é a de um pântano — e porque a escala certa depende do
+ * tamanho do mapa e do enquadramento da câmera.
+ *
+ * Ausente = o padrão que o cliente já traz. Um mapa antigo, sem o campo,
+ * desenha exatamente como antes.
+ */
+export const TerrainStyleSchema = z.object({
+  /**
+   * Variante da textura: o `id` de uma entrada do
+   * `public/assets/terrain/manifest.json`. Nome desconhecido cai no padrão em
+   * vez de deixar o chão sem textura.
+   */
+  texture: z.string().optional(),
+  /**
+   * Unidades de MUNDO por repetição da textura (a célula do rAthena mede 2).
+   * Valor alto = padrão maior e mais legível; baixo demais e a textura vira
+   * granulado que, de longe, lê como cor sólida.
+   */
+  scale: z.number().positive().optional(),
+});
+export type TerrainStyle = z.infer<typeof TerrainStyleSchema>;
+
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 
 export const MapPropSchema = z.object({
@@ -33,7 +60,7 @@ export type MapProp = z.infer<typeof MapPropSchema>;
 export const MapSpawnSchema = z
   .object({
     id: z.string(),
-    kind: z.enum(["mob", "npc", "player_start", "warp", "road_node"]),
+    kind: z.enum(["mob", "npc", "player_start", "warp", "road_node", "river_node"]),
     refId: z.string().optional(),
     position: vec3,
     count: z.number().int().positive().optional(),
@@ -136,6 +163,8 @@ export const GameMapSchema = z
     collision: z.array(CollisionTypeSchema),
     /** superfície visual por célula (blocos). Vazio = deriva da colisão. */
     surface: z.array(SurfaceTypeSchema).default([]),
+    /** textura e escala de cada superfície NESTE mapa. Vazio = padrão do cliente. */
+    terrainStyle: z.record(SurfaceTypeSchema, TerrainStyleSchema).default({}),
     waterLevel: z.number().nullable(),
     props: z.array(MapPropSchema),
     spawns: z.array(MapSpawnSchema),
@@ -209,6 +238,7 @@ export function createBlankMap(id: string, name: string, width = 32, height = 32
     heightmap: new Array(n).fill(0),
     collision: new Array(n).fill("walkable"),
     surface: new Array(n).fill("grass"),
+    terrainStyle: {},
     waterLevel: null,
     props: [],
     spawns: [],
@@ -226,4 +256,4 @@ export function cellIndex(map: Pick<GameMap, "size">, x: number, y: number): num
   return y * map.size.width + x;
 }
 
-export const MAP_SCHEMA_VERSION = 5; // v5: terrainMode "square" (grade do rAthena)
+export const MAP_SCHEMA_VERSION = 6; // v6: terrainStyle (textura+escala por superfície)

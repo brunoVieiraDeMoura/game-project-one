@@ -34,12 +34,14 @@ export function SkillVfx({
     useVfxStore.getState().prune(performance.now());
   });
 
+  // grupo NOMEADO e inerte, só como rótulo para a contagem por categoria do
+  // flight recorder (`core/diagnostics/cenaProbe`)
   return (
-    <>
+    <group name="skill-vfx">
       {effects.map((effect) => (
         <VfxNode key={effect.id} effect={effect} map={map} mapping={mapping} cellSize={cellSize} />
       ))}
-    </>
+    </group>
   );
 }
 
@@ -90,14 +92,82 @@ function VfxNode({
 
   return (
     <group ref={group} position={[initial.x, initial.y + 0.05, initial.z]} scale={cellSize}>
-      {effect.kind === "area" || effect.kind === "cast" ? (
-        <AreaDisc kind={effect.kind} />
+      {effect.kind === "area" ? (
+        <AreaCell />
+      ) : effect.kind === "cast" ? (
+        <AreaDisc kind="cast" />
       ) : effect.kind === "buff" ? (
         <BuffRing />
       ) : (
         <ImpactFlash />
       )}
     </group>
+  );
+}
+
+/**
+ * UMA CÉLULA pintada — a área da skill, célula a célula.
+ *
+ * Cada `skill:ground` do servidor é uma unidade de skill plantada em UMA célula
+ * (`skill_unit`, o layout do `Unit.Layout`). Desenhando um disco de duas células
+ * em cada uma, uma Storm Gust — que planta 81 unidades — virava 81 círculos
+ * sobrepostos, e o que se via era uma mancha de bolhas em vez da área.
+ *
+ * Pintando a célula, o conjunto das unidades DESENHA a área: o quadrado 9×9
+ * aparece porque ele é 9×9 de células, sem ninguém precisar saber o raio.
+ *
+ * O quadrado é 1×1 no espaço local e o grupo é escalado por `cellSize`, então
+ * ele cobre exatamente a célula em qualquer escala de mundo.
+ */
+function AreaCell() {
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uColor: { value: new THREE.Color("#c084fc") }, uTime: { value: 0 } },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        /**
+         * Miolo fraco e BORDA marcada.
+         *
+         * Com o preenchimento chapado, células vizinhas viram um bloco só e a
+         * grade some — e é a grade que diz quais células pegam. A borda desenha
+         * a divisão sem precisar de linha geométrica nenhuma.
+         */
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform float uTime;
+          varying vec2 vUv;
+          void main() {
+            vec2 d = abs(vUv - 0.5) * 2.0;
+            float borda = max(d.x, d.y);
+            float linha = smoothstep(0.78, 1.0, borda);
+            float pulso = 0.8 + 0.2 * sin(uTime * 5.0);
+            gl_FragColor = vec4(uColor, (0.16 + linha * 0.5) * pulso);
+          }
+        `,
+      }),
+    [],
+  );
+
+  useFrame((_, dt) => {
+    material.uniforms.uTime!.value += dt;
+  });
+  useEffect(() => () => material.dispose(), [material]);
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[1, 1]} />
+      <primitive object={material} attach="material" />
+    </mesh>
   );
 }
 

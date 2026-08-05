@@ -1,5 +1,5 @@
 import { Billboard, Text } from "@react-three/drei";
-import { BOOK } from "../ui/travelbook";
+import { WorldBar } from "./WorldBar";
 
 /**
  * Plaquinha em cima da entidade: nome (e HP, quando o servidor manda).
@@ -9,7 +9,30 @@ import { BOOK } from "../ui/travelbook";
  * `Poring 55/55 Lv 1`. A barra abaixo do nome só aparece quando existe HP:
  * inventar uma barra cheia para um mob cujo HP o servidor não mandou seria
  * mentira.
+ *
+ * A barra usa a MESMA moldura pintada das barras de HP/SP do HUD, montada em
+ * textura por `ui/barTexture.ts` — no mundo 3D não existe `border-image`.
  */
+
+/**
+ * Medidas da plaquinha, em frações de CÉLULA.
+ *
+ * Tudo se mede na célula e não em unidades de mundo, senão a plaquinha muda de
+ * tamanho a cada `hexScale` — a mesma regra do VFX.
+ *
+ * A barra ENGORDOU (0,05 → 0,085 de célula) porque a moldura pintada tem traço
+ * e canto: no fio de antes ela virava uma linha só e o desenho não aparecia. O
+ * nome subiu junto (0,10 → 0,115), senão ficava miúdo ao lado dela.
+ */
+const PLACA = {
+  nome: 0.115,
+  contorno: 0.01,
+  barraW: 0.62,
+  barraH: 0.085,
+  /** altura acima do topo do modelo */
+  acima: 0.35,
+} as const;
+
 export function EntityLabel({
   name,
   level,
@@ -31,17 +54,15 @@ export function EntityLabel({
 }) {
   const hasHp = hp !== undefined && maxHp !== undefined && maxHp > 0;
   const frac = hasHp ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
-  const width = cellSize * 0.55;
-  const barHeight = cellSize * 0.05;
+  const width = cellSize * PLACA.barraW;
+  const barHeight = cellSize * PLACA.barraH;
 
   return (
-    <Billboard position={[0, height + cellSize * 0.35, 0]}>
+    <Billboard position={[0, height + cellSize * PLACA.acima, 0]}>
       <Text
-        // ~1/10 de célula: no RO o nome cabe embaixo do sprite sem virar placa.
-        // Em 0,15 ele ficava mais largo que três células e tapava o mob.
-        fontSize={cellSize * 0.1}
+        fontSize={cellSize * PLACA.nome}
         color={targeted ? "#ffd166" : "#ffffff"}
-        outlineWidth={cellSize * 0.009}
+        outlineWidth={cellSize * PLACA.contorno}
         outlineColor="#000000"
         anchorX="center"
         anchorY="bottom"
@@ -50,17 +71,9 @@ export function EntityLabel({
       </Text>
 
       {hasHp && (
-        <group position={[0, -barHeight * 1.8, 0]}>
-          {/* trilho */}
-          <mesh>
-            <planeGeometry args={[width, barHeight]} />
-            <meshBasicMaterial color={BOOK.wood} transparent opacity={0.85} depthWrite={false} />
-          </mesh>
-          {/* preenchimento: encolhe pela esquerda, como no RO */}
-          <mesh position={[-(width * (1 - frac)) / 2, 0, 0.001]}>
-            <planeGeometry args={[width * frac, barHeight * 0.72]} />
-            <meshBasicMaterial color="#c0392b" depthWrite={false} />
-          </mesh>
+        <group position={[0, -barHeight * 1.5, 0]}>
+          {/* vermelho do alvo: o tom médio da curva de `ENEMY_FILL` do HUD */}
+          <WorldBar width={width} height={barHeight} frac={frac} color="#8a2f22" />
         </group>
       )}
     </Billboard>

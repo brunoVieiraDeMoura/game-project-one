@@ -14,6 +14,8 @@ import type {
 	Cell,
 	ChatScope,
 	EntitySnapshot,
+	Friend,
+	GuildMember,
 	InventoryItem,
 	GroundItem,
 	NpcDialog,
@@ -66,7 +68,14 @@ export declare interface RoSession {
 	on(event: "entity-spawn", listener: (entity: EntitySnapshot) => void): this;
 	on(
 		event: "entity-move",
-		listener: (payload: { gid: number; from: Cell; to: Cell; speed: number }) => void,
+		listener: (payload: {
+			gid: number;
+			from: Cell;
+			to: Cell;
+			speed: number;
+			/** `gettick()` do map-server quando o movimento começou (ver o hook) */
+			startTime: number;
+		}) => void,
 	): this;
 	on(event: "entity-stop", listener: (payload: { gid: number; x: number; y: number }) => void): this;
 	on(event: "entity-vanish", listener: (payload: { gid: number; reason: number }) => void): this;
@@ -90,6 +99,10 @@ export declare interface RoSession {
 	/** o servidor REPOSICIONOU o personagem (teleporte, empurrão, fixpos) */
 	on(event: "self-warp", listener: (payload: Cell) => void): this;
 	on(
+		event: "attack-too-far",
+		listener: (payload: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void,
+	): this;
+	on(
 		event: "stat",
 		listener: (payload: { name: string; id: number; value: number; bonus?: number }) => void,
 	): this;
@@ -108,6 +121,22 @@ export declare interface RoSession {
 	on(event: "ground-item-gone", listener: (payload: { gid: number }) => void): this;
 	on(event: "char-error", listener: (payload: { reason: string }) => void): this;
 	on(event: "chat", listener: (payload: { gid?: number; text: string; scope: ChatScope }) => void): this;
+	on(event: "friends", listener: (payload: Friend[]) => void): this;
+	on(
+		event: "friend-state",
+		listener: (payload: { accountId: number; charId: number; online: boolean }) => void,
+	): this;
+	on(
+		event: "friend-request",
+		listener: (payload: { accountId: number; charId: number; name: string }) => void,
+	): this;
+	on(
+		event: "friend-added",
+		listener: (payload: { result: number; reason: string; friend: Friend | null }) => void,
+	): this;
+	on(event: "friend-removed", listener: (payload: { accountId: number; charId: number }) => void): this;
+	on(event: "guild-members", listener: (payload: GuildMember[]) => void): this;
+	on(event: "ignore-list", listener: (payload: string[]) => void): this;
 	on(event: "closed", listener: (payload: { stage: SessionStage; reason: string }) => void): this;
 	on(event: "error", listener: (err: Error) => void): this;
 }
@@ -145,6 +174,17 @@ export class RoSession extends EventEmitter {
 	 * guardamos e reenviamos.
 	 */
 	private readonly entities = new Map<number, EntitySnapshot>();
+	/**
+	 * Lista de amigos, guilda e ignorados.
+	 *
+	 * A de amigos chega em `pc_authok` (pc.cpp:2252), ou seja, ANTES do
+	 * NOTIFY_ACTORINIT — o navegador ainda nem montou a cena. Sem guardar aqui, a
+	 * janela de amigos abria vazia até alguém entrar ou sair do jogo. As três
+	 * são reenviadas no `world:ready`, como o resto do estado.
+	 */
+	private friends: Friend[] = [];
+	private guildMembers: GuildMember[] = [];
+	private ignored: string[] = [];
 
 	private login: RoConnection | null = null;
 	private char: RoConnection | null = null;
@@ -537,6 +577,16 @@ export class RoSession extends EventEmitter {
 						from: { x: fromX, y: fromY },
 						to: { x: toX, y: toY },
 						speed: entity.speed,
+						/**
+						 * O pacote de spawn-andando também traz `moveStartTime`, e ele
+						 * importa MAIS aqui que no NOTIFY_MOVE: a entidade entrou no
+						 * campo de visão no MEIO de um trecho já em andamento, então
+						 * ancorar na chegada a faria recomeçar o caminho do início.
+						 *
+						 * As variantes numeradas do pacote nem sempre trazem o campo;
+						 * `0` significa "não sei" e o cliente cai no relógio local.
+						 */
+						startTime: pkt.moveStartTime ?? 0,
 					});
 				}
 			});
@@ -557,7 +607,30 @@ export class RoSession extends EventEmitter {
 				gid: pkt.GID,
 				from: { x: fromX, y: fromY },
 				to: { x: toX, y: toY },
-				speed: pkt.speed ?? 0,
+				/**
+				 * O TICK DO SERVIDOR, que estava sendo jogado fora.
+				 *
+				 * `ZC_NOTIFY_MOVE` (0x86) carrega `moveStartTime` — o `gettick()`
+				 * do map-server no instante em que o movimento COMEÇOU
+				 * (PacketStructure.js:4813). Sem ele, o cliente ancorava o
+				 * trecho na hora de CHEGADA do pacote: um pacote que demorou
+				 * 80 ms fazia o mob recomeçar o trecho do zero, 80 ms atrasado,
+				 * e a diferença se acumulava em cada passo. Com o tick, o
+				 * cliente sabe em que ponto do trecho o bicho já está.
+				 *
+				 * É `gettick()`, não epoch: conta ms desde o boot do
+				 * map-server. Quem traduz para o relógio local é o cliente
+				 * (`net/relogioDoServidor`), estimando o desvio por mediana.
+				 */
+				startTime: pkt.moveStartTime,
+				/**
+				 * A struct 0x86 NÃO tem campo de velocidade (só GID, MoveData e
+				 * moveStartTime). O `pkt.speed ?? 0` de antes lia `undefined` e
+				 * mandava 0 em TODO pacote de movimento, e o cliente caía no
+				 * fallback `prev.speed` sempre. Mandar o que se sabe — o do
+				 * snapshot — é honesto; inventar um número não.
+				 */
+				speed: this.entities.get(pkt.GID)?.speed ?? 0,
 			});
 		});
 
@@ -579,6 +652,44 @@ export class RoSession extends EventEmitter {
 				const gid = pkt.AID;
 				if (this.isSelf(gid)) this.emit("self-warp", { x: pkt.xPos, y: pkt.yPos });
 				else this.emit("entity-stop", { gid, x: pkt.xPos, y: pkt.yPos });
+			});
+		}
+
+		/**
+		 * ZC_ATTACK_FAILURE_FOR_DISTANCE (0x139) — "longe demais, ande até lá".
+		 *
+		 * O rAthena NÃO persegue o alvo por conta do jogador. Em
+		 * `unit_attack_timer_sub` (unit.cpp:3259) o ramo do MONSTRO chama
+		 * `unit_walktobl`, mas o do jogador só manda este pacote e desiste:
+		 *
+		 * ```c
+		 * if(sd && !check_distance_client_bl(src,target,range)) {
+		 *     // Player tries to attack but target is too far, notify client
+		 *     clif_movetoattack( *sd, *target );
+		 *     return 1;
+		 * }
+		 * ```
+		 *
+		 * Ou seja: aproximar-se é trabalho do CLIENTE, e é o que o cliente
+		 * oficial faz. Sem enganchar aqui, clicar num monstro longe não fazia
+		 * absolutamente nada.
+		 *
+		 * O pacote traz tudo que a aproximação precisa — onde o alvo está e qual
+		 * o alcance da arma —, então não é preciso adivinhar nada.
+		 */
+		if (PACKET.ZC.ATTACK_FAILURE_FOR_DISTANCE) {
+			conn.hook(PACKET.ZC.ATTACK_FAILURE_FOR_DISTANCE, (pkt: any) => {
+				this.emit("attack-too-far", {
+					gid: pkt.targetAID,
+					x: pkt.targetXPos,
+					y: pkt.targetYPos,
+					// a posição do PRÓPRIO jogador segundo o servidor: é a única
+					// que não sofre da deriva do desenho, e é por ela que o
+					// cliente decide se já pode parar de andar
+					euX: pkt.xPos,
+					euY: pkt.yPos,
+					range: pkt.currentAttRange,
+				});
 			});
 		}
 
@@ -966,6 +1077,106 @@ export class RoSession extends EventEmitter {
 				this.emit("chat", { text, scope: scopeDoCanal(text) });
 			});
 		}
+
+		this.hookSocialPackets(conn);
+	}
+
+	/**
+	 * Amigos, guilda e ignorados.
+	 *
+	 * Os três alimentam a MESMA janela (`hud/FriendsWindow`), mas são três
+	 * caminhos independentes do protocolo:
+	 *
+	 * - amigos: 0x201 (lista) + 0x206 (entrou/saiu) + 0x207/0x209/0x20a
+	 * - guilda: 0x154, e só depois de pedir (CZ_REQ_GUILD_MENU tipo 1)
+	 * - ignorados: 0xd4, idem (CZ_REQ_WHISPER_LIST)
+	 *
+	 * A lista de amigos NÃO traz nível, classe nem mapa nesta faixa de
+	 * PACKETVER; a da guilda traz os três. Quem desenha respeita a diferença.
+	 */
+	private hookSocialPackets(conn: RoConnection): void {
+		if (PACKET.ZC.FRIENDS_LIST) {
+			conn.hook(PACKET.ZC.FRIENDS_LIST, (pkt: any) => {
+				// A lista nasce toda OFFLINE: o rAthena manda um 0x206 logo em
+				// seguida para cada amigo que está no ar (clif.cpp:15378). Chutar
+				// "online" aqui piscaria todo mundo verde por um instante.
+				this.friends = (pkt.friendList ?? []).map((f: any) => ({
+					accountId: f.AID,
+					charId: f.GID,
+					name: String(f.Name ?? ""),
+					online: false,
+				}));
+				this.emit("friends", this.friends);
+			});
+		}
+		if (PACKET.ZC.FRIENDS_STATE) {
+			conn.hook(PACKET.ZC.FRIENDS_STATE, (pkt: any) => {
+				// `State` é 0 = online, 1 = offline (clif.cpp:15300). Em 20130618 o
+				// pacote NÃO carrega o nome, então quem casa é o par de ids.
+				const online = pkt.State === 0;
+				const alvo = this.friends.find((f) => f.accountId === pkt.AID && f.charId === pkt.GID);
+				if (alvo) alvo.online = online;
+				this.emit("friend-state", { accountId: pkt.AID, charId: pkt.GID, online });
+			});
+		}
+		if (PACKET.ZC.REQ_ADD_FRIENDS) {
+			conn.hook(PACKET.ZC.REQ_ADD_FRIENDS, (pkt: any) => {
+				this.emit("friend-request", {
+					accountId: pkt.ReqAID,
+					charId: pkt.ReqGID,
+					name: String(pkt.Name ?? ""),
+				});
+			});
+		}
+		if (PACKET.ZC.ADD_FRIENDS_LIST) {
+			conn.hook(PACKET.ZC.ADD_FRIENDS_LIST, (pkt: any) => {
+				const amigo: Friend = {
+					accountId: pkt.AID,
+					charId: pkt.GID,
+					name: String(pkt.Name ?? ""),
+					// quem acabou de aceitar está por definição no ar
+					online: true,
+				};
+				const ok = pkt.Result === 0;
+				if (ok && !this.friends.some((f) => f.charId === amigo.charId)) {
+					this.friends.push(amigo);
+				}
+				this.emit("friend-added", {
+					result: pkt.Result,
+					reason: ADD_FRIEND_RESULT[pkt.Result as 0 | 1 | 2 | 3] ?? "resposta desconhecida",
+					friend: ok ? amigo : null,
+				});
+			});
+		}
+		if (PACKET.ZC.DELETE_FRIENDS) {
+			conn.hook(PACKET.ZC.DELETE_FRIENDS, (pkt: any) => {
+				this.friends = this.friends.filter((f) => f.accountId !== pkt.AID || f.charId !== pkt.GID);
+				this.emit("friend-removed", { accountId: pkt.AID, charId: pkt.GID });
+			});
+		}
+		if (PACKET.ZC.MEMBERMGR_INFO) {
+			conn.hook(PACKET.ZC.MEMBERMGR_INFO, (pkt: any) => {
+				this.guildMembers = (pkt.memberInfo ?? []).map((m: any) => ({
+					accountId: m.AID,
+					charId: m.GID,
+					name: String(m.CharName ?? ""),
+					job: m.Job,
+					level: m.Level,
+					// `CurrentState`: 0 = offline, 1 = online (clif.cpp:8855)
+					online: m.CurrentState !== 0,
+					position: m.GPositionID,
+				}));
+				this.emit("guild-members", this.guildMembers);
+			});
+		}
+		if (PACKET.ZC.WHISPER_LIST) {
+			conn.hook(PACKET.ZC.WHISPER_LIST, (pkt: any) => {
+				this.ignored = (pkt.wisperList ?? [])
+					.map((w: any) => String(w.name ?? ""))
+					.filter(Boolean);
+				this.emit("ignore-list", this.ignored);
+			});
+		}
 	}
 
 	/**
@@ -990,6 +1201,80 @@ export class RoSession extends EventEmitter {
 		for (const entity of this.entities.values()) {
 			this.emit("entity-spawn", entity);
 		}
+		// A lista de amigos chega em `pc_authok`, antes de tudo isto.
+		if (this.friends.length) {
+			this.emit("friends", this.friends);
+		}
+		// Guilda e ignorados só existem se forem PEDIDOS. Pedir agora (e não
+		// quando a janela abre) é o que faz a aba já vir preenchida no primeiro
+		// Alt+Z; o custo é um pacote de 2 bytes cada.
+		this.requestGuildMembers();
+		this.requestIgnoreList();
+	}
+
+	/**
+	 * Convida pelo NOME (CZ_ADD_FRIENDS).
+	 *
+	 * Não existe "adicionar direto": o rAthena manda ZC_REQ_ADD_FRIENDS ao outro
+	 * lado e só grava quando ele aceita (clif.cpp:15475). Quem chama aqui vê o
+	 * resultado em `friend-added`, que pode ser recusa ou lista cheia.
+	 */
+	addFriend(name: string): void {
+		const pkt = new PACKET.CZ.ADD_FRIENDS();
+		pkt.name = name;
+		this.sendMap(pkt);
+	}
+
+	removeFriend(accountId: number, charId: number): void {
+		const pkt = new PACKET.CZ.DELETE_FRIENDS();
+		pkt.AID = accountId;
+		pkt.GID = charId;
+		this.sendMap(pkt);
+	}
+
+	answerFriendRequest(accountId: number, charId: number, accept: boolean): void {
+		const pkt = new PACKET.CZ.ACK_REQ_ADD_FRIENDS();
+		pkt.ReqAID = accountId;
+		pkt.ReqGID = charId;
+		pkt.Result = accept ? 1 : 0;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Gasta um ponto de habilidade (CZ_UPGRADE_SKILLLEVEL).
+	 *
+	 * Quem valida é o servidor: pré-requisito de árvore, ponto disponível e teto
+	 * de nível. Recusa volta calada, e o nível na tela simplesmente não muda —
+	 * por isso o cliente não soma nada por conta própria.
+	 */
+	raiseSkill(skillId: number): void {
+		const pkt = new PACKET.CZ.UPGRADE_SKILLLEVEL();
+		pkt.SKID = skillId;
+		this.sendMap(pkt);
+	}
+
+	/** tipo 1 = "members list, list job title" (clif.cpp:14310) */
+	requestGuildMembers(): void {
+		if (!this.map || !PACKET.CZ.REQ_GUILD_MENU) return;
+		const pkt = new PACKET.CZ.REQ_GUILD_MENU();
+		pkt.Type = 1;
+		this.map.send(pkt);
+	}
+
+	requestIgnoreList(): void {
+		if (!this.map || !PACKET.CZ.REQ_WHISPER_LIST) return;
+		this.map.send(new PACKET.CZ.REQ_WHISPER_LIST());
+	}
+
+	/** `type` 0 = ignorar, 1 = voltar a ouvir (CZ_SETTING_WHISPER_PC) */
+	setIgnored(name: string, ignore: boolean): void {
+		const pkt = new PACKET.CZ.SETTING_WHISPER_PC();
+		pkt.name = name;
+		pkt.type = ignore ? 0 : 1;
+		this.sendMap(pkt);
+		// O rAthena responde com 0xd1 (ack do próprio comando), NÃO com a lista
+		// nova — sem pedir de novo a aba ficava desatualizada até o próximo login.
+		this.requestIgnoreList();
 	}
 
 	private pushStat(stat: { name: string; id: number; value: number; bonus?: number }): void {
@@ -1141,6 +1426,15 @@ export class RoSession extends EventEmitter {
 		this.nameQueue.push(gid);
 		if (this.nameTimer) return;
 		this.nameTimer = setInterval(() => {
+			// A fila só existe enquanto há mapa. Sem esta guarda, uma sessão que
+			// caiu (ou que está trocando de mapa) com pergunta pendente fazia
+			// `requestName` → `sendMap` lançar DENTRO do setInterval — exceção
+			// fora de qualquer try, ou seja, o processo do gateway inteiro
+			// morria e derrubava junto todas as outras sessões.
+			if (!this.map) {
+				this.pararFilaDeNomes();
+				return;
+			}
 			for (let i = 0; i < NAME_QUERIES_PER_TICK; i++) {
 				const gid = this.nameQueue.shift();
 				if (gid === undefined) break;
@@ -1160,11 +1454,18 @@ export class RoSession extends EventEmitter {
 					}, NAME_RETRY_DELAY_MS);
 				}
 			}
-			if (this.nameQueue.length === 0 && this.nameTimer) {
-				clearInterval(this.nameTimer);
-				this.nameTimer = null;
+			if (this.nameQueue.length === 0) {
+				this.pararFilaDeNomes();
 			}
 		}, NAME_QUERY_INTERVAL_MS);
+	}
+
+	private pararFilaDeNomes(): void {
+		if (this.nameTimer) {
+			clearInterval(this.nameTimer);
+			this.nameTimer = null;
+		}
+		this.nameQueue.length = 0;
 	}
 
 	/** Fala com um NPC (o clique no boneco). */
@@ -1286,11 +1587,7 @@ export class RoSession extends EventEmitter {
 	}
 
 	close(): void {
-		if (this.nameTimer) {
-			clearInterval(this.nameTimer);
-			this.nameTimer = null;
-		}
-		this.nameQueue = [];
+		this.pararFilaDeNomes();
 		this.nameTries.clear();
 		this.login?.close();
 		this.char?.close();
@@ -1367,6 +1664,19 @@ function toEntity(pkt: any): EntitySnapshot {
 }
 
 /** Texto do rAthena vem com   no fim e códigos de cor ^RRGGBB. */
+/**
+ * Resposta do pedido de amizade (ZC_ADD_FRIENDS_LIST).
+ *
+ * Os quatro casos são os do rAthena (clif.cpp:15391), traduzidos aqui e não no
+ * navegador — o número cru é do protocolo e não deve vazar para a UI.
+ */
+const ADD_FRIEND_RESULT: Record<0 | 1 | 2 | 3, string> = {
+	0: "vocês agora são amigos",
+	1: "o pedido foi recusado",
+	2: "sua lista de amigos está cheia",
+	3: "a lista de amigos dessa pessoa está cheia",
+};
+
 function cleanText(raw: unknown): string {
 	return String(raw ?? "")
 		.replace(/ .*$/s, "")

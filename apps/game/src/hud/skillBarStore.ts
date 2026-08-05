@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { ATAQUE_BASICO_ID } from "../net/ataqueBasico";
 
 /**
  * Quais skills o jogador colocou em cada slot da barra.
@@ -25,10 +26,24 @@ interface SkillBarState {
 
 const EMPTY = Array.from({ length: SKILL_SLOTS }, () => 0);
 
+/**
+ * A barra NASCE com o Ataque Básico no primeiro slot.
+ *
+ * Ele é do cliente, não do rAthena, então não aparece na janela de habilidades
+ * (que é montada a partir do que o servidor manda) e não haveria de onde
+ * arrastá-lo. Deixá-lo posto é o que o torna alcançável; daí em diante ele se
+ * move, troca e sai como qualquer outro, e a escolha persiste.
+ */
+function comAtaqueBasico(): number[] {
+  const slots = [...EMPTY];
+  slots[0] = ATAQUE_BASICO_ID;
+  return slots;
+}
+
 export const useSkillBar = create<SkillBarState>()(
   persist(
     (set) => ({
-      slots: EMPTY,
+      slots: comAtaqueBasico(),
 
       assign: (slot, skillId) =>
         set((s) => {
@@ -56,8 +71,29 @@ export const useSkillBar = create<SkillBarState>()(
           return { slots };
         }),
 
-      reset: () => set({ slots: EMPTY }),
+      reset: () => set({ slots: comAtaqueBasico() }),
     }),
-    { name: "ragnarok:skillbar" },
+    {
+      name: "ragnarok:skillbar",
+      /**
+       * Quem já tinha barra salva também ganha o Ataque Básico.
+       *
+       * Sem a migração, só quem instalasse o jogo do zero teria acesso a ele —
+       * e a barra de quem já jogava ficaria sem nenhum caminho até a skill. Ele
+       * entra no primeiro slot LIVRE para não atropelar o que a pessoa arrumou;
+       * com a barra cheia, não entra (e aí ela pode abrir espaço à mão).
+       */
+      version: 1,
+      migrate: (guardado, versao) => {
+        const estado = guardado as { slots?: number[] } | undefined;
+        if (versao >= 1 || !estado?.slots) return guardado as never;
+        const slots = [...estado.slots];
+        if (!slots.includes(ATAQUE_BASICO_ID)) {
+          const livre = slots.indexOf(0);
+          if (livre !== -1) slots[livre] = ATAQUE_BASICO_ID;
+        }
+        return { ...estado, slots } as never;
+      },
+    },
   ),
 );

@@ -76,6 +76,8 @@ export interface ServerEvents {
 	"self:move": (payload: { from: Cell; to: Cell; startTime: number; speed: number }) => void;
 	/** o servidor pôs o personagem noutra célula sem andar (teleporte, empurrão) */
 	"self:warp": (payload: Cell) => void;
+	/** o alvo está longe demais: o rAthena NÃO persegue por você (unit.cpp:3259) */
+	"attack:too-far": (payload: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void;
 	"self:stat": (payload: { name: string; id: number; value: number; bonus?: number }) => void;
 	"self:status": (payload: StatusBlock) => void;
 	"inv:list": (payload: InventoryItem[]) => void;
@@ -96,7 +98,20 @@ export interface ServerEvents {
 	"ground:item": (payload: GroundItem) => void;
 	"ground:item-gone": (payload: { gid: number }) => void;
 	"entity:spawn": (payload: EntitySnapshot) => void;
-	"entity:move": (payload: { gid: number; from: Cell; to: Cell; speed: number }) => void;
+	/**
+	 * `startTime` é o `gettick()` do map-server no instante em que o movimento
+	 * COMEÇOU (`moveStartTime` do ZC_NOTIFY_MOVE). Sem ele o cliente ancorava o
+	 * trecho na hora de CHEGADA do pacote, e um pacote atrasado fazia a entidade
+	 * recomeçar o caminho do zero — é a base da interpolação de snapshots.
+	 * `0` = o pacote não trouxe; o cliente cai no relógio local.
+	 */
+	"entity:move": (payload: {
+		gid: number;
+		from: Cell;
+		to: Cell;
+		speed: number;
+		startTime: number;
+	}) => void;
 	"entity:stop": (payload: { gid: number; x: number; y: number }) => void;
 	"entity:vanish": (payload: { gid: number; reason: number }) => void;
 	"entity:name": (payload: { gid: number; name: string }) => void;
@@ -110,7 +125,50 @@ export interface ServerEvents {
 	}) => void;
 	"entity:hp": (payload: { gid: number; hp: number; maxHp: number }) => void;
 	"chat:message": (payload: { gid?: number; name?: string; text: string; scope: ChatScope }) => void;
+	"friend:list": (payload: Friend[]) => void;
+	/** um amigo entrou/saiu (ZC_FRIENDS_STATE) — casa por accountId+charId */
+	"friend:state": (payload: { accountId: number; charId: number; online: boolean }) => void;
+	/** alguém pediu para ser seu amigo e o script está esperando resposta */
+	"friend:request": (payload: { accountId: number; charId: number; name: string }) => void;
+	"friend:added": (payload: { result: number; reason: string; friend: Friend | null }) => void;
+	"friend:removed": (payload: { accountId: number; charId: number }) => void;
+	"guild:members": (payload: GuildMember[]) => void;
+	"ignore:list": (payload: string[]) => void;
 	"session:closed": (payload: { stage: SessionStage; reason: string }) => void;
+}
+
+/**
+ * Amigo da lista do rAthena.
+ *
+ * O protocolo carrega NOME e ids, mais nada: em PACKETVER 20130618 o
+ * ZC_FRIENDS_LIST é `{ <account id>.L <char id>.L <name>.24B }*`
+ * (clif.cpp:15355) e o online/offline chega separado, em ZC_FRIENDS_STATE.
+ * Nível, classe e mapa do amigo NÃO existem em pacote nenhum desta faixa — quem
+ * mostra a janela mostra "—", nunca um palpite.
+ */
+export interface Friend {
+	accountId: number;
+	charId: number;
+	name: string;
+	/** só é verdade depois de um ZC_FRIENDS_STATE; a lista nasce toda offline */
+	online: boolean;
+}
+
+/**
+ * Membro da guilda (ZC_MEMBERMGR_INFO, 0x154).
+ *
+ * Ao contrário da lista de amigos, esta traz nível, classe e online — é a única
+ * lista de gente do protocolo que tem a linha inteira da referência.
+ */
+export interface GuildMember {
+	accountId: number;
+	charId: number;
+	name: string;
+	job: number;
+	level: number;
+	online: boolean;
+	/** cargo dentro da guilda (índice na tabela de posições) */
+	position: number;
 }
 
 export interface InventoryItem {
@@ -264,6 +322,24 @@ export interface ClientEvents {
 	"npc:close": (payload: { gid: number }) => void;
 	/** pede nome/HP/nível de uma entidade (CZ.REQNAME) — usado ao alvejar */
 	"entity:info": (payload: { gid: number }) => void;
+	/** convida pelo NOME (CZ_ADD_FRIENDS); o outro lado precisa aceitar */
+	"friend:add": (payload: { name: string }) => void;
+	"friend:remove": (payload: { accountId: number; charId: number }) => void;
+	/** resposta ao convite que chegou em `friend:request` */
+	"friend:answer": (payload: { accountId: number; charId: number; accept: boolean }) => void;
+	/** pede a lista de membros da guilda (CZ_REQ_GUILD_MENU tipo 1) */
+	"guild:request": () => void;
+	"ignore:add": (payload: { name: string }) => void;
+	"ignore:remove": (payload: { name: string }) => void;
+	/**
+	 * Sobe UM nível de uma habilidade (CZ_UPGRADE_SKILLLEVEL, 0x112).
+	 *
+	 * Como o atributo, o rAthena não tem pacote de "subir N de uma vez": quem
+	 * quer três níveis manda três vezes. A confirmação volta em
+	 * ZC_SKILLINFO_UPDATE, que o gateway já engancha — a lista de skills se
+	 * atualiza sozinha.
+	 */
+	"skill:raise": (payload: { skillId: number }) => void;
 }
 
 /** Atributos que a janela de status permite subir com ponto. */

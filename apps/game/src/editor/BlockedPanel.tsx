@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useEditorStore } from "./editorStore";
 import { findBlockedClusters, summarizeClusters } from "./blockedClusters";
 import { RpgButton, ink } from "../ui/rpg";
@@ -21,6 +21,10 @@ export function BlockedPanel() {
   const map = useEditorStore((s) => s.map);
   const escopo = useEditorStore((s) => s.editScope);
   const limpar = useEditorStore((s) => s.clearSmallBlocked);
+  const zerar = useEditorStore((s) => s.clearAll);
+  // confirmação de dois passos: um clique acidental aqui apaga 400×400 de
+  // trabalho, e o Ctrl+Z só salva quem perceber na hora
+  const [armado, setArmado] = useState(false);
 
   // recontar 160.000 células a cada render seria caro; só muda quando o mapa muda
   const resumo = useMemo(() => {
@@ -69,6 +73,34 @@ export function BlockedPanel() {
       <div style={{ font: "10px system-ui", color: "#fbbf24", marginTop: 8 }}>
         Muda a colisão do mapa 3D. O servidor só deixa de barrar essas células quando o
         map_cache do rAthena for regerado.
+      </div>
+
+      <div style={{ borderTop: `1px solid ${ink.faint}`, opacity: 0.4, margin: "14px 0 10px" }} />
+
+      <div style={{ font: "11px system-ui", color: ink.text, marginBottom: 2 }}>
+        Começar do zero
+      </div>
+      <div style={{ font: "10px system-ui", color: ink.faint, marginBottom: 8 }}>
+        Deixa o mapa inteiro ({map.size.width}×{map.size.height}) plano e andável: apaga relevo,
+        colisão, superfícies, props, spawns e gatilhos. Não vale o escopo — é o mapa todo.
+      </div>
+
+      <RpgButton
+        color="brown"
+        active={armado}
+        onClick={() => {
+          if (!armado) return setArmado(true);
+          zerar();
+          setArmado(false);
+        }}
+        style={{ width: "100%" }}
+      >
+        {armado ? "Tem certeza? Clique de novo" : "Zerar o mapa inteiro"}
+      </RpgButton>
+      <div style={{ font: "10px system-ui", color: ink.faint, marginTop: 6 }}>
+        Ctrl+Z desfaz enquanto não salvar. Depois de salvar, o servidor só concorda com o mapa
+        novo depois do <b style={{ color: ink.dim }}>export:mapcache</b> e do restart do rAthena —
+        até lá o chão parece livre e o personagem esbarra em parede invisível.
       </div>
     </div>
   );

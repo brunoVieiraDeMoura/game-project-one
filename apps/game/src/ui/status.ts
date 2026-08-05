@@ -12,6 +12,8 @@
  * personagem e do chat.
  */
 
+import { CHROME, windowWidth } from "./windowChrome";
+
 const BASE = "/assets/ui/status";
 
 export const ST_ART = {
@@ -72,7 +74,7 @@ export const ST_LAYOUT = {
    * O "x" desceu e foi para a direita: em (578, 22) ele encostava na moldura de
    * cima e parecia solto do canto.
    */
-  close: { cx: 583, cy: 30, d: 34 },
+  close: { cx: 583, cy: 30, d: CHROME.closeD },
 } as const;
 
 /** teto de atributo do projeto — o "+" fica cinza ao chegar nele */
@@ -150,7 +152,16 @@ export const ST_ATTRS: { key: RaisableStat; sigla: string; nome: string; texto: 
   },
 ];
 
-export const STATUS_WIDTH = 760;
+/**
+ * Largura de render.
+ *
+ * Sai de `WINDOW_SCALE` (ver `ui/windowChrome.ts`), a escala única das janelas
+ * com arte própria. Dá 841 px contra os 760 de antes: esta era a janela de
+ * escala mais BAIXA das três (1,26 contra 1,43 e 1,53), e por isso a que
+ * escrevia tudo menor — o título saa com 21,5 px enquanto o dos amigos tinha
+ * 29,0.
+ */
+export const STATUS_WIDTH = windowWidth(ST_PLATE.w);
 
 export const ST_COLORS = {
   ink: "#e9dcc0",

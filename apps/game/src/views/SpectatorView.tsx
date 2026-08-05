@@ -36,7 +36,7 @@ export function SpectatorView() {
           <Sky sunPosition={[100, 80, 20]} />
           <ambientLight intensity={0.5} />
           <directionalLight position={[span, span, span / 2]} intensity={1.2} castShadow />
-          <Physics>{map ? <MapTerrain map={map} /> : <ReferencePlane />}</Physics>
+          <Physics>{map ? <MapTerrain map={map} fisica /> : <ReferencePlane />}</Physics>
           <OrbitControls makeDefault target={map ? [span / 2, 0, span / 2] : [0, 0, 0]} />
         </Suspense>
       </Canvas>

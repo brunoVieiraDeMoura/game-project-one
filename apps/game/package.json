@@ -9,8 +9,10 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:perf": "vitest run src/perf",
     "tiles:measure": "node scripts/measure-tiles.mjs",
-    "props:measure": "node scripts/measure-props.mjs"
+    "props:measure": "node scripts/measure-props.mjs",
+    "terrain:textures": "node scripts/make-terrain-textures.mjs"
   },
   "dependencies": {
     "@ragnarok/engine-core": "workspace:*",

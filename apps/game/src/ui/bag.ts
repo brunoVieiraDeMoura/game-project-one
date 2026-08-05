@@ -12,6 +12,8 @@
  * arquivos novos: o fundo, a moeda e o peso.
  */
 
+import { CHROME, windowWidth } from "./windowChrome";
+
 const BASE = "/assets/ui/bag";
 
 export const BAG_ART = {
@@ -39,13 +41,22 @@ export const BAG_PLATE = { w: 294, h: 342 } as const;
  * lado): antes as caixas iam de 20 a 274 e encostavam na moldura, o que fazia
  * aba, slot e contador parecerem estourados para fora.
  *
- * A grade é 5 × 4 como na referência.
+ * A grade é 4 × 4: com 5 colunas o slot ficava estreito demais para a faixa do
+ * nome caber embaixo dele, que é o que quebrava a janela quando o item tinha
+ * nome longo. Quatro colunas dão ~25% mais lado por slot, e o excedente passou a
+ * ser problema de ROLAGEM, não de espremer mais coisa na mesma largura.
  */
 export const BAG_CONTENT = { x: 30, w: 234 } as const;
 
 export const BAG_LAYOUT = {
   title: { x: BAG_CONTENT.x, y: 16, w: BAG_CONTENT.w, h: 30 },
-  tabs: { x: BAG_CONTENT.x, y: 50, w: BAG_CONTENT.w, h: 28 },
+  /**
+   * A ALTURA vem de `CHROME.tabH`, comum às três janelas com arte própria: em
+   * 28 a aba do inventário saa com 40 px de tela contra 30,5 da de amigos. O
+   * `y` desceu de 50 para 51 para a fileira continuar centrada na mesma faixa
+   * da arte.
+   */
+  tabs: { x: BAG_CONTENT.x, y: 51, w: BAG_CONTENT.w, h: CHROME.tabH },
   grid: { x: BAG_CONTENT.x, y: 88, w: BAG_CONTENT.w, h: 192 },
   weight: { x: BAG_CONTENT.x, y: 302, w: 116, h: 28 },
   gold: { x: 154, y: 302, w: 110, h: 28 },
@@ -55,16 +66,54 @@ export const BAG_LAYOUT = {
    * parecia recuado; em 280 ele passa ~8 px para fora, que é a sobra que o
    * desenho mostra.
    */
-  close: { cx: 278, cy: 20, d: 34 },
+  close: { cx: 278, cy: 20, d: CHROME.closeD },
 } as const;
 
-export const BAG_GRID = { cols: 5, rows: 4, gap: 5 } as const;
+export const BAG_GRID = {
+  cols: 4,
+  /** fileiras VISÍVEIS — o que passar disso rola */
+  rows: 4,
+  gap: 5,
+  /**
+   * Vão reservado à barra de rolagem, em px de arte.
+   *
+   * A barra é a mesma do chat (`hud/ChatScrollbar`), e as peças dela são
+   * `arrow`, `background-rolling-bar` e `rolling-bar-*` do pacote da bolsa —
+   * byte a byte (md5 conferido) as que o repo já tinha. Nenhum arquivo novo.
+   */
+  barra: 13,
+  /** vão entre a grade e a barra */
+  barraGap: 5,
+} as const;
+
 /**
- * Largura de render da janela. Tudo aqui é % da arte, então este é o único
- * número a mexer para a janela inteira crescer — slots, abas, fontes e o aro do
- * "x" acompanham.
+ * Teto de caracteres do nome sob o slot.
+ *
+ * Nome de item do RO passa de trinta caracteres ("Wing Of Fly", "Old Blue Box",
+ * e os equipamentos são piores). Sem teto ele empurrava a faixa e estourava a
+ * moldura — o Alt+E "quebrado" do relato.
+ *
+ * Doze é o que cabe no slot de quatro colunas. O corte tira os TRÊS últimos
+ * caracteres do que sobra e concatena "…", então o resultado tem exatamente 12:
+ * nove de nome mais as reticências.
  */
-export const BAG_WIDTH = 420;
+export const BAG_NOME_MAX = 12;
+
+export function encurtarNome(nome: string): string {
+  if (nome.length <= BAG_NOME_MAX) return nome;
+  return `${nome.slice(0, BAG_NOME_MAX - 3)}...`;
+}
+/**
+ * Largura de render da janela.
+ *
+ * Sai de `WINDOW_SCALE`, a escala ÚNICA da família de janelas com arte própria
+ * (ver `ui/windowChrome.ts`): com ela um px de arte vale o mesmo px de tela
+ * aqui, no status e nos amigos, e o "x", as abas, a rolagem e as fontes ficam
+ * do mesmo tamanho nas três sem tabela de exceção. Dá 412 px — o inventário
+ * praticamente não se mexeu (era 420), porque foi a densidade DELE (5×4 slots)
+ * que fixou a escala.
+ */
+export const BAG_WIDTH = windowWidth(BAG_PLATE.w);
 
 /**
  * Abas do inventário. As cores são as do change (consumível verde,

@@ -63,8 +63,6 @@ interface HudState {
   setSkillPage: (p: number) => void;
 
   /** mouse sobre um monstro (pra trocar o cursor pra espada) */
-  hoverMonster: boolean;
-  setHoverMonster: (v: boolean) => void;
 }
 
 export const useHudStore = create<HudState>((set) => ({
@@ -96,6 +94,4 @@ export const useHudStore = create<HudState>((set) => ({
   skillPage: 0,
   setSkillPage: (skillPage) => set({ skillPage: ((skillPage % 3) + 3) % 3 }),
 
-  hoverMonster: false,
-  setHoverMonster: (hoverMonster) => set({ hoverMonster }),
 }));

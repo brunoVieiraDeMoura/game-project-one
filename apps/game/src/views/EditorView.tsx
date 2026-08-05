@@ -43,6 +43,7 @@ export function EditorView() {
   useEffect(() => {
     if (NEW_MAP) newMap();
   }, [newMap]);
+
   // O EDITOR desenha no hexScale atual (EditorScene faz setHexScale), mas as
   // posições salvas estão na escala em que o mapa foi AUTORADO. Sem converter,
   // um mapa autorado em escala 1 aberto em escala 10 tem o terreno 10× maior e
@@ -59,6 +60,16 @@ export function EditorView() {
 
   useEffect(() => {
     if (NEW_MAP) return;
+    // NUNCA re-inicializa por cima de edição não salva.
+    //
+    // Este efeito depende de `naEscalaAtual`, que muda de identidade quando o
+    // `hexScale` da config chega da API — e no dev o HMR remonta a view a cada
+    // arquivo salvo. Nos dois casos ele re-rodava `init(map)` com o mapa que
+    // veio do servidor, apagando o que estava sendo editado e zerando o
+    // histórico: o mapa "voltava sozinho" ao estado salvo, sem Ctrl+Z para
+    // desfazer. Mapa limpo (não sujo) pode ser recarregado à vontade.
+    const atual = useEditorStore.getState();
+    if (atual.dirty && atual.map?.id === (map?.id ?? MAP_ID)) return;
     if (IS_PREFAB) {
       // hexdemo: usa a versão do banco SÓ se salva corretamente como "blocks";
       // senão (smooth/stale/404) cai pro prefab — evita carregar versão quebrada
@@ -234,7 +245,17 @@ export function EditorView() {
 
         {/* área do canvas (preenche o meio); options bar flutua no topo-esquerda */}
         <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-          <Canvas camera={{ position: [40, 50, 60], fov: 50, near: 0.5, far: 4000 }} shadows style={{ position: "absolute", inset: 0 }}>
+          {/* `shadows` fica: props e terreno continuam marcados para receber, e
+              ligar de volta uma luz com câmera de sombra própria não deve exigir
+              mexer no Canvas. Sem luz com `castShadow`, o passo não roda.
+              `dpr` com teto pelo mesmo motivo do /play: numa tela hi-dpi o mapa
+              de 400×400 seria rasterizado em 4× de pixels. */}
+          <Canvas
+            camera={{ position: [40, 50, 60], fov: 50, near: 0.5, far: 4000 }}
+            shadows
+            dpr={[1, 1.5]}
+            style={{ position: "absolute", inset: 0 }}
+          >
             <Suspense fallback={null}>{storeMap && <EditorScene />}</Suspense>
           </Canvas>
 

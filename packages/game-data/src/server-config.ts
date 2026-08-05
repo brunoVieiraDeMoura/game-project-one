@@ -22,7 +22,7 @@ export const RateOverrideSchema = z.object({
  * linhas de server_config antigas ganham o bloco automaticamente (jsonb, sem
  * migração). O game (apps/game) lê via GET /server-config e aplica.
  */
-export const GameplayConfigSchema = z.object({
+const GameplayObjectSchema = z.object({
   /**
    * Velocidade de movimento do personagem, em unidades de mundo/segundo — a
    * MESMA nos dois modos (clique-tile e WASD livre), por decisão de projeto
@@ -68,11 +68,24 @@ export const GameplayConfigSchema = z.object({
    * é relativa ao hex (ver charScale). Assets/props mantêm sua própria escala
    * autorada (ver /asset-scaling), não crescem automaticamente. */
   hexScale: z.number().positive().default(1),
-  /** distância de renderização (raio, unidades de mundo): props/terreno só
-   * renderizam dentro desse raio do player. Deve ser > fogFar pra os itens
-   * surgirem já dentro da névoa (sem "pop"). 140 ≈ 70 células de raio — num
-   * mapa do rAthena (400×400) é o que dá a sensação de campo aberto. */
-  renderDistance: z.number().positive().default(140),
+  /**
+   * O RAIO DO MUNDO DESENHADO, em unidades — e o único número de distância que
+   * se ajusta à mão.
+   *
+   * Terreno, props e tudo mais existem só dentro dele; a névoa é uma FRAÇÃO
+   * dele (abaixo), então ela sempre fecha ANTES da malha acabar e a borda
+   * dissolve em vez de aparecer recortada contra o céu.
+   *
+   * Eram três números soltos (raio 200, névoa 90 e 120) e eles saíram de
+   * acordo: medido no `/play`, **81% dos triângulos de chão desenhados estavam
+   * atrás de névoa opaca** — 84.552 invisíveis contra 19.912 visíveis, 49 das
+   * 59 malhas. O schema até pedia a regra ("fogFar tem que ficar DENTRO do
+   * renderDistance"), mas pedir não é garantir.
+   *
+   * 130 ≈ 65 células de raio, e com as frações abaixo reproduz exatamente a
+   * vista que o jogo já tinha (névoa começando em 90, fechando em 120).
+   */
+  renderDistance: z.number().positive().default(130),
   /**
    * CHÃO do mundo hex. Os tiles KayKit não têm textura de chão: a face de cima
    * amostra UM pixel do atlas (a "grama" é a cor 191,197,55 em x81..90,y590 de
@@ -112,14 +125,75 @@ export const GameplayConfigSchema = z.object({
   retroPixelSize: z.number().int().min(1).max(24).default(6),
   /** dithering ordenado (Bayer 4×4) — tira o faixamento do céu/névoa */
   retroDither: z.boolean().default(true),
-  /** névoa — distância onde começa a desbotar (≈45 células) */
-  fogNear: z.number().nonnegative().default(90),
-  /** névoa — distância onde fica totalmente opaca (nada visível além). Tem que
-   * ficar DENTRO do renderDistance, senão a borda do terreno aparece recortada
-   * contra o céu em vez de sumir na névoa. */
-  fogFar: z.number().positive().default(135),
+  /**
+   * Névoa, em FRAÇÃO do `renderDistance` — não em unidades.
+   *
+   * Fração porque a névoa não tem sentido próprio: ela existe para esconder o
+   * fim do mundo desenhado. Em unidades, os dois números podiam (e foram)
+   * ajustados separadamente até deixarem 116 unidades de terreno sendo
+   * desenhadas dentro de névoa 100% opaca.
+   *
+   * 0,69 e 0,92 sobre um raio de 130 dão 90 e 120 — os valores que o jogo já
+   * usava. Mexer no raio agora leva a névoa junto.
+   */
+  /**
+   * 0,50 e não 0,69: com a névoa começando aos 69% do raio, o chão ia de limpo
+   * a 100% enevoado em 30 unidades, e num ângulo rasante isso são pouquíssimos
+   * pixels — o encontro chão↔céu saía SECO (marcação 1 de
+   * `Desktop/ref/background.jpg`). Com 0,50 a faixa dobra e a dissolução ocupa
+   * o dobro da tela.
+   */
+  fogNearFrac: z.number().min(0).max(1).default(0.5),
+  /** onde a névoa fica opaca. Abaixo de 1 de propósito: a malha ainda tem uma
+   * folga além disso, e é ela que garante que a borda nunca apareça. */
+  fogFarFrac: z.number().min(0.05).max(1).default(0.92),
 });
-export type GameplayConfig = z.infer<typeof GameplayConfigSchema>;
+/**
+ * Config gravada ANTES da névoa virar fração — convertida na leitura.
+ *
+ * O formato antigo tinha `fogNear`/`fogFar` em unidades e um `renderDistance`
+ * independente. Converter aqui, no schema, e não num script de migração, é o
+ * que garante que API, jogo e admin cheguem ao MESMO número: os três leem este
+ * módulo. Quem salvar de novo grava já no formato novo, e a conversão passa a
+ * não ter o que fazer.
+ *
+ * A regra: o raio passa a ser a névoa mais uma folga de 8% (é ela que esconde a
+ * borda da malha), e as frações saem da razão que o usuário já tinha ajustado —
+ * ou seja, a vista não muda, só para de desenhar o que ficava atrás dela.
+ */
+function converterNevoaAntiga(v: unknown): unknown {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return v;
+  const o = { ...(v as Record<string, unknown>) };
+  const far = o.fogFar;
+  const near = o.fogNear;
+  // só converte o formato ANTIGO: com fração gravada, o valor novo manda
+  if (typeof far === "number" && far > 0 && o.fogFarFrac === undefined) {
+    const raio = Math.round(far * 1.08);
+    o.renderDistance = raio;
+    o.fogFarFrac = Math.min(1, far / raio);
+    if (typeof near === "number" && near >= 0) o.fogNearFrac = Math.min(1, near / raio);
+  }
+  delete o.fogNear;
+  delete o.fogFar;
+  return o;
+}
+
+export const GameplayConfigSchema = z.preprocess(converterNevoaAntiga, GameplayObjectSchema);
+export type GameplayConfig = z.infer<typeof GameplayObjectSchema>;
+
+/**
+ * Onde a névoa começa e acaba, em unidades de mundo.
+ *
+ * Existe para que ninguém precise repetir a multiplicação (e errar o sinal, ou
+ * esquecer que o `renderDistance` já vem escalado pelo `hexScale`). Quem desenha
+ * a névoa e quem limita o clique chamam a mesma função.
+ */
+export function fogDistances(cfg: Pick<GameplayConfig, "renderDistance" | "fogNearFrac" | "fogFarFrac">): {
+  near: number;
+  far: number;
+} {
+  return { near: cfg.renderDistance * cfg.fogNearFrac, far: cfg.renderDistance * cfg.fogFarFrac };
+}
 
 export const ServerConfigSchema = z.object({
   expRateBase: z.number().positive().default(1),
@@ -127,9 +201,15 @@ export const ServerConfigSchema = z.object({
   dropRate: z.number().positive().default(1),
   dropRateOverrides: z.array(RateOverrideSchema).default([]),
   expRateOverrides: z.array(RateOverrideSchema).default([]),
-  /** default movement mode for new characters; per-character override allowed */
-  defaultMovementMode: z.enum(["grid", "free"]).default("grid"),
-  allowMovementModeSwitch: z.boolean().default(true),
+  /**
+   * NÃO existe mais `defaultMovementMode`/`allowMovementModeSwitch`.
+   *
+   * Os dois campos configuravam a escolha entre clique-tile e WASD — e o
+   * cliente do jogo NUNCA os leu: `play/useGameplayConfig` parseia apenas o
+   * sub-bloco `gameplay`, e eles eram irmãos dele. Prometiam um controle que não
+   * existia. O WASD saiu, e a escolha com ele. Config já gravada continua
+   * carregando: o zod descarta chave desconhecida por padrão.
+   */
   /** ajustes do cliente 3D (editor do game) — todos com default */
   gameplay: GameplayConfigSchema.default({}),
   /** bump a cada save; engine-core usa pra detectar hot-reload sem restart */

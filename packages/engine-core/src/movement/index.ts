@@ -13,10 +13,11 @@ export { GridMovementController } from "./grid";
 export { FreeMovementController } from "./free";
 
 /**
- * Runtime-switchable factory (skill-r3f-conventions): the ONLY place that
- * picks a controller implementation. Mode comes from character/server config
- * (ServerConfig.defaultMovementMode in @ragnarok/game-data), never a
- * hardcoded branch at call sites.
+ * The ONLY place that picks a controller implementation.
+ *
+ * O jogo não escolhe mais em tempo de execução: o WASD saiu e `play/Player`
+ * crava "grid". O modo "free" continua aqui porque `entities/NpcWalker` o usa
+ * para patrulha de NPC — que nunca teve nada com teclado.
  */
 export function createMovementController(
   mode: MovementMode,

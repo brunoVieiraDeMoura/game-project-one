@@ -8,10 +8,13 @@ import { SkillBar } from "./SkillBar";
 import { CastBar } from "./CastBar";
 import { MenuBar } from "./MenuBar";
 import { Chat } from "./Chat";
-import { Windows, ActiveQuests } from "./Windows";
+import { Windows } from "./Windows";
+import { QuestTracker } from "./QuestTracker";
+import { LootToast } from "./LootToast";
 import { useHudHotkeys } from "./hotkeys";
 import { NpcDialog } from "./NpcDialog";
 import { Panel, RpgButton } from "../ui/rpg";
+import { SondaDeMontagem } from "../core/diagnostics/SondaDeCanvas";
 
 const wrap: React.CSSProperties = { position: "absolute", userSelect: "none" };
 
@@ -21,20 +24,42 @@ export function Hud({ map, playerPos }: { map: GameMap; playerPos: React.Mutable
   useHudHotkeys(); // Alt+A/E/S/Q… como no RO
   return (
     <>
+      {/*
+        O HUD inteiro é montado por `{map && !carregando && <Hud/>}` no
+        `PlayView` — ou seja, ele DESAPARECE enquanto a tela de carregamento
+        está no ar, e num portal isso acontece. Se ele levar junto os retratos,
+        cada portal destrói e recria contextos WebGL, e é essa a suspeita que
+        esta sonda existe para confirmar ou derrubar: se `hud/desmontou-em` vier
+        imediatamente antes dos `retrato:*`, a causa é o HUD, não o retrato.
+      */}
+      {import.meta.env.DEV && <SondaDeMontagem nome="hud" />}
       {/* topo-esquerda: frame do personagem + alvo */}
       <div style={{ ...wrap, top: 10, left: 10, display: "flex", gap: 8, alignItems: "flex-start" }}>
         <PlayerFrame />
         <TargetFrame />
       </div>
 
-      {/* topo-direita: minimapa */}
-      <div style={{ ...wrap, top: 10, right: 10 }}>
-        <Minimap map={map} playerPos={playerPos} />
-      </div>
+      {/* topo-centro: o que acabou de entrar na bolsa. Sem `wrap` (que ancora
+          num canto) — ele se centraliza sozinho e não recebe clique. */}
+      <LootToast />
 
-      {/* meio-direita: quests ativas */}
-      <div style={{ ...wrap, top: "40%", right: 10 }}>
-        <ActiveQuests />
+      {/* topo-direita: minimapa e, logo abaixo dele, o acesso rápido às
+          missões. Os dois na MESMA coluna para o quadro acompanhar a altura do
+          minimapa em vez de depender de um `top` cravado — e como o tracker some
+          quando não há missão aceita, o `gap` do flex não deixa buraco. */}
+      <div
+        style={{
+          ...wrap,
+          top: 10,
+          right: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 8,
+        }}
+      >
+        <Minimap map={map} playerPos={playerPos} />
+        <QuestTracker />
       </div>
 
       {/* baixo-esquerda: chat */}
@@ -68,7 +93,7 @@ export function Hud({ map, playerPos }: { map: GameMap; playerPos: React.Mutable
       </div>
 
       <NpcDialog />
-      <Windows />
+      <Windows map={map} playerPos={playerPos} />
       <DeathOverlay />
     </>
   );
@@ -95,15 +120,13 @@ function DeathOverlay() {
   );
 }
 
-/** cursor de espada vermelha ao passar sobre um monstro (senão, padrão) */
-const SWORD_CURSOR =
-  "url('data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g stroke="#000" stroke-width="1.5"><line x1="6" y1="26" x2="24" y2="8" stroke="#dc2626" stroke-width="4"/><line x1="4" y1="20" x2="12" y2="28" stroke="#9ca3af" stroke-width="3"/><circle cx="24" cy="8" r="2.5" fill="#fca5a5"/></g></svg>`,
-  ) +
-  "') 6 26, crosshair";
-
-export function useHudCursor(): string {
-  const hover = useHudStore((s) => s.hoverMonster);
-  return hover ? SWORD_CURSOR : "default";
-}
+/*
+ * O cursor saiu daqui: agora é global e pintado (`ui/cursors` + `ui/cursorStore`).
+ *
+ * O que existia era uma espada desenhada em SVG, lida de
+ * `hudStore.hoverMonster` — e NINGUÉM nunca chamou `setHoverMonster`, então ela
+ * jamais apareceu na tela. A arte de `ui_definitiva/cursor` substituiu os dois,
+ * o valor passou a ser aplicado no `body` (vale em todas as telas, não só na
+ * cena) e o estado é posto por quem de fato sabe o que está sob o ponteiro:
+ * `NetEntity` (monstro), `GroundItems` (drop) e `GroundInteract` (bloqueio).
+ */

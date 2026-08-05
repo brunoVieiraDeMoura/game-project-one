@@ -1,20 +1,7 @@
-na parte de status 
-Classe - é a classe atual, ex, espadachim, mago,warlock, wizzard
-EXP - remover
+1 o background do canva do lado direito, aonde vc pois opacidade para o texto/recompensa e missao, está um pouco pequeno ainda para todas as direções, eu queria que ele tapasse o fundo verde parece que falta 14px para todos os lados.
 
-criar uma divisória entre, Claase / hp - sp 
-e outra do hp-sp para a parte do ATK/DEF etc..
+2 a barra de vida em cima dos monstros e a de baixo do boneco (player) usa
+  essa barrinha C:\Users\Bruno\Desktop\game-project\assets-new\ui_definitiva\skill-cast
 
-dar um padding mainor com a divisório lateral, (a divisória lateral, você pode usar reta-barra-hp-sp horizontal e botar uma opacidade nela )
+3 o tamanho visual da barrinha de vida dos monstros e do nome deles
 
-dos atributos para a mensagem de dica, botar uma divisória também,
-
-o botao de fechar está muito em cima, deixa ele mais para baixo e para direita 
-o máximo de atributos que você pode botar é 130, então deixa o botão de "+" cinza ao chegar 130
-
-Deixe responsivo o tamanho das letras tipográficas, 
-a referencia na parte de atributos foi só uma referencia, deixe mais bonito e responsivo (pode extender o nome e diminuir ele, "For" -> 
-"Força"
-
-
-o personagem não está aparecendo no meio dos equipamento em "Alt+q"

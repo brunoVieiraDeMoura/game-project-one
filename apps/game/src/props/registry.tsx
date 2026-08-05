@@ -248,7 +248,32 @@ export function preloadProp(assetId: string) {
   if (url) useGLTF.preload(url);
 }
 
-/** compat: chamada no boot do PlayView. Preload leve (nada eager). */
-export function preloadProps() {
-  /* on-demand — PropInstance carrega quando renderiza (drei cacheia) */
+/**
+ * Pré-carrega os assets que ESTE mapa usa. Devolve quantas urls distintas.
+ *
+ * Substitui um `preloadProps()` que era **no-op** — o `PlayView` o chamava no
+ * boot como se pré-carregasse, e o comentário dizia "on-demand, drei cacheia".
+ * Cacheia mesmo, mas só DEPOIS de baixar, e baixar acontecia no meio da
+ * caminhada: medido no `voo-1785937156994.json`, um
+ * `/assets/props/Rock_3_M_Color1.gltf` frio entrando no culling suspendeu o
+ * boundary da cena por **177 ms** e o mundo inteiro sumiu por um quadro.
+ *
+ * Pré-carregar os 105 do catálogo continua sendo errado (é a objeção do
+ * comentário antigo, e ela é válida). Mas o mapa não usa 105: ele usa as
+ * espécies que foram autoradas nele, que são poucas dezenas de urls distintas
+ * para milhares de instâncias. É esse conjunto — e só ele — que entra aqui.
+ *
+ * Idempotente: `useGLTF.preload` sobre url já carregada não faz nada, então
+ * chamar de novo (StrictMode, troca de mapa) é de graça.
+ */
+export function preloadPropsDoMapa(props: readonly { assetId: string }[]): number {
+  const urls = new Set<string>();
+  for (const p of props) {
+    const url = PROP_URLS[p.assetId];
+    // assetId desconhecido não é erro aqui: o mapa pode citar um prop que saiu
+    // do catálogo, e quem avisa disso é o `PropInstance` ao não desenhar nada
+    if (url) urls.add(url);
+  }
+  for (const url of urls) useGLTF.preload(url);
+  return urls.size;
 }

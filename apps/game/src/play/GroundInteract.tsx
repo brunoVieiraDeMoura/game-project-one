@@ -1,9 +1,10 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { CellLattice, TerrainQuery } from "@ragnarok/engine-core";
 import { usePlayStore } from "./playStore";
 import { useCombatStore } from "../combat/combatStore";
+import { useCursorStore } from "../ui/cursorStore";
 import {
   MARKER_SEGS,
   TERRAIN_GROUP,
@@ -39,11 +40,70 @@ import {
 export const PROPS_GROUP = "map-props";
 
 
-/** quantos anéis de células ao redor de um alvo bloqueado se procura uma andável */
-const SNAP_RINGS = 4;
+/**
+ * Quantos anéis de células ao redor de um alvo bloqueado se procura uma andável.
+ *
+ * 4 dava conta de uma árvore ou de uma pedra, mas não de uma montanha pintada no
+ * editor: clicando no miolo dela nenhum anel achava chão, o snap devolvia a
+ * própria célula bloqueada e o pedido ia para o servidor assim mesmo.
+ *
+ * Este continua sendo só o palpite GEOMÉTRICO — ele trabalha em coordenada de
+ * mundo e não conhece a grade do servidor nem o A*. Quem tem a palavra final
+ * sobre ALCANÇABILIDADE é `net/moveTarget.destinoAlcancavel`, chamado no
+ * `NetPlayer` com a célula já convertida: célula andável não quer dizer célula
+ * que dá para alcançar (uma ilha cercada de parede é andável e inútil).
+ */
+const SNAP_RINGS = 10;
 
 /** meia-largura do marcador em função do personagem (charScale × altura do modelo) */
 const MARKER_OF_CHAR = 0.75;
+
+/**
+ * As quatro frames do marcador de destino, em `ui_definitiva/cursor`.
+ *
+ * Medido nos PNG: são o MESMO desenho (276 pixels opacos, as mesmas três cores)
+ * recuado 0, 1, 2 e 1 px. É uma pulsação — a moldura respira. Por isso a ordem
+ * é a do arquivo e o ciclo fecha sozinho, sem precisar de ida e volta.
+ */
+const MARCADOR_FRAMES = [1, 2, 3, 4].map((n) => `/assets/ui/cursor/UI_Flat_Select02a_${n}.png`);
+/** quantas frames por segundo — a pulsação é lenta de propósito, não pisca */
+const MARCADOR_FPS = 12;
+
+/**
+ * Quanto tempo a pulsação dura DEPOIS do clique.
+ *
+ * Ela é o retorno de "recebi o clique", não um enfeite permanente: pulsando o
+ * tempo todo enquanto o mouse passeia, o marcador vira ruído no canto do olho e
+ * deixa de significar coisa nenhuma. Duas voltas completas do ciclo bastam para
+ * o olho perceber e pararem.
+ */
+const MARCADOR_CLIQUE_MS = (MARCADOR_FRAMES.length * 2 * 1000) / MARCADOR_FPS;
+
+/**
+ * As frames do marcador, carregadas uma vez.
+ *
+ * Quem troca a frame é o `useFrame` do componente, mutando `material.map` por
+ * REFERÊNCIA: passar a frame por `setState` repintaria a árvore do React oito
+ * vezes por segundo para animar um quadradinho no chão — o mesmo erro que o
+ * cronômetro da barra de skills já evita.
+ */
+function useMarcadorFrames(): THREE.Texture[] {
+  const texturas = useMemo(() => {
+    const loader = new THREE.TextureLoader();
+    return MARCADOR_FRAMES.map((url) => {
+      const t = loader.load(url);
+      // pixel art: nada de interpolar. É COR (o material multiplica por ela),
+      // então sRGB — e sem mipmap, que borraria a moldura de longe.
+      t.magFilter = THREE.NearestFilter;
+      t.minFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    });
+  }, []);
+  useEffect(() => () => texturas.forEach((t) => t.dispose()), [texturas]);
+  return texturas;
+}
 
 export function GroundInteract({
   worldWidth,
@@ -54,6 +114,8 @@ export function GroundInteract({
   terrain,
   lattice,
   markerRadius,
+  hoverRef,
+  assistir,
 }: {
   /** tamanho do plano de clique em UNIDADES DE MUNDO (não em células): num mapa
    * hex o mundo mede HEX_W×largura, que com hexScale 10 é 4× o `width×cellSize`
@@ -70,12 +132,62 @@ export function GroundInteract({
   lattice?: CellLattice | undefined;
   /** meia-largura do marcador (unidades de mundo) — pouco maior que o personagem */
   markerRadius: number;
+  /**
+   * Onde o mouse aponta no chão, publicado para quem mais precisar.
+   *
+   * A prévia da skill de área desenha o disco NESTE ponto, e ela não pode
+   * recalcular o raio por conta própria: dois raycasts por quadro para o mesmo
+   * ponto, e com a chance de divergirem por um quadro. Quem já faz a conta
+   * empresta o resultado.
+   */
+  hoverRef?: React.MutableRefObject<{ x: number; z: number } | null>;
+  /**
+   * Assistência de mira: dá ao clique a chance de virar ataque ou coleta.
+   *
+   * Devolve `true` quando resolveu — aí não há caminhada a pedir. Fica FORA
+   * daqui (é o `PlayView` que a monta) porque depende do mundo do servidor e da
+   * conversão de célula, coisas que este componente não conhece: ele só sabe
+   * apontar o chão. É também o que mantém o preview do editor funcionando sem
+   * entidade nenhuma.
+   *
+   * Sem parâmetro de propósito: quem ESCOLHE o alvo é o `AssistenciaDeMira`, por
+   * quadro, em PIXEL de tela — o ponto do chão que este componente calculou não
+   * entra na conta.
+   */
+  assistir?: () => boolean;
 }) {
   const setMoveTarget = usePlayStore((s) => s.setMoveTarget);
   const setCombatTarget = useCombatStore((s) => s.setTarget);
-  const mode = usePlayStore((s) => s.mode);
   const cursor = useRef<THREE.Mesh>(null);
-  const hover = useRef<{ x: number; z: number } | null>(null);
+  const hoverLocal = useRef<{ x: number; z: number } | null>(null);
+  const hover = hoverRef ?? hoverLocal;
+  /** estado anterior da passagem, para só avisar o cursor na TROCA */
+  const bloqueadoAntes = useRef(false);
+  /**
+   * Em que célula o marcador foi MOLDADO pela última vez.
+   *
+   * Vestir o relevo custa reescrever os 49 vértices da malha e recalcular a
+   * esfera envolvente (`moldarMarcador`), e isso rodava por QUADRO — enquanto o
+   * mouse está parado, ou andando dentro da mesma célula, o resultado é
+   * idêntico ao do quadro anterior. O marcador só se mexe quando muda de célula,
+   * então é aí que ele precisa ser remoldado.
+   */
+  const marcadorEm = useRef<string | null>(null);
+  // trocar de mapa (ou editar o relevo, no preview) invalida a forma guardada
+  useEffect(() => {
+    marcadorEm.current = null;
+  }, [terrain]);
+  /** instante do último clique no chão — é ele que dispara a pulsação */
+  const cliqueEm = useRef(Number.NEGATIVE_INFINITY);
+  const marcadorFrames = useMarcadorFrames();
+
+  // sair da cena com o ponteiro sobre bloqueio deixaria o cursor preso
+  useEffect(
+    () => () => {
+      if (bloqueadoAntes.current) useCursorStore.getState().pedir("block", false);
+    },
+    [],
+  );
   const scene = useThree((s) => s.scene);
   // raycaster próprio: o do R3F é reconfigurado a cada evento
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -142,11 +254,30 @@ export function GroundInteract({
    *
    * Vale sempre o hit mais próximo da câmera.
    */
-  const pontoDoRaio = (e: ThreeEvent<PointerEvent | MouseEvent>) => {
+  /**
+   * Os dois grupos, achados UMA vez.
+   *
+   * `getObjectByName` percorre o grafo inteiro, e isto rodava duas vezes por
+   * evento de mouse. Os grupos são criados pelo `PlayView` e não trocam de
+   * identidade enquanto a cena existe, então o resultado é guardado — com uma
+   * releitura enquanto ainda não existirem (a cena monta em ordem).
+   */
+  const grupos = useRef<{ props?: THREE.Object3D; terreno?: THREE.Object3D }>({});
+  const acharGrupos = () => {
+    const g = grupos.current;
+    if (!g.props) g.props = scene.getObjectByName(PROPS_GROUP);
+    if (!g.terreno) g.terreno = scene.getObjectByName(TERRAIN_GROUP);
+    return g;
+  };
+
+  const pontoDoRaio = (e: {
+    ray: { origin: THREE.Vector3; direction: THREE.Vector3 };
+    distance: number;
+    point: { x: number; z: number };
+  }) => {
     raycaster.set(e.ray.origin, e.ray.direction);
     raycaster.far = e.distance;
-    const props = scene.getObjectByName(PROPS_GROUP);
-    const terreno = scene.getObjectByName(TERRAIN_GROUP);
+    const { props, terreno } = acharGrupos();
 
     const hitsProp = props ? raycaster.intersectObject(props, true).filter((h) => h.distance < e.distance) : [];
     const hitsChao = terreno ? raycaster.intersectObject(terreno, true).filter((h) => h.distance < e.distance) : [];
@@ -170,24 +301,75 @@ export function GroundInteract({
     return topmostXZ(candidatos, { x: e.point.x, z: e.point.z });
   };
 
+  /**
+   * O `pointermove` só GUARDA o raio; quem resolve é o `useFrame`.
+   *
+   * O mouse dispara 60 a 120 eventos por segundo, e cada `pontoDoRaio` faz duas
+   * varreduras do grafo (`getObjectByName`) mais dois `intersectObject`
+   * RECURSIVOS — contra as ~25 malhas de chunk do terreno e contra os props.
+   * Só que o resultado é lido uma vez por quadro, ali embaixo: todo evento além
+   * do primeiro de cada quadro era trabalho inteiramente jogado fora, e é
+   * justamente movendo o mouse para clicar que a travada aparecia.
+   *
+   * O evento do R3F não sobrevive ao quadro, então o que se guarda é uma cópia
+   * do raio e da distância — os três números que o `pontoDoRaio` usa.
+   */
+  const raioPendente = useRef({
+    origin: new THREE.Vector3(),
+    direction: new THREE.Vector3(),
+    distance: 0,
+    point: new THREE.Vector3(),
+    /** houve movimento desde o último quadro? */
+    sujo: false,
+  });
+
   const onMove = (e: ThreeEvent<PointerEvent>) => {
-    hover.current = pontoDoRaio(e);
+    const p = raioPendente.current;
+    p.origin.copy(e.ray.origin);
+    p.direction.copy(e.ray.direction);
+    p.distance = e.distance;
+    p.point.copy(e.point);
+    p.sujo = true;
   };
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     // clique no chão vazio deseleciona o alvo de combate (clicar num monstro é
     // capturado pelo próprio monstro antes de chegar aqui)
     setCombatTarget(null);
     // clique só move no modo clique-tile; em WASD livre é clique morto
-    if (mode !== "grid") return;
     const p = pontoDoRaio(e);
+    cliqueEm.current = performance.now();
+
+    /**
+     * Soft lock: o clique que passou RASPANDO num alvo vale como clique nele.
+     *
+     * Chegar aqui já quer dizer que o raio não acertou monstro nem item — a
+     * hitbox deles teria capturado o evento. Só que ela é uma caixa no espaço
+     * 3D, e com a câmera afastada, o bicho atrás de um prop ou andando entre o
+     * apertar e o soltar do botão, o raio passa de lado; aí o clique vira
+     * "andar até ali" e o personagem sai correndo em vez de bater.
+     *
+     * Skill de ÁREA fica de fora de propósito (`assistir` devolve `null`): ali
+     * o alvo é a célula, e puxar o ponto mudaria onde a magia cai.
+     */
+    const assistido = assistir?.();
+    if (assistido) return;
+
     setMoveTarget(snapAndavel(p.x, p.z));
   };
 
   useFrame(() => {
+    // no máximo UMA resolução de raio por quadro, com o último movimento do
+    // mouse — o de antes já não interessa a ninguém
+    const pendente = raioPendente.current;
+    if (pendente.sujo) {
+      pendente.sujo = false;
+      hover.current = pontoDoRaio({ ray: pendente, distance: pendente.distance, point: pendente.point });
+    }
+
     const c = cursor.current;
     if (!c) return;
     const h = hover.current;
-    if (mode !== "grid" || !h) {
+    if (!h) {
       c.visible = false;
       return;
     }
@@ -197,8 +379,47 @@ export function GroundInteract({
     // O marcador fica na ORIGEM e desenha em coordenada de mundo: cada vértice é
     // amostrado no terreno, então ele veste o relevo em vez de flutuar.
     c.position.set(0, 0, 0);
-    moldarMarcador(c.geometry as THREE.BufferGeometry, center.x, center.z, markerRadius, terrain);
-    (c.material as THREE.MeshBasicMaterial).color.set(walkable ? "#4ade80" : "#ef4444");
+    // remolda só ao MUDAR de célula (ver `marcadorEm`)
+    const chave = `${center.x},${center.z},${markerRadius}`;
+    if (marcadorEm.current !== chave) {
+      marcadorEm.current = chave;
+      moldarMarcador(c.geometry as THREE.BufferGeometry, center.x, center.z, markerRadius, terrain);
+    }
+
+    /**
+     * Quem avisa que a célula é intransponível é o CURSOR (`block_area`), não a
+     * cor do marcador: o marcador está no chão, longe de onde o olho está, e o
+     * cursor fica exatamente onde o jogador olha. A arte do marcador continua
+     * como veio, porque ela diz só ONDE o mouse está.
+     *
+     * O pedido é CONTADO, então só se avisa na TROCA — mandar todo quadro
+     * somaria sessenta pedidos por segundo e o cursor nunca mais sairia do
+     * bloqueado.
+     */
+    const bloqueado = !walkable;
+    if (bloqueado !== bloqueadoAntes.current) {
+      bloqueadoAntes.current = bloqueado;
+      useCursorStore.getState().pedir("block", bloqueado);
+    }
+
+    /**
+     * A pulsação só roda DEPOIS DE UM CLIQUE, e por pouco tempo.
+     *
+     * Enquanto o mouse só passeia, o marcador fica na frame parada: a animação é
+     * a confirmação de "recebi o clique", e piscando o tempo todo ela deixa de
+     * dizer isso. Troca a textura por referência, sem passar pelo React.
+     */
+    const decorrido = performance.now() - cliqueEm.current;
+    const animando = decorrido < MARCADOR_CLIQUE_MS;
+    const i = animando ? Math.floor(decorrido / (1000 / MARCADOR_FPS)) % marcadorFrames.length : 0;
+    const frame = marcadorFrames[i];
+    const mat = c.material as THREE.MeshBasicMaterial;
+    if (frame && mat.map !== frame) {
+      mat.map = frame;
+      // trocar a textura de um material já compilado NÃO exige recompilar o
+      // shader (o `map` já está declarado); só o uniform muda
+      mat.needsUpdate = false;
+    }
   });
 
   return (
@@ -212,14 +433,24 @@ export function GroundInteract({
         <planeGeometry args={[worldWidth, worldDepth]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      {/* Marcador de destino: quadrado pouco maior que o personagem (não do
-          tamanho da célula, como era antes), SUBDIVIDIDO para poder acompanhar
-          o contorno do terreno — em rampa e morro um quad único atravessava a
-          malha e sumia pela metade. Sem `rotation`: os vértices já são escritos
-          em coordenada de mundo no useFrame. */}
+      {/* Marcador de destino: a moldura pintada de `ui_definitiva/cursor`
+          (UI_Flat_Select02a), SUBDIVIDIDA para acompanhar o contorno do terreno
+          — em rampa e morro um quad único atravessava a malha e sumia pela
+          metade. Sem `rotation`: os vértices já são escritos em coordenada de
+          mundo no useFrame. */}
       <mesh ref={cursor} visible={false}>
         <planeGeometry args={[markerRadius * 2, markerRadius * 2, MARKER_SEGS, MARKER_SEGS]} />
-        <meshBasicMaterial color="#4ade80" transparent opacity={0.45} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          map={marcadorFrames[0]}
+          color="#ffffff"
+          transparent
+          opacity={0.95}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          // a arte tem alpha duro; sem o corte o navegador desenha a borda
+          // semitransparente por cima do chão e sobra um halo quadrado
+          alphaTest={0.35}
+        />
       </mesh>
     </group>
   );

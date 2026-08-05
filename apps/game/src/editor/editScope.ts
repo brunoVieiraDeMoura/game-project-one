@@ -43,12 +43,20 @@ export type EditScope = "all" | "inside" | "border" | "hole";
  * Borda é o que está bloqueado E conectado ao limite do mapa (flood fill de 4
  * vizinhos a partir da moldura). Ilha bloqueada no meio do campo não é borda —
  * é obstáculo do miolo.
+ *
+ * O canal fundo de RIO fica de fora, mesmo bloqueado. Um rio atravessa o mapa de
+ * ponta a ponta e encosta na moldura: contado como bloqueio comum, o flood fill
+ * corria por dentro dele e o rio inteiro — mais o que ele tocasse — virava
+ * região "Borda", tirando o miolo do mapa do escopo "Dentro". O rio é cenário
+ * autorado no meio do campo, não moldura.
  */
 function buildBorderMask(map: GameMap): Uint8Array {
   const { width: W, height: H } = map.size;
   const mask = new Uint8Array(W * H);
   const bloqueada = (col: number, row: number) => {
-    const c = map.collision[cellIndex(map, col, row)];
+    const i = cellIndex(map, col, row);
+    if (map.surface[i] === "river") return false;
+    const c = map.collision[i];
     return c === "wall" || c === "cliff";
   };
 
@@ -81,17 +89,18 @@ function buildBorderMask(map: GameMap): Uint8Array {
   return mask;
 }
 
-// A máscara é cara (uma varredura do mapa) e muda só quando a COLISÃO muda —
-// e o store recria esse array a cada edição, então ele serve de chave.
-const cache = new WeakMap<GameMap["collision"], Uint8Array>();
+// A máscara é cara (uma varredura do mapa) e muda quando a COLISÃO muda — e
+// também quando a SUPERFÍCIE muda, desde que o rio saiu da moldura. O store é
+// imutável e recria os dois arrays a cada edição, então eles servem de chave;
+// a superfície entra como valor guardado porque nem toda edição toca os dois.
+const cache = new WeakMap<GameMap["collision"], { surface: GameMap["surface"]; mask: Uint8Array }>();
 
 export function borderMask(map: GameMap): Uint8Array {
-  let m = cache.get(map.collision);
-  if (!m) {
-    m = buildBorderMask(map);
-    cache.set(map.collision, m);
-  }
-  return m;
+  const guardado = cache.get(map.collision);
+  if (guardado && guardado.surface === map.surface) return guardado.mask;
+  const mask = buildBorderMask(map);
+  cache.set(map.collision, { surface: map.surface, mask });
+  return mask;
 }
 
 /** a célula está no escopo escolhido? */

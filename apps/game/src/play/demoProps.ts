@@ -1,5 +1,6 @@
 import { cellIndex, type GameMap, type MapProp } from "@ragnarok/map-format";
 import { PROP_IDS } from "../props/registry";
+import { gridFor } from "../grid";
 
 /**
  * Espalha props de demonstração em células andáveis quando o mapa ainda não
@@ -48,7 +49,17 @@ export function scatterDemoProps(map: GameMap, center: { x: number; z: number },
 /** primeira célula andável varrendo do centro pra fora (posição inicial do player) */
 export function findWalkableStart(map: GameMap): { x: number; z: number } {
   const { width, height } = map.size;
-  const s = map.cellSize;
+  /**
+   * A célula DESENHADA, não o `map.cellSize`.
+   *
+   * `cellSize` vale 5 no schema e não tem relação com o tamanho do mundo — a
+   * mesma armadilha que já tinha feito o WASD mirar 2,5× mais longe que o
+   * clique. Num mapa do rAthena (400×400, célula de 2 unidades) o mundo mede
+   * 800; multiplicando por 5, este spawn caía em 952 × 1052, ou seja FORA do
+   * mapa, e o preview local abria com o personagem boiando sobre o vazio —
+   * nenhum chunk é montado onde não há mapa.
+   */
+  const grid = gridFor(map);
   const cx0 = Math.floor(width / 2);
   const cz0 = Math.floor(height / 2);
   for (let r = 0; r < Math.max(width, height); r++) {
@@ -59,10 +70,12 @@ export function findWalkableStart(map: GameMap): { x: number; z: number } {
         const cz = cz0 + dz;
         if (cx < 0 || cx >= width || cz < 0 || cz >= height) continue;
         if (map.collision[cellIndex(map, cx, cz)] === "walkable") {
-          return { x: cx * s + s / 2, z: cz * s + s / 2 };
+          const p = grid.cellToWorld(cx, cz);
+          return { x: p.x, z: p.z };
         }
       }
     }
   }
-  return { x: (width * s) / 2, z: (height * s) / 2 };
+  const meio = grid.cellToWorld(Math.floor(width / 2), Math.floor(height / 2));
+  return { x: meio.x, z: meio.z };
 }

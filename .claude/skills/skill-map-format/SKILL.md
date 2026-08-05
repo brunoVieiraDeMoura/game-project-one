@@ -57,6 +57,9 @@ interface GameMap {
   collision: CollisionType[];    // flattened row-major, same length as heightmap
   surface: SurfaceType[];        // blocks-only visual tile per cell; [] = derive from
                                 // collision. Length 0 or width*height.
+  terrainStyle: Partial<Record<SurfaceType, TerrainStyle>>; // how each surface is DRAWN
+                                // in this map. Appearance only — never collision,
+                                // height or passability. {} = client defaults.
   waterLevel: number | null;      // from rsw; null = no water (was sentinel 1000000)
   props: MapProp[];
   spawns: MapSpawn[];
@@ -69,7 +72,12 @@ interface GameMap {
 }
 
 type CollisionType = "walkable" | "wall" | "water" | "cliff"; // gat type 0/1/3/5
-type SurfaceType = "grass" | "dirt" | "stone" | "sand" | "snow" | "water"; // blocks visual
+type SurfaceType = "grass" | "dirt" | "stone" | "sand" | "snow" | "water" | "river";
+
+interface TerrainStyle {
+  texture?: string;  // id in public/assets/terrain/manifest.json; unknown → default
+  scale?: number;    // WORLD units per texture repeat (a rAthena cell is 2 units)
+}
 
 interface MapProp {
   id: string;
@@ -114,5 +122,10 @@ interface MapTrigger {
   map editor. Height and walkability are independent fields in the source format.
 - `waterLevel: null` means no water plane is rendered/simulated for that map — don't default
   it to `0`, which is a valid real water level.
+- `terrainStyle` is **appearance only**. It may never influence collision, height or
+  passability — those come from the gat/editor, and a map that renders differently must
+  still walk identically. An unknown `texture` id falls back to the client default rather
+  than leaving the ground untextured.
 - When adding a new field, update this file's schema block and bump `metadata.version` in
   the same change — don't let the TypeScript types and this doc drift apart.
+  Current: **v6** (`terrainStyle`).

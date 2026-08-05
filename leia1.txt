@@ -1,0 +1,11 @@
+Antes de implementar, faça uma estimativa baseada nas medições do profiler. Se todas as props repetidas forem convertidas para InstancedMesh, qual a redução esperada em:
+
+draw calls;
+tempo de updateMatrixWorld;
+tempo de renderização por frame;
+FPS médio;
+FPS mínimo;
+uso de CPU;
+uso de GPU.
+
+Se possível, indique também o custo da implementação (baixo, médio ou alto risco) e quais sistemas podem ser afetados, como raycast, seleção de objetos e colisão.

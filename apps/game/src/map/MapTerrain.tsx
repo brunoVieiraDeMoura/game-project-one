@@ -18,7 +18,13 @@ const RGB: Record<CollisionType, [number, number, number]> = {
   cliff: [120, 53, 15],
 };
 
-export function MapTerrain({ map }: { map: GameMap }) {
+/**
+ * `fisica` só é ligado pelo `/spectator`, que é a única tela que ainda monta um
+ * `<Physics>`. No `/play` o corpo do Rapier não decidia nada — quem responde
+ * "posso pisar aqui" é o `TerrainQuery` e, online, o servidor — e um `RigidBody`
+ * FORA de um `<Physics>` explode na montagem, então ele tem de ser opcional.
+ */
+export function MapTerrain({ map, fisica = false }: { map: GameMap; fisica?: boolean }) {
   const { width, height } = map.size;
   const worldW = width * map.cellSize;
   const worldH = height * map.cellSize;
@@ -39,19 +45,23 @@ export function MapTerrain({ map }: { map: GameMap }) {
     return tex;
   }, [map, width, height]);
 
+  {/* plano no XZ, centrado; origem do mapa no canto → deslocado meia extensão */}
+  const chao = (
+    <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[worldW / 2, 0, worldH / 2]}>
+      <planeGeometry args={[worldW, worldH]} />
+      <meshStandardMaterial map={texture} />
+    </mesh>
+  );
+
   return (
     <group>
-      <RigidBody type="fixed" colliders="cuboid">
-        {/* plano no XZ, centrado; origem do mapa no canto → deslocado meia extensão */}
-        <mesh
-          receiveShadow
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[worldW / 2, 0, worldH / 2]}
-        >
-          <planeGeometry args={[worldW, worldH]} />
-          <meshStandardMaterial map={texture} />
-        </mesh>
-      </RigidBody>
+      {fisica ? (
+        <RigidBody type="fixed" colliders="cuboid">
+          {chao}
+        </RigidBody>
+      ) : (
+        chao
+      )}
     </group>
   );
 }

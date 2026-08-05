@@ -28,8 +28,17 @@ export function CurvedBox({
   border?: number;
   /** CSS background de dentro (translúcido: a folhagem tem que aparecer) */
   background?: string;
+  /**
+   * Estilo do elemento de FORA — posição, tamanho, margem.
+   *
+   * ATENÇÃO: os filhos NÃO moram aqui. Layout de conteúdo (`display`, `padding`,
+   * `gap`, `grid`…) tem de ir em `inner`, senão ele se aplica a um elemento cujos
+   * únicos filhos são as duas camadas absolutas da moldura e o container do
+   * conteúdo — ou seja, a nada. Foi assim que o aviso de item ficou com o ícone
+   * numa linha e o texto na outra (`hud/LootToast`).
+   */
   style?: CSSProperties;
-  /** estilo da área interna (padding, layout, overflow…) */
+  /** estilo da área interna, onde os filhos realmente ficam (padding, layout, overflow…) */
   inner?: CSSProperties;
   onPointerDown?: (e: React.PointerEvent) => void;
   title?: string;

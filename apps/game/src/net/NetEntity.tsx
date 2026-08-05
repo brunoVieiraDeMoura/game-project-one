@@ -1,14 +1,47 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { useShallow } from "zustand/react/shallow";
 import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
 import { CHARACTER_URLS, useCharacter } from "../assets";
 import { mobModel, NPC_MODEL } from "../entities/mobModels";
 import { gateway } from "./gateway";
 import { cellToWorld, type LegacyMapping } from "./legacyCells";
+import { fatiaDeRender } from "./entityRenderSlice";
 import { interpolatedCell, useWorldStore } from "./worldStore";
-import { useAimStore } from "./aimStore";
+import { cliqueVaiParaOChao, useAimStore } from "./aimStore";
 import { EntityLabel } from "./EntityLabel";
+import { useCursorStore } from "../ui/cursorStore";
+import { GlowChao } from "./GlowChao";
+import { GEO_CILINDRO, MATERIAL_INVISIVEL } from "./recursosCompartilhados";
+import { useSoftLockStore } from "../play/softLockStore";
+import { useAttackStore } from "./attackStore";
+import { atacar } from "./acoes";
+
+/** de quanto em quanto tempo o `__netEntities` do DEV é atualizado */
+const DBG_INTERVALO_MS = 500;
+
+/**
+ * Área clicável do mob, em fração de CÉLULA (raio) e da altura do modelo.
+ *
+ * Era 0,42 de célula — o corpo justo. Numa câmera afastada isso é um alvo de
+ * poucos pixels, e errar o clique manda o personagem ANDAR até lá em vez de
+ * atacar, que é o pior resultado possível. 0,62 dá folga sem invadir a célula
+ * vizinha (o raio ainda é menor que 2/3 da célula), e a altura passa do topo da
+ * cabeça para poder pegar o clique de cima.
+ */
+const HITBOX_RAIO = 0.62;
+const HITBOX_ALTURA = 1.25;
+
+/**
+ * Vermelho do realce de inimigo.
+ *
+ * É a mesma família do preenchimento de HP do alvo (`ENEMY_FILL`, o vermelho
+ * medido da arte com a matiz girada para ~8°) — a paleta da UI não tem vermelho
+ * próprio, e inventar um tom novo faria o realce destoar da placa que ele
+ * acende.
+ */
+const GLOW_INIMIGO = "#8a2f22";
 
 /**
  * Uma entidade do servidor desenhada na cena.
@@ -24,6 +57,7 @@ export function NetEntityView({
   charScale,
   animationSpeed,
   cellSize,
+  fogFar,
 }: {
   gid: number;
   map: GameMap;
@@ -32,24 +66,134 @@ export function NetEntityView({
   animationSpeed: number;
   /** largura da célula em unidades de mundo (plaquinha e hitbox são medidas nela) */
   cellSize: number;
+  /** onde a névoa fica opaca — além disto não há o que ver (ver play/viewRadius) */
+  fogFar: number;
 }) {
-  const entity = useWorldStore((s) => s.entities[gid]);
+  /**
+   * Assina só o que MUDA O DESENHO — nunca a entidade inteira.
+   *
+   * O `move` do store cria um objeto novo por pacote, e assinando `entities[gid]`
+   * cada passo de cada mob re-renderizava esta subárvore toda (área de clique,
+   * brilho, plaquinha e a barra de três malhas), com o `<Text>` do drei
+   * re-sincronizando o atlas de glifo junto. A posição não passa por render
+   * nenhum: ela é escrita no `group.position` do `useFrame` abaixo, que lê o
+   * store por `getState()`. Ver `net/entityRenderSlice` e o teste que trava isso
+   * dos dois lados em `perf/cenarios.test.ts`.
+   */
+  const entity = useWorldStore(
+    useShallow((s) => {
+      const e = s.entities[gid];
+      return e ? fatiaDeRender(e) : undefined;
+    }),
+  );
   const targeted = useWorldStore((s) => s.target === gid);
   const modelInfo = entity?.kind === "npc" ? NPC_MODEL : mobModel(entity?.job ?? 0);
-  const { scene, play } = useCharacter(CHARACTER_URLS[modelInfo.character], animationSpeed);
+  /**
+   * "Esta entidade está à vista?" — escrito no `useFrame` abaixo, lido pelo
+   * mixer de animação (ver `assets.useCharacter`). Começa `true` para o primeiro
+   * quadro não nascer congelado.
+   */
+  const aVista = useRef(true);
+  const { scene, play } = useCharacter(CHARACTER_URLS[modelInfo.character], animationSpeed, aVista);
   const group = useRef<THREE.Group>(null);
   /** só o boneco gira; plaquinha e área de clique ficam paradas */
   const model = useRef<THREE.Group>(null);
   const wasMoving = useRef(false);
+  /** última escrita no `__netEntities` (DEV) — ver o bloco no `useFrame` */
+  const ultimoDbg = useRef(0);
+  /** o ponteiro está sobre esta entidade? (para devolver o cursor ao desmontar) */
+  const sobre = useRef(false);
+  /** o mesmo, mas em estado — o brilho é desenho e precisa de render */
+  const [realce, setRealce] = useState(false);
+  /**
+   * Há uma skill de CHÃO mirando?
+   *
+   * Enquanto houver, este monstro não é alvo de clique: quem recebe é a célula
+   * atrás dele. O seletor devolve booleano (não o objeto da skill), então o
+   * zustand só repinta na troca — e a troca acontece por clique na barra de
+   * skills, não por quadro.
+   */
+  const mirandoChao = useAimStore((s) => cliqueVaiParaOChao(s.skill));
+  /**
+   * A assistência de mira escolheria ESTE mob se o clique saísse agora?
+   *
+   * É a trava do soft lock, visível. O pedido original era puxar o cursor até o
+   * monstro; o navegador não deixa mover o ponteiro do sistema, então o que
+   * entrega a mesma informação — "é neste que vou bater" — é acender o alvo
+   * antes do clique.
+   *
+   * Seletor de igualdade (booleano), e o store só publica na TROCA: o alvo é
+   * recalculado por quadro, e devolver o objeto faria toda entidade montada
+   * reconciliar 60 vezes por segundo.
+   */
+  const travado = useSoftLockStore((s) => s.alvo?.gid === gid);
+  /**
+   * É o alvo SELECIONADO? (o do Tab, o do clique, o que o Ataque Básico bate)
+   *
+   * Seletor booleano, como o de cima: o alvo muda por clique e por Tab, não por
+   * quadro, e devolver o gid faria toda entidade montada reconciliar a cada
+   * troca de alvo em vez de só as duas envolvidas.
+   */
+  const alvo = useWorldStore((s) => s.target === gid);
 
-  useFrame(() => {
+  /**
+   * Escolher a skill com o ponteiro JÁ sobre o monstro tem de apagar o realce.
+   *
+   * O `pointerover` não dispara de novo — o mouse não se mexeu —, então sem
+   * isto o cursor de espada e o brilho vermelho ficariam acesos prometendo um
+   * ataque que o clique não vai mais fazer.
+   */
+  useEffect(() => {
+    if (!mirandoChao || !sobre.current) return;
+    sobre.current = false;
+    setRealce(false);
+    useCursorStore.getState().pedir("attack", false);
+  }, [mirandoChao]);
+
+  // Um mob que MORRE com o ponteiro em cima nunca dispara `pointerout`: ele
+  // some da cena e o cursor de ataque ficaria preso na tela para sempre.
+  useEffect(
+    () => () => {
+      if (sobre.current) useCursorStore.getState().pedir("attack", false);
+    },
+    [],
+  );
+
+  useFrame((estado) => {
     const e = useWorldStore.getState().entities[gid];
     const g = group.current;
     if (!e || !g) return;
 
-    const cell = interpolatedCell(e, performance.now());
+    const now = performance.now();
+    const cell = interpolatedCell(e, now);
     const world = cellToWorld(map, mapping, cell.x, cell.y);
     const prev = g.position;
+
+    /**
+     * Monstro é desenhado da NÉVOA para dentro — a mesma regra do chão e dos
+     * props (`play/viewRadius`).
+     *
+     * Quem decide quais entidades EXISTEM é o servidor (`area_size`, em
+     * `rathena-conf/battle_conf.txt`), e ele mede num QUADRADO de células: com
+     * 60 células o canto da diagonal chega a 170 unidades, bem além das 120 em
+     * que a névoa já fecha. Aqui o corte é radial e usa a distância até a
+     * CÂMERA, que é exatamente a conta que a névoa faz por fragmento — além
+     * dela o bicho seria pintado 100% da cor da névoa.
+     *
+     * `visible = false` em vez de desmontar: desmontar devolveria o custo de
+     * criar modelo, plaquinha e barra toda vez que ele cruza a fronteira, e o
+     * raycaster pula objeto invisível de graça (clicar no que não se vê não é
+     * para funcionar mesmo).
+     */
+    const cam = estado.camera.position;
+    const dx = world.x - cam.x;
+    const dz = world.z - cam.z;
+    const visivel = dx * dx + dz * dz <= fogFar * fogFar;
+    if (g.visible !== visivel) g.visible = visivel;
+    // o mixer de animação lê isto no quadro seguinte: o three pula sozinho o
+    // desenho e a sombra do que está invisível, mas o mixer é nosso
+    aVista.current = visivel;
+    if (!visivel) return;
 
     // Vira para onde está andando. Usa o deslocamento real do frame em vez do
     // `dir` do pacote: o rAthena só manda direção em alguns pacotes, e o
@@ -65,9 +209,19 @@ export function NetEntityView({
 
     g.position.set(world.x, world.y, world.z);
 
-    if (import.meta.env.DEV) {
-      // onde CADA entidade foi parar no mundo — a resposta para "o servidor
-      // mandou o mob mas não aparece na tela"
+    /**
+     * Onde CADA entidade foi parar no mundo — a resposta para "o servidor mandou
+     * o mob mas não aparece na tela".
+     *
+     * Uma vez a cada `DBG_INTERVALO_MS`, não por quadro. Escrito por quadro,
+     * este bloco montava um objeto, três arrays e SEIS `toFixed` (que alocam
+     * string e são reconvertidas com `+`) por entidade — com 25 mobs a 60 fps,
+     * ~9.000 strings por segundo para alimentar um objeto de depuração que
+     * ninguém lê 60 vezes por segundo. Duas leituras por segundo respondem a
+     * mesma pergunta.
+     */
+    if (import.meta.env.DEV && now - ultimoDbg.current > DBG_INTERVALO_MS) {
+      ultimoDbg.current = now;
       const dbg = (window as unknown as { __netEntities?: Record<number, unknown> });
       dbg.__netEntities ??= {};
       dbg.__netEntities[gid] = {
@@ -93,29 +247,68 @@ export function NetEntityView({
   return (
     <group
       ref={group}
+      /**
+       * Cursor de ataque só sobre MONSTRO.
+       *
+       * NPC abre diálogo, não briga — e a arte é uma espada. Os handlers ficam
+       * no grupo, então valem para o cilindro de clique junto (ele é invisível
+       * pelo material, não por `visible`, justamente para continuar recebendo
+       * raio).
+       */
+      onPointerOver={(e) => {
+        if (entity?.kind !== "mob" || sobre.current) return;
+        // mirando uma skill de chão, o clique não ataca — e o cursor de espada
+        // com o realce vermelho prometeriam o contrário
+        if (mirandoChao) return;
+        e.stopPropagation();
+        sobre.current = true;
+        setRealce(true);
+        useCursorStore.getState().pedir("attack", true);
+      }}
+      onPointerOut={() => {
+        if (!sobre.current) return;
+        sobre.current = false;
+        setRealce(false);
+        useCursorStore.getState().pedir("attack", false);
+      }}
       onClick={(e) => {
+        const aiming = useAimStore.getState().skill;
+
+        /**
+         * Com uma skill de CHÃO mirando, o monstro não recebe o clique.
+         *
+         * O clique escolhe ONDE a magia cai, e o alvo é a célula — não a
+         * criatura. Deixar o `stopPropagation` acontecer aqui fazia o clique
+         * morrer na entidade e nunca chegar ao chão, então mirar em cima de um
+         * mob (o caso normal de uma área) ou não fazia nada, ou virava ataque.
+         *
+         * Sem `stopPropagation` e sem `setTarget`: o R3F segue entregando o
+         * evento ao que está atrás, que é o plano do `GroundInteract`, e é ele
+         * quem manda o `skill:use-ground` na célula certa.
+         */
+        if (cliqueVaiParaOChao(aiming)) return;
+
         e.stopPropagation();
         useWorldStore.getState().setTarget(gid);
 
-        // Mira de skill de alvo pendente: este clique escolhe EM QUEM, e não
+        // Mira de skill de ALVO pendente: este clique escolhe EM QUEM, e não
         // vira ataque normal — no RO o cursor de skill substitui o de ataque.
-        const aiming = useAimStore.getState().skill;
         if (aiming && aiming.mode === "entity") {
           gateway().emit("skill:use", { skillId: aiming.id, level: aiming.level, targetGid: gid });
           useAimStore.getState().cancel();
           return;
         }
 
-        // Alvejar pede a ficha ao servidor: o pacote de spawn traz só o nome, e
-        // é o ACK_REQNAME que devolve HP e nível (com show_mob_info ligado) —
-        // é assim que a barra do alvo se preenche.
-        gateway().emit("entity:info", { gid });
         // Alvo e ataque são pedido, não decisão: quem resolve acerto, dano e
-        // morte é o servidor (CZ.REQUEST_ACT → ZC.NOTIFY_ACT). Se estiver longe,
-        // ele responde ATTACK_FAILURE_FOR_DISTANCE e nada acontece — não cabe
-        // ao cliente adivinhar alcance.
+        // morte é o servidor (CZ.REQUEST_ACT → ZC.NOTIFY_ACT).
         if (entity.kind === "mob") {
-          gateway().emit("action:attack", { gid, continuous: true });
+          // a CÉLULA sai do store no instante do clique, não da fatia de render:
+          // posição é movimento, e movimento não passa por render (ver acima).
+          // A sequência inteira mora em `net/acoes` — clicar EM CIMA do mob e
+          // clicar PERTO dele (assistência de mira) têm de fazer o mesmo.
+          const atual = useWorldStore.getState().entities[gid];
+          if (!atual) return;
+          atacar(gid, atual.x, atual.y);
         } else if (entity.kind === "npc") {
           // clicar no NPC começa o script DELE, no servidor; o diálogo que
           // aparece é o que ele mandar (hud/NpcDialog)
@@ -124,16 +317,52 @@ export function NetEntityView({
       }}
     >
       {/* Alvo de clique: os ossos do modelo são finos e o clique quase sempre
-          passava entre os braços. Um cilindro do tamanho da CÉLULA é o que o RO
+          passava entre os braços. Um cilindro em volta dele é o que o RO
           efetivamente oferece como área clicável.
           NÃO usar `visible={false}`: o raycaster do three PULA objeto invisível
           (Raycaster.intersectObject sai cedo em `object.visible === false`), e
           era por isso que clicar no mob não fazia nada. Some pelo material —
           sem escrever cor nem profundidade — e continua sendo raycastável. */}
-      <mesh position={[0, height / 2, 0]}>
-        <cylinderGeometry args={[cellSize * 0.42, cellSize * 0.42, height, 8]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
-      </mesh>
+      {/* geometria e material de MÓDULO: o cilindro é unitário e o tamanho vai
+          no `scale`, então todas as entidades dividem os dois em vez de alocar
+          um par por mob que entra no alcance (ver `net/recursosCompartilhados`) */}
+      <mesh
+        position={[0, (height * HITBOX_ALTURA) / 2, 0]}
+        scale={[cellSize * HITBOX_RAIO * 2, height * HITBOX_ALTURA, cellSize * HITBOX_RAIO * 2]}
+        geometry={GEO_CILINDRO}
+        material={MATERIAL_INVISIVEL}
+      />
+
+      {/**
+       * Brilho vermelho com o ponteiro EM CIMA ou com a trava do soft lock
+       * apontando para cá.
+       *
+       * São as duas maneiras de o clique cair neste mob, e o realce tem de
+       * cobrir as duas: acender só no `pointerover` deixava de fora justamente o
+       * caso que a assistência existe para resolver — o ponteiro passando ao
+       * LADO dele. A trava acende mais fraco, porque ali o jogador ainda não
+       * está apontando: é um "seria este", não um "é este".
+       */}
+      {/**
+       * O chão sob o mob diz TRÊS coisas, e elas se somam.
+       *
+       * `realce` — o ponteiro está em cima. `travado` — a assistência de mira
+       * escolheria este. `alvo` — é o alvo SELECIONADO, o que o Tab cicla e o
+       * que o Ataque Básico persegue; esse ganha o ARO, uma circunferência
+       * fechada em volta do bicho, porque seleção é um estado que dura e precisa
+       * ser legível de relance no meio de um bando.
+       *
+       * O brilho subiu (0,46 → 0,62 na trava, 0,55 → 0,78 no hover): sobre grama
+       * clara e com o personagem em movimento, o que havia antes se perdia no
+       * chão — e ele é o único retorno de "é neste que vou bater".
+       */}
+      <GlowChao
+        cor={GLOW_INIMIGO}
+        raio={cellSize * HITBOX_RAIO * (alvo ? 1.45 : 1.25)}
+        aceso={realce || travado || alvo}
+        forca={realce ? 0.78 : travado ? 0.62 : alvo ? 0.5 : 0}
+        aro={alvo ? 0.95 : 0}
+      />
 
       <group ref={model} scale={charScale * modelInfo.scale}>
         <primitive object={scene} />
@@ -161,23 +390,40 @@ export function NetEntities({
   charScale,
   animationSpeed,
   cellSize,
+  fogFar,
 }: {
   map: GameMap;
   mapping: LegacyMapping;
   charScale: number;
   animationSpeed: number;
   cellSize: number;
+  /** onde a névoa fecha; entidade além disso não é desenhada */
+  fogFar: number;
 }) {
   const selfGid = useWorldStore((s) => s.selfGid);
-  // Só o conjunto de gids re-renderiza a lista; posição muda em useFrame.
-  const gids = useWorldStore((s) => Object.keys(s.entities).join(","));
+  /**
+   * Só o conjunto de gids re-renderiza a lista; posição muda em `useFrame`.
+   *
+   * A lista vem PRONTA do store (`gids`, atualizada só em spawn/vanish). Antes
+   * ela era derivada com `Object.keys(s.entities).join(",")`, e o zustand roda o
+   * seletor de todo assinante em CADA `set` — ou seja, cada pacote de movimento
+   * pagava uma varredura O(n) e uma string nova para concluir que nada tinha
+   * mudado. Agora a comparação é de referência.
+   */
+  const gids = useWorldStore((s) => s.gids);
 
+  /**
+   * O grupo tem NOME porque o flight recorder conta objetos renderizáveis POR
+   * CATEGORIA, e ele classifica pelo ancestral nomeado mais próximo
+   * (`core/diagnostics/cenaProbe`). Sem o nome, mob e NPC cairiam em "outros" e
+   * o retrato de um mundo vazio não diria O QUE sumiu.
+   *
+   * O grupo é inerte: transform identidade, nenhuma prop de render. Ele só
+   * existe como rótulo.
+   */
   return (
-    <>
+    <group name="net-entidades">
       {gids
-        .split(",")
-        .filter(Boolean)
-        .map(Number)
         .filter((gid) => gid !== selfGid)
         .map((gid) => (
           <NetEntityView
@@ -188,8 +434,9 @@ export function NetEntities({
             charScale={charScale}
             animationSpeed={animationSpeed}
             cellSize={cellSize}
+            fogFar={fogFar}
           />
         ))}
-    </>
+    </group>
   );
 }

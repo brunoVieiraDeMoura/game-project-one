@@ -31,7 +31,6 @@ export function Player({
   start,
   characterKey = "knight",
   positionRef,
-  camAzimuthRef,
   gameplay,
   lattice,
 }: {
@@ -42,7 +41,6 @@ export function Player({
   characterKey?: CharacterKey;
   positionRef?: React.MutableRefObject<THREE.Vector3>;
   /** azimute de movimento (referência do WASD); NÃO inclui o olhar temporário */
-  camAzimuthRef?: React.MutableRefObject<number>;
   /** ajustes do editor do game (velocidades, pulo, física, animação) */
   gameplay: GameplayConfig;
   /** células do modo clique-tile; omitido = grade quadrada de `cellSize` */
@@ -50,8 +48,7 @@ export function Player({
 }) {
   const group = useRef<THREE.Group>(null);
   const { scene, play, playOnce } = useCharacter(CHARACTER_URLS[characterKey], gameplay.animationSpeed);
-  const { axis, jump } = usePlayerInput();
-  const mode = usePlayStore((s) => s.mode);
+  const { jump } = usePlayerInput();
   const moveTarget = usePlayStore((s) => s.moveTarget);
   const setMoveTarget = usePlayStore((s) => s.setMoveTarget);
   const lastWarp = useRef(0); // seq do último warp consumido (gatilho de warp)
@@ -70,7 +67,16 @@ export function Player({
     }),
     [cellSize, gameplay.moveSpeed, lattice],
   );
-  const controller = useMemo(() => createMovementController(mode, terrain, config), [mode, terrain, config]);
+  /**
+   * Clique-tile, cravado — o modo deixou de ser escolha.
+   *
+   * O `"free"` (WASD) saiu do jogo junto com o seletor das Configurações. Este
+   * é o player LOCAL (preview do editor e demo), e ele segue a mesma regra do
+   * `/play`: navega-se por clique. O `FreeMovementController` continua no
+   * engine-core porque o `NpcWalker` o usa para patrulha — ele nunca teve nada
+   * com teclado.
+   */
+  const controller = useMemo(() => createMovementController("grid", terrain, config), [terrain, config]);
 
   const state = useRef<MovementState>({
     position: { x: start.x, y: terrain.getHeight(start.x, start.z), z: start.z },
@@ -112,7 +118,6 @@ export function Player({
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
-    const isGrid = mode === "grid";
     const pos = state.current.position;
 
     // teleporte por gatilho de warp: consome 1× (por seq) e reposiciona o estado
@@ -127,27 +132,13 @@ export function Player({
       setMoveTarget(null);
     }
 
-    // input de WASD (relativo ao azimute de movimento)
-    let inX = 0;
-    let inZ = 0;
-    if (!isGrid) {
-      const ax = axis.current.x;
-      const az = axis.current.z;
-      if (ax !== 0 || az !== 0) {
-        const a = camAzimuthRef?.current ?? 0;
-        const fwd = -az;
-        inX = Math.cos(a) * ax + -Math.sin(a) * fwd;
-        inZ = -Math.sin(a) * ax + -Math.cos(a) * fwd;
-      }
-    }
-    const usingKeys = inX !== 0 || inZ !== 0;
-    const clickTarget = isGrid ? (moveTarget ?? undefined) : undefined;
+    const clickTarget = moveTarget ?? undefined;
     const newClick = !!(clickTarget && clickTarget !== prevTarget.current);
 
-    const ctrlInput = { x: inX, z: inZ, target: clickTarget };
+    const ctrlInput = { x: 0, z: 0, target: clickTarget };
 
     // walk vs run no clique-tile
-    if (isGrid && clickTarget && newClick) {
+    if (clickTarget && newClick) {
       prevTarget.current = clickTarget;
       const dCells = Math.hypot(clickTarget.x - pos.x, clickTarget.z - pos.z) / cellSize;
       gridRun.current = dCells > 1.5;
@@ -157,7 +148,7 @@ export function Player({
     const next = controller.update(state.current, ctrlInput, dt);
     state.current = next;
 
-    if (isGrid && clickTarget) {
+    if (clickTarget) {
       const reached = Math.hypot(next.position.x - clickTarget.x, next.position.z - clickTarget.z) < cellSize * 0.6;
       if (reached && !next.moving) setMoveTarget(null);
     }
@@ -191,7 +182,7 @@ export function Player({
     if (airborne.current) {
       // pulo rodando (one-shot)
     } else if (next.moving) {
-      play(isGrid ? (gridRun.current ? "run" : "walk") : "run");
+      play(gridRun.current ? "run" : "walk");
     } else {
       play("idle");
     }

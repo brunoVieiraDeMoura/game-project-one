@@ -17,8 +17,16 @@ import { CHAT_ART, CHAT_ART_SIZE, FRAME_SCALE, RAIL } from "../ui/chatFrame";
  * Fica por CIMA do conteúdo (`zIndex`) porque a folhagem tem que passar na
  * frente do canvas, e inteiramente com `pointer-events: none` — é decoração.
  */
-export function ChatFrame() {
-  const k = FRAME_SCALE;
+export function ChatFrame({ escala = FRAME_SCALE }: { escala?: number } = {}) {
+  /**
+   * A escala é PARÂMETRO porque a moldura serve duas telas.
+   *
+   * Ela nasceu para o chat (0,5), e o login/char-select usam a MESMA arte num
+   * painel muito maior — os quatro cantos são byte a byte (md5 conferido) os do
+   * pacote do chat. Copiar o componente para mudar um número duplicaria as oito
+   * peças e o alinhamento medido entre elas, que é a parte difícil.
+   */
+  const k = escala;
   const S = CHAT_ART_SIZE;
   const tl = { w: S.cornerTopLeft.w * k, h: S.cornerTopLeft.h * k };
   const tr = { w: S.cornerTopRight.w * k, h: S.cornerTopRight.h * k };
@@ -48,7 +56,7 @@ export function ChatFrame() {
           left: tl.w,
           right: tr.w,
           top: 0,
-          height: RAIL.top,
+          height: RAIL.top * (escala / FRAME_SCALE),
           backgroundImage: `url(${CHAT_ART.edgeTop})`,
           backgroundSize: "100% 100%",
         }}
@@ -59,7 +67,7 @@ export function ChatFrame() {
           left: bl.w,
           right: br.w,
           bottom: 0,
-          height: RAIL.bottom,
+          height: RAIL.bottom * (escala / FRAME_SCALE),
           backgroundImage: `url(${CHAT_ART.edgeBottom})`,
           backgroundSize: "100% 100%",
         }}

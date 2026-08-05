@@ -31,15 +31,90 @@ export const MAX_WALKPATH = 32;
 /**
  * Quantas células o servidor aceita por PEDIDO de caminhada.
  *
- * Não é o `MAX_WALKPATH`: quem manda é `battle_config.max_walk_path`, que vale
- * **17** por padrão (`conf/battle/client.conf:42`) e é conferido em
- * `unit_walktoxy` (unit.cpp:860) — acima disso o servidor devolve 0 e não
- * responde nada. É por isso que clicar longe parecia "não ter alcance": o
- * cliente pedia, o servidor descartava em silêncio.
+ * Não é o `MAX_WALKPATH`: quem manda é `battle_config.max_walk_path`, conferido
+ * em `unit_walktoxy` (unit.cpp:860) — acima disso o servidor devolve 0 e não
+ * responde NADA. É por isso que clicar longe parecia "não ter alcance": o
+ * cliente pedia, o servidor descartava em silêncio (medido: 16 células andavam,
+ * 20 não).
  *
- * Medido no servidor deste projeto: 16 células andam, 20 não.
+ * **Este número é uma CÓPIA do servidor e tem de bater com ele.** O valor do
+ * projeto está em `rathena-conf/battle_conf.txt` (`max_walk_path: 30`); o
+ * padrão do rAthena é 17 e o teto absoluto é `MAX_WALKPATH` (32,
+ * `battle.cpp:8684` valida o intervalo). Se um lado mudar sozinho, o cliente
+ * volta a pedir trecho que o servidor joga fora — e a falha é silenciosa.
  */
-export const MAX_WALK_PATH_DEFAULT = 17;
+export const MAX_WALK_PATH_DEFAULT = 30;
+
+/**
+ * O SEGUNDO teto, o que quase ninguém lembra: 14 células quando há obstáculo.
+ *
+ * `OFFICIAL_WALKPATH` está LIGADO nesta árvore (`rathena/src/config/core.hpp:26`)
+ * e acrescenta esta regra ao `unit_walktoxy` (unit.cpp:865), logo depois do
+ * `max_walk_path`:
+ *
+ * ```c
+ * // Official number of walkable cells is 14 if and only if there is an
+ * // obstacle between.
+ * if( wpd.path_len > 14 && !path_search_long(...) ) return 0;
+ * ```
+ *
+ * Ou seja: um caminho de mais de 14 células só é aceito se a LINHA RETA entre
+ * as duas pontas estiver livre. Como toda recusa do `unit_walktoxy` é SILENCIOSA
+ * — devolve 0 e não responde nada —, ignorar isto no cliente é uma falha muda,
+ * exatamente do tipo que o projeto já pagou caro com o `max_walk_path`.
+ *
+ * Hoje não morde porque o `prt_fild08` está 100% andável e a reta nunca cruza
+ * bloqueio. Morde no primeiro relevo autorado.
+ */
+export const MAX_WALK_PATH_COM_OBSTACULO = 14;
+
+/**
+ * A reta entre duas células está livre? (`path_search_long`, path.cpp:132)
+ *
+ * O rAthena caminha a linha de Bresenham conferindo `CELL_CHKNOPASS` em cada
+ * célula. É esta a pergunta que decide qual dos dois tetos vale.
+ */
+export function retaLivre(map: GameMap, from: Cell, to: Cell, blocked?: Set<number>): boolean {
+  let x = from.x;
+  let y = from.y;
+  const dx = Math.abs(to.x - x);
+  const dy = Math.abs(to.y - y);
+  const sx = x < to.x ? 1 : -1;
+  const sy = y < to.y ? 1 : -1;
+  let err = dx - dy;
+  // teto de segurança: a reta nunca é maior que a soma dos catetos
+  for (let guarda = dx + dy + 2; guarda > 0; guarda--) {
+    if (!walkable(map, x, y, blocked)) return false;
+    if (x === to.x && y === to.y) return true;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y += sy;
+    }
+  }
+  return false;
+}
+
+/**
+ * Maior trecho que se pode PEDIR de uma vez, já com margem.
+ *
+ * A margem existe porque quem refaz a conta é o SERVIDOR, a partir da célula
+ * onde ELE acha que o personagem está — que pode não ser a que o cliente
+ * desenha. Era de UMA célula e foi dimensionada para um desvio de uma célula;
+ * com o desvio acumulado de 2-3 que o cliente chegava a ter, o trecho pedido
+ * estourava o teto na conta do servidor e sumia calado. Três é o mesmo número
+ * que o `DERIVA_MAX` do worldStore admite, arredondado para cima.
+ */
+export const MARGEM_TRECHO = 3;
+
+export function tetoDeTrecho(map: GameMap, from: Cell, to: Cell, blocked?: Set<number>): number {
+  const teto = retaLivre(map, from, to, blocked) ? MAX_WALK_PATH_DEFAULT : MAX_WALK_PATH_COM_OBSTACULO;
+  return Math.max(4, teto - MARGEM_TRECHO);
+}
 
 export interface Cell {
   x: number;

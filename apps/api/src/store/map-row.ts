@@ -42,6 +42,11 @@ export function mapToRow(m: GameMap): MapRow {
       [BLOCKS_KEY]: {
         terrainMode: m.terrainMode,
         surface: m.surface,
+        // textura/escala por superfície: sem isto aqui, escolher a grama no
+        // editor e salvar devolvia o padrão no /play — o campo é novo (schema
+        // v6) e esta lista é FIXA, então todo campo sem coluna própria precisa
+        // ser acrescentado nos DOIS sentidos ou se perde calado no round-trip
+        terrainStyle: m.terrainStyle,
         triggers: m.triggers,
         ramps: m.ramps,
         lighting: m.lighting,
@@ -57,6 +62,7 @@ export function rowToMap(row: MapRow): GameMap {
   const blocks = (meta[BLOCKS_KEY] ?? {}) as {
     terrainMode?: string;
     surface?: unknown;
+    terrainStyle?: unknown;
     triggers?: unknown;
     ramps?: unknown;
     lighting?: unknown;
@@ -74,6 +80,7 @@ export function rowToMap(row: MapRow): GameMap {
     heightmap: row.heightmap,
     collision: row.collision,
     surface: blocks.surface ?? [],
+    terrainStyle: blocks.terrainStyle ?? {},
     waterLevel: row.water_level,
     props: row.props,
     spawns: row.spawns,

@@ -42,6 +42,22 @@ export function cornerLevel(map: GameMap, col: number, row: number, bloqueada: b
   let n = 0;
   let somaTodas = 0;
   let nTodas = 0;
+  /**
+   * Todas as células deste canto têm altura AUTORADA?
+   *
+   * É o que decide se o grupo de passagem importa aqui. A separação existe por
+   * causa do PALPITE por tipo do `visualLevel` (parede +1, buraco −1): sem ela,
+   * esse degrau inventado viraria rampa para dentro do campo e o jogador veria
+   * ladeira onde o servidor não deixa subir.
+   *
+   * Mas onde a altura foi PINTADA não há palpite nenhum — quem decidiu a forma
+   * foi quem autorou. Ali a separação só rasga a superfície: um morro erguido
+   * por cima de mata e campo tem `wall` e `walkable` INTERCALADOS, cada grupo
+   * calcula um canto diferente, e o vão entre eles vira aquela prateleira de
+   * face vertical no meio da encosta (medido no mapa do usuário: 618 fronteiras
+   * assim, degrau de até 3,73 níveis — a referência `craquelado-square.jpg`).
+   */
+  let todasAutoradas = true;
   for (let dr = -1; dr <= 0; dr++) {
     for (let dc = -1; dc <= 0; dc++) {
       const c = col + dc;
@@ -49,6 +65,7 @@ export function cornerLevel(map: GameMap, col: number, row: number, bloqueada: b
       if (c < 0 || r < 0 || c >= width || r >= height) continue;
       const idx = cellIndex(map, c, r);
       const nivel = visualLevel(map, idx);
+      if ((map.heightmap[idx] ?? 0) === 0) todasAutoradas = false;
       somaTodas += nivel;
       nTodas++;
       if (isBlockedCell(map, idx) !== bloqueada) continue;
@@ -56,6 +73,7 @@ export function cornerLevel(map: GameMap, col: number, row: number, bloqueada: b
       n++;
     }
   }
+  if (todasAutoradas && nTodas > 0) return somaTodas / nTodas;
   if (n > 0) return soma / n;
   return nTodas > 0 ? somaTodas / nTodas : 0;
 }

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { gateway, type EntitySnapshot, type InventoryItemPayload, type SkillPayload } from "./gateway";
 import { useWorldStore } from "./worldStore";
+import { useAttackStore } from "./attackStore";
 import { useSessionStore } from "./sessionStore";
 import { usePlayerStore } from "./playerStore";
 import { damageKind, useDamageFeed } from "./damageFeed";
@@ -8,6 +9,10 @@ import { useVfxStore } from "../vfx/vfxStore";
 import { useNpcStore } from "./npcStore";
 import { useCastStore } from "./castStore";
 import { useGroundItems } from "./GroundItems";
+import { useFriendStore } from "./friendStore";
+import { useLootStore } from "../hud/lootStore";
+import { limparAmeacas, marcarAmeaca } from "./ameacas";
+import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
 
 /**
  * Entidades e movimento vindos do servidor → worldStore.
@@ -34,10 +39,26 @@ export function useWorldEvents(): void {
         hp: e.hp,
         maxHp: e.maxHp,
       });
+      // Alimenta a aba "Recentes" da janela de amigos. O rAthena não tem lista
+      // de "vistos por último" em pacote nenhum — quem lembra é o navegador, e
+      // só de gente (mob e NPC não entram).
+      if (e.kind === "player" && e.name) useFriendStore.getState().verJogador(e.name, "cena");
     };
 
-    const onMove = (p: { gid: number; from: { x: number; y: number }; to: { x: number; y: number }; speed: number }) =>
-      useWorldStore.getState().move(p.gid, p.from, p.to, p.speed);
+    const onMove = (p: {
+      gid: number;
+      from: { x: number; y: number };
+      to: { x: number; y: number };
+      speed: number;
+      startTime?: number;
+    }) => {
+      // Todo pacote de movimento é uma amostra do relógio do servidor: são eles
+      // que chegam o tempo todo, e é neles que o tick é usado. Ver
+      // `net/relogioDoServidor` — a estimativa é por MEDIANA, então uma amostra
+      // atrasada não a envenena.
+      if (p.startTime) amostrarRelogio(p.startTime, performance.now());
+      useWorldStore.getState().move(p.gid, p.from, p.to, p.speed, p.startTime);
+    };
     const onStop = (p: { gid: number; x: number; y: number }) =>
       useWorldStore.getState().stop(p.gid, p.x, p.y);
     const onVanish = (p: { gid: number }) => useWorldStore.getState().vanish(p.gid);
@@ -52,6 +73,18 @@ export function useWorldEvents(): void {
       // action 9 (esquiva) e dano 0 = "Miss". O rAthena decide; aqui só se
       // escolhe a cor e o texto.
       const selfGid = useWorldStore.getState().selfGid;
+      /**
+       * O personagem batendo é a ÚNICA prova de que o ataque entrou.
+       *
+       * `action:attack` não tem resposta de sucesso: o servidor bate, recusa por
+       * distância, ou engole o pedido no `stepaction`. Ver o golpe é o que
+       * permite ao cliente parar de repetir o pedido — e não vê-lo, estando do
+       * lado do alvo, é o que dispara a repetição.
+       */
+      if (p.gid === selfGid) useAttackStore.getState().marcarAtaqueVisto(performance.now());
+      // e o contrário: quem bate em VOCÊ vira prioridade da assistência de mira
+      // (ver `net/ameacas`) — o mesmo pacote, sem custo nenhum a mais
+      else if (p.targetGid === selfGid) marcarAmeaca(p.gid, performance.now());
       useDamageFeed.getState().push({
         gid: p.targetGid,
         value: p.damage,
@@ -65,14 +98,38 @@ export function useWorldEvents(): void {
     const onHp = (p: { gid: number; hp: number; maxHp: number }) =>
       useWorldStore.getState().setHp(p.gid, p.hp, p.maxHp);
 
-    const onSelfMove = (p: { from: { x: number; y: number }; to: { x: number; y: number } }) =>
+    const onSelfMove = (p: {
+      from: { x: number; y: number };
+      to: { x: number; y: number };
+      startTime?: number;
+    }) => {
+      // o pacote do PRÓPRIO personagem também traz o tick (ZC_NOTIFY_PLAYERMOVE)
+      if (p.startTime) amostrarRelogio(p.startTime, performance.now());
       useWorldStore.getState().selfMove(p.from, p.to);
+    };
 
     // Teleporte/empurrão: o servidor pôs o personagem noutra célula sem andar.
     // Sem aplicar, o cliente continuava desenhando (e pedindo caminho a partir
     // de) uma célula onde o personagem não estava mais — depois de um @jump ou
     // de um warp de NPC, andar simplesmente parava de funcionar.
-    const onSelfWarp = (p: { x: number; y: number }) => useWorldStore.getState().setSelfCell(p.x, p.y);
+    // ZC_STOPMOVE/fixpos e teleporte chegam no MESMO evento; quem separa os dois
+    // é a distância até onde o personagem está desenhado (ver `aplicarFixpos`)
+    const onSelfWarp = (p: { x: number; y: number }) => useWorldStore.getState().aplicarFixpos(p.x, p.y);
+
+    /**
+     * "Longe demais para bater" — o cliente é que anda até lá.
+     *
+     * O rAthena persegue por conta própria só para MONSTRO (unit.cpp:3259); ao
+     * jogador ele manda este pacote e desiste. Sem isso, clicar num monstro fora
+     * de alcance não fazia absolutamente nada.
+     */
+    const onAtaqueLonge = (p: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) =>
+      useAttackStore.getState().perseguir(p);
+
+    // o alvo morreu ou saiu de vista: não há mais quem perseguir
+    const onVanishAlvo = (p: { gid: number }) => {
+      if (useAttackStore.getState().alvo?.gid === p.gid) useAttackStore.getState().parar();
+    };
 
     const onStat = (p: { name: string; value: number; bonus?: number }) => {
       usePlayerStore.getState().applyStat(p.name, p.value, p.bonus);
@@ -84,7 +141,12 @@ export function useWorldEvents(): void {
     };
     const onStatus = (p: Record<string, number>) => usePlayerStore.getState().applyStatus(p);
     const onInvList = (p: InventoryItemPayload[]) => usePlayerStore.getState().setInventory(p);
-    const onInvAdd = (p: InventoryItemPayload) => usePlayerStore.getState().addItem(p);
+    const onInvAdd = (p: InventoryItemPayload) => {
+      usePlayerStore.getState().addItem(p);
+      // e o aviso no alto da tela: sem ele, pegar coisa do chão não tinha
+      // retorno nenhum — só abrindo o Alt+E dava para saber o que entrou
+      useLootStore.getState().registrar(p.itemId, p.amount, performance.now());
+    };
     const onInvRemove = (p: { index: number; amount: number }) =>
       usePlayerStore.getState().removeItem(p.index, p.amount);
 
@@ -160,6 +222,8 @@ export function useWorldEvents(): void {
     socket.on("ground:item-gone", onGroundItemGone);
     socket.on("self:move", onSelfMove);
     socket.on("self:warp", onSelfWarp);
+    socket.on("attack:too-far", onAtaqueLonge);
+    socket.on("entity:vanish", onVanishAlvo);
     socket.on("self:stat", onStat);
     socket.on("self:status", onStatus);
     socket.on("inv:list", onInvList);
@@ -199,6 +263,8 @@ export function useWorldEvents(): void {
       socket.off("ground:item-gone", onGroundItemGone);
       socket.off("self:move", onSelfMove);
       socket.off("self:warp", onSelfWarp);
+      socket.off("attack:too-far", onAtaqueLonge);
+      socket.off("entity:vanish", onVanishAlvo);
       socket.off("self:stat", onStat);
       socket.off("self:status", onStatus);
       socket.off("inv:list", onInvList);
@@ -217,10 +283,17 @@ export function useWorldEvents(): void {
       // StrictMode monta/desmonta este efeito no dev, e resetar aqui apagava
       // nível/zeny/classe — que vêm uma vez só, no world:enter.
       useWorldStore.getState().clear();
+      // o desvio estimado vale para ESTE map-server: reconectar (ou trocar de
+      // servidor) começa outra contagem de `gettick()`, e uma estimativa velha
+      // ancoraria todo trecho num instante inventado
+      zerarRelogioDoServidor();
       useDamageFeed.getState().reset();
       useVfxStore.getState().reset();
       useNpcStore.getState().close();
       useGroundItems.getState().clear();
+      // o gid é RECICLADO pelo servidor: guardar "quem me bateu" entre mapas
+      // faria um gid velho apontar para outra criatura
+      limparAmeacas();
     };
   }, []);
 }

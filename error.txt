@@ -1,19 +1,51 @@
-Runtime Error
+25chunk-SICL74T5.js?v=547a9b3c:28665 Uncaught TypeError: Cannot set properties of undefined (setting '_cacheIndex')
+    at AnimationMixer._lendBinding (chunk-SICL74T5.js?v=547a9b3c:28665:38)
+    at AnimationMixer._activateAction (chunk-SICL74T5.js?v=547a9b3c:28516:16)
+    at AnimationAction.play (chunk-SICL74T5.js?v=547a9b3c:27998:17)
+    at assets.ts:141:29
+    at Object.react_stack_bottom_frame (chunk-EPRJQK46.js?v=547a9b3c:8010:36)
+    at B (chunk-EPRJQK46.js?v=547a9b3c:2759:63)
+    at ca (chunk-EPRJQK46.js?v=547a9b3c:5732:95)
+    at Yp (chunk-EPRJQK46.js?v=547a9b3c:5779:25)
+    at sh (chunk-EPRJQK46.js?v=547a9b3c:6549:39)
+    at Jr (chunk-EPRJQK46.js?v=547a9b3c:6538:11)
+4react-router-dom.js?v=547a9b3c:6570 Error handled by React Router default ErrorBoundary: TypeError: Cannot set properties of undefined (setting '_cacheIndex')
+    at AnimationMixer._lendBinding (chunk-SICL74T5.js?v=547a9b3c:28665:38)
+    at AnimationMixer._activateAction (chunk-SICL74T5.js?v=547a9b3c:28516:16)
+    at AnimationAction.play (chunk-SICL74T5.js?v=547a9b3c:27998:17)
+    at assets.ts:141:29
+    at Object.react_stack_bottom_frame (chunk-EPRJQK46.js?v=547a9b3c:8010:36)
+    at B (chunk-EPRJQK46.js?v=547a9b3c:2759:63)
+    at ca (chunk-EPRJQK46.js?v=547a9b3c:5732:95)
+    at Yp (chunk-EPRJQK46.js?v=547a9b3c:5779:25)
+    at sh (chunk-EPRJQK46.js?v=547a9b3c:6549:39)
+    at Jr (chunk-EPRJQK46.js?v=547a9b3c:6538:11)
+DefaultErrorComponent @ react-router-dom.js?v=547a9b3c:6570
+chunk-K3NGNZHK.js?v=547a9b3c:6733 TypeError: Cannot set properties of undefined (setting '_cacheIndex')
+    at AnimationMixer._lendBinding (chunk-SICL74T5.js?v=547a9b3c:28665:38)
+    at AnimationMixer._activateAction (chunk-SICL74T5.js?v=547a9b3c:28516:16)
+    at AnimationAction.play (chunk-SICL74T5.js?v=547a9b3c:27998:17)
+    at assets.ts:141:29
+    at Object.react_stack_bottom_frame (chunk-EPRJQK46.js?v=547a9b3c:8010:36)
+    at B (chunk-EPRJQK46.js?v=547a9b3c:2759:63)
+    at ca (chunk-EPRJQK46.js?v=547a9b3c:5732:95)
+    at Yp (chunk-EPRJQK46.js?v=547a9b3c:5779:25)
+    at sh (chunk-EPRJQK46.js?v=547a9b3c:6549:39)
+    at Jr (chunk-EPRJQK46.js?v=547a9b3c:6538:11)
 
+The above error occurred in the <CanvasImpl> component.
 
+React will try to recreate this component tree from scratch using the error boundary you provided, RenderErrorBoundary.
 
-Jest worker encountered 2 child process exceptions, exceeding retry limit
-Call Stack
-5
-
-Hide 5 ignore-listed frame(s)
-ChildProcessWorker.initialize
-..\..\node_modules\.pnpm\next@16.2.10_react-dom@19.2.7_react@19.2.7__react@19.2.7\node_modules\next\dist\compiled\jest-worker\index.js (1:11580)
-ChildProcessWorker._onExit
-..\..\node_modules\.pnpm\next@16.2.10_react-dom@19.2.7_react@19.2.7__react@19.2.7\node_modules\next\dist\compiled\jest-worker\index.js (1:12545)
-ChildProcess.emit
-node:events (508:28)
-ChildProcess._handle.onexit
-node:internal/child_process (294:12)
-Process.callbackTrampoline
-node:internal/async_hooks (130:17)
+defaultOnCaughtError @ chunk-K3NGNZHK.js?v=547a9b3c:6733
+react-router-dom.js?v=547a9b3c:6609 React Router caught the following error during render TypeError: Cannot set properties of undefined (setting '_cacheIndex')
+    at AnimationMixer._lendBinding (chunk-SICL74T5.js?v=547a9b3c:28665:38)
+    at AnimationMixer._activateAction (chunk-SICL74T5.js?v=547a9b3c:28516:16)
+    at AnimationAction.play (chunk-SICL74T5.js?v=547a9b3c:27998:17)
+    at assets.ts:141:29
+    at Object.react_stack_bottom_frame (chunk-EPRJQK46.js?v=547a9b3c:8010:36)
+    at B (chunk-EPRJQK46.js?v=547a9b3c:2759:63)
+    at ca (chunk-EPRJQK46.js?v=547a9b3c:5732:95)
+    at Yp (chunk-EPRJQK46.js?v=547a9b3c:5779:25)
+    at sh (chunk-EPRJQK46.js?v=547a9b3c:6549:39)
+    at Jr (chunk-EPRJQK46.js?v=547a9b3c:6538:11)

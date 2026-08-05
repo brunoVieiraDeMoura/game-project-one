@@ -1,0 +1,132 @@
+Quero que faça uma investigação técnica completa sobre um bug de movimentação no meu MMORPG.
+
+Não quero hipóteses. Quero descobrir exatamente onde o problema acontece no código.
+
+Sintoma
+
+Quando o personagem anda continuamente por uma longa distância (vários chunks), eventualmente acontece um glitch:
+
+o personagem trava por um instante;
+depois volta algumas células para trás;
+em seguida continua andando;
+às vezes parece perder sincronização com o servidor.
+
+Ainda existe lag e rollback durante caminhadas longas.
+
+Não quero mais tentativas de correção.
+
+Quero descobrir exatamente em qual sistema nasce o problema.
+
+Não altere nenhum comportamento até identificar a causa.
+
+Objetivo
+
+Instrumente todo o pipeline da movimentação e gere evidências.
+
+Para cada frame registre:
+
+timestamp
+frame
+tick do cliente
+tick do servidor
+posição renderizada
+posição lógica
+posição prevista
+posição oficial do servidor
+chunk atual
+chunk anterior
+chunk carregado
+chunk descarregado
+quantidade de entidades carregadas
+tamanho da fila de snapshots
+tamanho da fila de prediction
+tamanho da fila de reconciliation
+RTT
+ping
+tempo entre snapshots
+FPS
+frame time
+update time
+render time
+tempo gasto carregando chunks
+tempo gasto desenhando chunks
+tempo gasto em pathfinding
+tempo gasto em reconciliation
+Durante o bug
+
+Quando acontecer qualquer rollback maior que 1 tile, registre automaticamente:
+
+os últimos 300 frames antes do rollback;
+os 120 frames seguintes;
+todos os eventos ocorridos nesse intervalo.
+Também registre
+GC (Garbage Collection)
+Context Lost
+criação de Canvas
+destruição de Canvas
+criação de Textures
+upload de Textures
+troca de chunks
+reconstrução de entidades
+reprocessamento de pathfinding
+atualização da câmera
+recebimento de snapshots
+perda de snapshots
+snapshots fora de ordem
+retransmissões
+timeouts
+correções de reconciliation
+Para cada rollback
+
+Quero uma linha do tempo como:
+
+t=0.000 clique
+
+↓
+
+prediction
+
+↓
+
+snapshot recebido
+
+↓
+
+chunk carregado
+
+↓
+
+queda de FPS
+
+↓
+
+GC
+
+↓
+
+reconciliation
+
+↓
+
+rollback
+
+↓
+
+posição final
+
+No final
+
+Não proponha soluções.
+
+Monte uma tabela com:
+
+horário exato;
+arquivo;
+função;
+evento;
+duração;
+impacto;
+evidência;
+confiança da análise.
+
+Só depois de descobrir exatamente onde o rollback nasce iremos corrigir o código.

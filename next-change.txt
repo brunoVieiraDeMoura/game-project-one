@@ -1,8 +1,47 @@
-1- sobre movimentação. 
-quero que a movimentação aconteça em square igual ao ragnarok, só que em 3d,
-estou tendo alguns problemas com a movimentação atual, estou imaginando que pelo mapa ser em hexagonal 
-ele está usando como referencia "andar em hexagonal" embora a estética parece em square,
-me da alternativas para resolver isso e conseguir andar igual ao ragnarok só que em 3d,
-quero também manter a proporção dos mapas/tamanho dos mobs/personagem igual ao do ragnarok 
+substituir a ui do http://localhost:3001/login 
+http://localhost:3001/char-select
 
-ex: prt_fild08 é 400x400 e esse mapa que estou no play é 32x32, embora pareça grande está muito diferente
+pelas novas peças e  referencia "referencia.png" que está em C:\Users\Bruno\Desktop\game-project\assets-new\ui_definitiva\login-new
+use background para ambos
+e de o seu melhor para ficar o resto bonito 
+
+
+//////////////////////////////
+
+
+o circulo em baixo do inimigo é vermelho, mas deixa ele mais saturado(visivel)
+
+//////////////////////////////
+
+ao clicar em skills ex: skill pointclick com o target do alvo aberto, ele ir até o range que da para castar e castar a skill(andar para qualquer lado ou apertar esc, cancela a habilidade)[se começar a castar a skill, não pode andar até acabar o cast ou que ele seja cancelado]
+
+//////////////////////////////
+
+os criculos indicativos de habilidades aoe:
+1 - ao clicar na skill e clicar na área (quando ele começa a castar as skill ele cria um circulo no chão, mas não está no tamanho exato da habilidade que está sendo castada [usar a mesma formula de fazer um circulo dentro do square, usada para mostrar a área que vai ser afetada ao clicar na skill])
+2- todos os circulos relacionados a habilidades ficam distorcidos em morros e montanhas, quero que esses circulos demonstrativos fique acima do solo sempre.
+
+//////////////////////////////
+
+quando vira a camera ao lado de uma montanha (da pra ver a parte de dentro da montanha [fica transparente dentro da montanhas], faz um jogo de camera, que quando virar a camera do lado da montanha, aproxime de modo que nunca mostre por dentro da montanha, e se continuar rodando ela volta para o local)
+
+//////////////////////////////
+
+quando eu clico pro personagem andar la na frente e fico com o mouse parado, o cursor do chão UI_Flat_Select02a_1 , não acompanha o boneco andando, ele fica parado no local do primeiro clique, é preciso que eu movimente o mouse, para que ele continue o movimento natural. (corrija)
+
+//////////////////////////////
+
+mostrar o dano das skills no monstro.
+
+/////////////////////////
+
+No alt+a tem um avatar do lado esquerdo nos equipamentos do meu personagem, porque ele sempre entra em "T-Pose"? deixa ele entrnado idle sempre.
+
+
+/////////////////////////
+
+itens na bag alt+e , não estão sendo renderizados, usei consumiveis eles não diminuem o numero usavel, parece não ter refresh dos itens.
+
+
+/////////////////////////
+

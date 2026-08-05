@@ -1,0 +1,373 @@
+{
+    "object3d": 1480,
+    "mesh": 603,
+    "instancedMesh": 0,
+    "instancias": 0,
+    "skinnedMesh": 19,
+    "points": 0,
+    "line": 0,
+    "sprite": 0,
+    "luzes": 2,
+    "cameras": 0,
+    "renderizaveis": 613,
+    "esqueletos": {
+        "referencias": 19,
+        "unicos": 19,
+        "reuso": 1
+    },
+    "materiais": {
+        "referencias": 631,
+        "unicos": 95,
+        "reuso": 6.64
+    },
+    "geometrias": {
+        "referencias": 622,
+        "unicos": 141,
+        "reuso": 4.41
+    },
+    "texturas": {
+        "referencias": 467,
+        "unicos": 8,
+        "reuso": 58.38
+    },
+    "memoria": {
+        "geometriasMb": 10.56,
+        "texturasMb": 22.45,
+        "totalMb": 33.01,
+        "exclui": "driver, render targets, mapa de sombra, compressão — ESTIMATIVA do que o grafo declara"
+    },
+    "maioresGeometrias": [
+        {
+            "nome": "(sem nome)",
+            "mb": 0.3
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.27
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.27
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        }
+    ],
+    "maioresTexturas": [
+        {
+            "nome": "forest_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "skeleton_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "skeleton_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "knight_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 1,
+            "tamanho": "2048x128"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.06,
+            "tamanho": "336x48"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.05,
+            "tamanho": "288x48"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0,
+            "tamanho": "32x32"
+        }
+    ],
+    "texturasDuplicadas": [
+        {
+            "fonte": "skeleton_texture",
+            "copias": 2,
+            "mbCada": 5.33,
+            "mbDesperdicado": 5.33
+        }
+    ],
+    "renderer": {
+        "geometrias": 194,
+        "texturas": 28,
+        "programas": 20,
+        "geometriasForaDaCena": 53,
+        "texturasForaDaCena": 20,
+        "nota": "diferença = recurso do renderer que não está na cena do jogo (retratos, UI, pendente de descarte)"
+    }
+}
+
+
+{
+    "object3d": 1301,
+    "mesh": 579,
+    "instancedMesh": 0,
+    "instancias": 0,
+    "skinnedMesh": 9,
+    "points": 0,
+    "line": 0,
+    "sprite": 0,
+    "luzes": 2,
+    "cameras": 0,
+    "renderizaveis": 584,
+    "esqueletos": {
+        "referencias": 9,
+        "unicos": 9,
+        "reuso": 1
+    },
+    "materiais": {
+        "referencias": 592,
+        "unicos": 74,
+        "reuso": 8
+    },
+    "geometrias": {
+        "referencias": 588,
+        "unicos": 116,
+        "reuso": 5.07
+    },
+    "texturas": {
+        "referencias": 441,
+        "unicos": 7,
+        "reuso": 63
+    },
+    "memoria": {
+        "geometriasMb": 9.68,
+        "texturasMb": 17.12,
+        "totalMb": 26.8,
+        "exclui": "driver, render targets, mapa de sombra, compressão — ESTIMATIVA do que o grafo declara"
+    },
+    "maioresGeometrias": [
+        {
+            "nome": "(sem nome)",
+            "mb": 0.3
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.27
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        }
+    ],
+    "maioresTexturas": [
+        {
+            "nome": "forest_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "skeleton_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "knight_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 1,
+            "tamanho": "2048x128"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.06,
+            "tamanho": "336x48"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.05,
+            "tamanho": "288x48"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0,
+            "tamanho": "32x32"
+        }
+    ],
+    "texturasDuplicadas": [],
+    "renderer": {
+        "geometrias": 156,
+        "texturas": 16,
+        "programas": 20,
+        "geometriasForaDaCena": 40,
+        "texturasForaDaCena": 9,
+        "nota": "diferença = recurso do renderer que não está na cena do jogo (retratos, UI, pendente de descarte)"
+    }
+}
+
+
+{
+    "object3d": 1301,
+    "mesh": 579,
+    "instancedMesh": 0,
+    "instancias": 0,
+    "skinnedMesh": 9,
+    "points": 0,
+    "line": 0,
+    "sprite": 0,
+    "luzes": 2,
+    "cameras": 0,
+    "renderizaveis": 584,
+    "esqueletos": {
+        "referencias": 9,
+        "unicos": 9,
+        "reuso": 1
+    },
+    "materiais": {
+        "referencias": 592,
+        "unicos": 73,
+        "reuso": 8.11
+    },
+    "geometrias": {
+        "referencias": 588,
+        "unicos": 115,
+        "reuso": 5.11
+    },
+    "texturas": {
+        "referencias": 448,
+        "unicos": 7,
+        "reuso": 64
+    },
+    "memoria": {
+        "geometriasMb": 9.67,
+        "texturasMb": 17.12,
+        "totalMb": 26.79,
+        "exclui": "driver, render targets, mapa de sombra, compressão — ESTIMATIVA do que o grafo declara"
+    },
+    "maioresGeometrias": [
+        {
+            "nome": "(sem nome)",
+            "mb": 0.3
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.27
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.21
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.2
+        }
+    ],
+    "maioresTexturas": [
+        {
+            "nome": "forest_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "skeleton_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "knight_texture",
+            "mb": 5.33,
+            "tamanho": "1024x1024"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 1,
+            "tamanho": "2048x128"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.06,
+            "tamanho": "336x48"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0.05,
+            "tamanho": "288x48"
+        },
+        {
+            "nome": "(sem nome)",
+            "mb": 0,
+            "tamanho": "32x32"
+        }
+    ],
+    "texturasDuplicadas": [],
+    "renderer": {
+        "geometrias": 158,
+        "texturas": 22,
+        "programas": 20,
+        "geometriasForaDaCena": 43,
+        "texturasForaDaCena": 15,
+        "nota": "diferença = recurso do renderer que não está na cena do jogo (retratos, UI, pendente de descarte)"
+    }
+}

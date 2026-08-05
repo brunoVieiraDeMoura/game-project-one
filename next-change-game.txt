@@ -1,5 +1,96 @@
-as velocidades entre wasd e click estão diferentes, quero que os 2 estejam iguais
+Quero que faça uma análise da arquitetura da movimentação do jogo, e não apenas do sistema de skills.
 
-square para target do chao do clique-tile, está quadrado, quero ele em hexagonal e menor, do tamanho do personagem
+Suspeito que o problema do mini teleporte ao lançar uma skill seja consequência da forma como a posição do personagem é representada internamente.
 
-falar no chat "wasd | 1234 | atalhos para ivintario,mapa etc." nao podem ser usados enquanto digita.
+Quero que você investigue
+
+Verifique se atualmente o personagem possui apenas uma posição baseada em inteiros, por exemplo:
+
+tileX
+tileY
+pixelX inteiro
+pixelY inteiro
+
+ou qualquer estrutura equivalente.
+
+Quero saber se durante toda a movimentação o personagem sempre permanece alinhado a pixels inteiros ou ao centro das células.
+
+Analise também
+
+Durante a caminhada:
+
+a posição é armazenada como float ou integer?
+existe perda da parte fracionária?
+existe arredondamento (Math.round, Math.floor, Math.ceil, Math.trunc) em algum ponto da movimentação?
+alguma etapa converte continuamente a posição para o centro do tile?
+Quero estudar outra arquitetura
+
+Sem alterar a estética do jogo.
+
+O jogo deve continuar exatamente igual para o jogador:
+
+movimentação por clique em tiles;
+grid quadrado;
+pathfinding por células;
+alcance baseado em células;
+colisão baseada em células;
+servidor autoritativo;
+Client-side Prediction;
+Server Reconciliation.
+
+Porém quero estudar uma arquitetura onde a posição interna do personagem seja contínua.
+
+Exemplo:
+
+Posição lógica:
+
+tile = (14, 8)
+
+Posição física:
+
+x = 14.63
+y = 8.18
+
+ou
+
+worldX = 468.23 px
+worldY = 262.74 px
+
+Ou seja, a representação interna pode ser fracionária, enquanto toda a lógica do jogo continua baseada em tiles.
+
+Objetivo
+
+Quero eliminar completamente qualquer snap para o centro da célula durante:
+
+cast de skill;
+troca de animação;
+parada;
+cancelamento de caminhada;
+troca de estado.
+
+Sem modificar a sensação clássica de movimentação por clique em grid.
+
+Quero que responda
+A arquitetura atual suporta posições fracionárias?
+Se não suporta, quais partes impedem isso?
+Quais sistemas dependem de posição inteira?
+O servidor pode passar a trabalhar com posição contínua sem quebrar pathfinding, colisão e alcance?
+É melhor manter:
+posição lógica em tiles;
+posição física em float;
+renderização usando posição física;
+validações usando posição lógica?
+Muito importante
+
+Não faça alterações imediatamente.
+
+Primeiro faça uma análise completa da arquitetura.
+
+Depois proponha uma migração incremental, identificando todos os arquivos e sistemas que precisariam ser alterados, garantindo que:
+
+o jogo continue visualmente igual;
+o clique em tiles continue funcionando exatamente igual;
+o pathfinding permaneça baseado em células;
+apenas a representação interna da posição passe a ser contínua.
+
+Se identificar que essa mudança elimina o problema do mini teleporte durante o cast das skills, explique tecnicamente por quê.

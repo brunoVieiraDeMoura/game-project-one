@@ -1,5 +1,6 @@
 import { Billboard } from "@react-three/drei";
 import { usePlayerStore } from "./playerStore";
+import { WorldBar } from "./WorldBar";
 
 /**
  * Barras de HP e SP embaixo do próprio personagem, como no Ragnarok.
@@ -7,16 +8,36 @@ import { usePlayerStore } from "./playerStore";
  * Os valores são os do servidor (`playerStore`); aqui não se calcula nada. Fica
  * abaixo do boneco de propósito: em cima é onde vai o nome dos outros, e duas
  * informações no mesmo lugar competem pela leitura.
+ *
+ * A moldura é a MESMA das barras de HP/SP do HUD, em textura (`WorldBar`) — no
+ * mundo 3D não existe `border-image`.
  */
+
+/**
+ * Medidas em frações de célula, como o resto da cena.
+ *
+ * A barra engordou (0,10 → 0,115 de célula) pelo mesmo motivo da plaquinha do
+ * mob: a moldura pintada tem traço e canto, e no fio de antes o desenho não
+ * aparecia.
+ *
+ * O vão entre HP e SP é NEGATIVO de propósito: as duas ficam coladas, com as
+ * molduras se encostando. Um vão positivo separava as barras em dois objetos e
+ * elas liam como coisas distintas; encostadas, leem como um bloco só — que é
+ * como a placa do personagem no HUD as mostra. O recuo de meio traço faz as
+ * duas bordas virarem uma linha só em vez de somarem espessura.
+ */
+const BARRA = { w: 0.72, h: 0.115, vao: -0.008 } as const;
+
 export function SelfBars({ cellSize }: { cellSize: number }) {
   const stats = usePlayerStore((s) => s.stats);
   const known = usePlayerStore((s) => s.known);
   if (!known) return null;
 
-  const width = cellSize * 0.7;
-  const height = cellSize * 0.1;
-  const hp = Math.max(0, Math.min(1, stats.maxHp > 0 ? stats.hp / stats.maxHp : 0));
-  const sp = Math.max(0, Math.min(1, stats.maxSp > 0 ? stats.sp / stats.maxSp : 0));
+  const width = cellSize * BARRA.w;
+  const height = cellSize * BARRA.h;
+  const passo = height + cellSize * BARRA.vao;
+  const hp = stats.maxHp > 0 ? stats.hp / stats.maxHp : 0;
+  const sp = stats.maxSp > 0 ? stats.sp / stats.maxSp : 0;
 
   return (
     // O Billboard fica NOS PÉS e as barras descem em Y LOCAL — que, num
@@ -26,45 +47,14 @@ export function SelfBars({ cellSize }: { cellSize: number }) {
     // barras ficam abaixo do personagem em qualquer ângulo de câmera, como as
     // do Ragnarok.
     <Billboard position={[0, 0, 0]}>
-      <Bar y={-height * 1.1} width={width} height={height} frac={hp} color="#38d16a" />
-      <Bar y={-height * 2.25} width={width} height={height} frac={sp} color="#3d9ee0" />
+      {/* as duas cores são as paradas MÉDIAS de `HP_FILL` e `SP_FILL`, os
+          gradientes medidos da arte da placa do personagem */}
+      <group position={[0, -passo, 0]}>
+        <WorldBar width={width} height={height} frac={hp} color="#56712a" semProfundidade />
+      </group>
+      <group position={[0, -passo * 2, 0]}>
+        <WorldBar width={width} height={height} frac={sp} color="#36516f" semProfundidade />
+      </group>
     </Billboard>
-  );
-}
-
-function Bar({
-  y,
-  width,
-  height,
-  frac,
-  color,
-}: {
-  y: number;
-  width: number;
-  height: number;
-  frac: number;
-  color: string;
-}) {
-  // `depthTest: false` + renderOrder alto: as barras ficam nos PÉS, e sem isso o
-  // próprio corpo do personagem (e o relevo do terreno) as engole — foi o que
-  // aconteceu: elas existiam na cena e não apareciam em lugar nenhum.
-  return (
-    <group position={[0, y, 0]} renderOrder={999}>
-      <mesh renderOrder={999}>
-        <planeGeometry args={[width, height]} />
-        <meshBasicMaterial color="#20150f" transparent opacity={0.85} depthTest={false} depthWrite={false} />
-      </mesh>
-      {frac > 0 && (
-        // encolhe pela direita mantendo a borda esquerda parada
-        // `transparent` mesmo opaco (opacity 1): o three desenha TODA a lista
-        // transparente depois da opaca, e o trilho é transparente. Com o fill
-        // fora dessa lista, o trilho passava por cima dele (depthTest false) e a
-        // barra ficava preta. Na mesma lista, quem manda é o renderOrder.
-        <mesh position={[-(width * (1 - frac)) / 2, 0, 0.001]} renderOrder={1000}>
-          <planeGeometry args={[width * frac, height * 0.78]} />
-          <meshBasicMaterial color={color} transparent opacity={1} depthTest={false} depthWrite={false} />
-        </mesh>
-      )}
-    </group>
   );
 }

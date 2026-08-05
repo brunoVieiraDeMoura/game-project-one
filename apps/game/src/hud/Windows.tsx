@@ -1,33 +1,60 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
+import type * as THREE from "three";
+import type { GameMap } from "@ragnarok/map-format";
 import { useHudStore, type WindowKey } from "./hudStore";
 import { usePlayStore } from "../play/playStore";
 import { useCharacterStore } from "../character/characterStore";
 import { usePlayerStore } from "../net/playerStore";
-import { useSkillCatalog } from "../net/skillCatalog";
 import { gateway } from "../net/gateway";
 import { Panel, IconSquare, RpgButton, Slot, UI_PACK_CREDIT } from "../ui/rpg";
 import { InventoryWindow } from "./InventoryWindow";
 import { StatusWindow as StatusArtWindow } from "./StatusWindow";
+import { FriendsWindow } from "./FriendsWindow";
+import { SkillsWindow as SkillsArtWindow } from "./SkillsWindow";
+import { QuestsWindow as QuestsArtWindow } from "./QuestsWindow";
+import { MapWindow as MapArtWindow } from "./MapWindow";
 
-/** janela central genérica: título + fechar. Conteúdo por chave. */
-export function Windows() {
+/**
+ * janela central genérica: título + fechar. Conteúdo por chave.
+ *
+ * `map`/`playerPos` chegam do `Hud` porque a janela do Alt+M desenha o MAPA em
+ * que o personagem está — as mesmas duas coisas que o minimapa recebe, e pelo
+ * mesmo motivo: sem sessão (preview do editor) quem sabe onde o boneco está é o
+ * ref da cena, não o `worldStore`.
+ */
+export function Windows({
+  map,
+  playerPos,
+}: {
+  map: GameMap;
+  playerPos: React.MutableRefObject<THREE.Vector3>;
+}) {
   const open = useHudStore((s) => s.openWindow);
   const close = () => useHudStore.getState().setWindow(null);
   if (!open) return null;
+
+  // Inventário, Status, Amigos, Habilidades, Missões e Mapa têm arte PRÓPRIA —
+  // moldura, título e botão de fechar vêm no desenho —, então não entram no
+  // `Panel` genérico: a página pixel-art do TravelBook por baixo brigaria com a
+  // madeira pintada delas. Por isso as seis também não aparecem em
+  // TITLES/CONTENT: o desvio é aqui, e o Record cobre só o que ainda usa o Panel.
+  switch (open) {
+    case "inventory":
+      return <Centralizada>{<InventoryWindow />}</Centralizada>;
+    case "status":
+      return <Centralizada>{<StatusArtWindow />}</Centralizada>;
+    case "friends":
+      return <Centralizada>{<FriendsWindow />}</Centralizada>;
+    case "skills":
+      return <Centralizada>{<SkillsArtWindow />}</Centralizada>;
+    case "quests":
+      return <Centralizada>{<QuestsArtWindow />}</Centralizada>;
+    case "map":
+      return <Centralizada>{<MapArtWindow map={map} playerPos={playerPos} />}</Centralizada>;
+  }
+
   const meta = TITLES[open];
   const Content = CONTENT[open];
-
-  // Inventário e Status têm arte PRÓPRIA — moldura, título e botão de fechar
-  // vêm no desenho —, então não entram no `Panel` genérico: a página pixel-art
-  // do TravelBook por baixo brigaria com a madeira pintada deles.
-  const comArte = open === "inventory" ? <InventoryWindow /> : open === "status" ? <StatusArtWindow /> : null;
-  if (comArte) {
-    return (
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-        <div style={{ pointerEvents: "auto" }}>{comArte}</div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
@@ -48,90 +75,29 @@ export function Windows() {
   );
 }
 
-const TITLES: Record<Exclude<WindowKey, null>, { title: string; width: number }> = {
-  skills: { title: "Habilidades", width: 520 },
-  status: { title: "Atributos & Equipamentos", width: 620 },
-  inventory: { title: "Inventário", width: 460 },
-  friends: { title: "Amigos & Party", width: 460 },
-  quests: { title: "Quests", width: 460 },
-  settings: { title: "Configurações", width: 420 },
-  map: { title: "Mapa", width: 420 },
-};
-
-const CONTENT: Record<Exclude<WindowKey, null>, () => ReactElement> = {
-  skills: SkillsWindow,
-  status: StatusWindow,
-  inventory: InventoryWindow,
-  friends: FriendsWindow,
-  quests: QuestsWindow,
-  settings: SettingsWindow,
-  map: MapWindow,
-};
-
-// ---- Habilidades: árvore real da classe (Swordman) vinda do admin /skills ----
-function SkillsWindow() {
-  const data = useCharacterStore((s) => s.data);
-  const online = usePlayerStore((s) => s.known);
-  const netSkills = usePlayerStore((s) => s.skills);
-  const skillPoint = usePlayerStore((s) => s.stats.skillPoint);
-
-  // Online: a árvore é a que o personagem REALMENTE tem no servidor
-  // (ZC.SKILLINFO_LIST), com o nível aprendido. `maxLevel` não vem no pacote —
-  // o rAthena manda o nível atual e se dá para subir; mostrar um teto inventado
-  // seria pior que não mostrar.
-  // O pacote traz a CONSTANTE ("SM_BASH"); o nome que o jogador conhece está no
-  // catálogo do admin, buscado por id.
-  const catalog = useSkillCatalog((s) => s.byId);
-  useEffect(() => {
-    if (online) useSkillCatalog.getState().ensure(netSkills.map((sk) => sk.id));
-  }, [online, netSkills]);
-
-  const skills = online
-    ? netSkills.map((sk) => ({ id: sk.id, name: catalog[sk.id]?.name ?? sk.name, level: sk.level, maxLevel: 0 }))
-    : (data?.skills ?? []);
-
+/** casca comum das janelas com arte própria: centraliza sem comer o clique */
+function Centralizada({ children }: { children: ReactElement }) {
   return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, font: "12px system-ui", color: "#493333" }}>
-        <span>
-          Classe: <b>{data?.jobName ?? "—"}</b>
-        </span>
-        {online && <span style={{ color: "#6b4a35" }}>· {skillPoint} pontos de habilidade</span>}
-      </div>
-      {skills.length === 0 ? (
-        <p style={{ font: "12px system-ui", color: "#6b4a35" }}>
-          {online
-            ? "Este personagem ainda não aprendeu nenhuma habilidade."
-            : "Sem sessão: a árvore de habilidades é do personagem no servidor."}
-        </p>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          {skills.map((sk) => (
-            <div
-              key={sk.id}
-              // arrastar para a barra de skills (o jeito do RO de montar a barra)
-              draggable={online}
-              onDragStart={(e) => e.dataTransfer.setData("application/x-ro-skill", String(sk.id))}
-              title={online ? "arraste para a barra de habilidades" : undefined}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textAlign: "center", cursor: online ? "grab" : "default" }}
-            >
-              <IconSquare seed={`sk-${sk.id}`} label={sk.name} size={42} />
-              <div style={{ font: "11px system-ui", color: "#493333", lineHeight: 1.1, minHeight: 26 }}>{sk.name}</div>
-              <div style={{ font: "10px system-ui", color: "#6b4a35" }}>
-                Lv {sk.level}{sk.maxLevel ? `/${sk.maxLevel}` : ""}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <p style={{ font: "10px system-ui", color: "#8a7868", marginTop: 10 }}>
-        {online
-          ? "Arraste uma habilidade para a barra embaixo. Lista do servidor (ZC.SKILLINFO_LIST)."
-          : `Habilidades reais do ${data?.jobName ?? "Swordman"} (catálogo do admin).`}
-      </p>
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+      <div style={{ pointerEvents: "auto" }}>{children}</div>
     </div>
   );
 }
+
+type PanelKey = Exclude<WindowKey, null | "friends" | "skills" | "quests" | "map">;
+
+const TITLES: Record<PanelKey, { title: string; width: number }> = {
+  status: { title: "Atributos & Equipamentos", width: 620 },
+  inventory: { title: "Inventário", width: 460 },
+  settings: { title: "Configurações", width: 420 },
+};
+
+const CONTENT: Record<PanelKey, () => ReactElement> = {
+  status: StatusWindow,
+  inventory: InventoryWindow,
+  settings: SettingsWindow,
+};
+
 
 // ---- Status: equip (esq) | atributos centralizados + sub-stats derivados (dir) ----
 const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"] as const;
@@ -263,70 +229,18 @@ function EquipSlot({ label }: { label: string }) {
   );
 }
 
-function FriendsWindow() {
-  return (
-    <div style={{ font: "12px system-ui", color: "#493333" }}>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        <input placeholder="nome do amigo" style={{ flex: 1, padding: "6px 8px", borderRadius: 5, border: "1px solid rgba(73,51,51,0.35)", background: "rgba(255,215,168,0.55)", color: "#493333", outline: "none" }} />
-        <RpgButton color="blue">Adicionar</RpgButton>
-      </div>
-      <div style={{ font: "700 12px system-ui", color: "#6b4a35", marginBottom: 4 }}>Amigos</div>
-      <div style={{ background: "rgba(222,169,116,0.45)", borderRadius: 6, padding: 10, minHeight: 150, marginBottom: 12, color: "#6b4a35" }}>
-        Sem amigos ainda.
-      </div>
-      <div style={{ font: "700 12px system-ui", color: "#6b4a35", marginBottom: 4 }}>Party</div>
-      <div style={{ background: "rgba(222,169,116,0.45)", borderRadius: 6, padding: 10, minHeight: 90, marginBottom: 10, color: "#6b4a35" }}>
-        Você não está em uma party.
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <RpgButton color="blue">Criar party</RpgButton>
-        <RpgButton color="blue">Convidar</RpgButton>
-        <RpgButton color="grey">Expulsar</RpgButton>
-      </div>
-    </div>
-  );
-}
 
-function QuestsWindow() {
-  const [quests, setQuests] = useState([
-    { id: 1, name: "Limpar o campo", desc: "Derrote 5 skeletons." },
-    { id: 2, name: "Explorar Prontera", desc: "Visite a fonte central." },
-  ]);
-  return (
-    <div style={{ font: "12px system-ui", color: "#493333" }}>
-      {quests.map((q) => (
-        <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", borderBottom: "1px solid rgba(0,0,0,0.1)" }}>
-          <IconSquare seed={`q-${q.id}`} size={28} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700 }}>{q.name}</div>
-            <div style={{ font: "11px system-ui", opacity: 0.8 }}>{q.desc}</div>
-          </div>
-          <RpgButton color="grey" onClick={() => setQuests((qs) => qs.filter((x) => x.id !== q.id))}>
-            deletar
-          </RpgButton>
-        </div>
-      ))}
-      {quests.length === 0 && <div>Sem quests.</div>}
-    </div>
-  );
-}
 
+/**
+ * Não há mais bloco "Movimento" aqui.
+ *
+ * Ele oferecia "Clique-tile (RO)" e "WASD livre", e era o ÚNICO jeito de ligar o
+ * WASD. O jogo passou a ter um caminho de movimento só — o clique-tile —, então
+ * a escolha deixou de existir junto com o outro caminho.
+ */
 function SettingsWindow() {
-  const mode = usePlayStore((s) => s.mode);
-  const setMode = usePlayStore((s) => s.setMode);
   return (
     <div style={{ font: "12px system-ui", color: "#493333" }}>
-      <div style={{ marginBottom: 14 }}>
-        <b>Movimento</b>
-        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-          <RpgButton color="blue" active={mode === "grid"} onClick={() => setMode("grid")}>
-            Clique-tile (RO)
-          </RpgButton>
-          <RpgButton color="blue" active={mode === "free"} onClick={() => setMode("free")}>
-            WASD livre
-          </RpgButton>
-        </div>
-      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
           <b>Volume & Gráfico</b>
@@ -357,22 +271,9 @@ const HOTKEY_HELP: [string, string][] = [
   ["Inventário", "Alt+E"],
   ["Habilidades", "Alt+S"],
   ["Mapa", "Alt+M"],
-  ["Amigos & Party", "Alt+Z"],
+  ["Lista de Amigos", "Alt+Z"],
   ["Configurações", "Alt+O"],
 ];
-
-function MapWindow() {
-  return (
-    <div style={{ font: "12px system-ui", color: "#493333" }}>
-      <div style={{ height: 220, background: "rgba(0,0,0,0.08)", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        mapa atual (render entra aqui)
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <RpgButton color="blue">Abrir mapa-múndi</RpgButton>
-      </div>
-    </div>
-  );
-}
 
 // ---- quests ativas (meio-direita, sempre visível) ----
 /**

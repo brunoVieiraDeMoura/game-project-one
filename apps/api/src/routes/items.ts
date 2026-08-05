@@ -13,12 +13,37 @@ const ListQuerySchema = z.object({
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
+/**
+ * `/items/by-id?ids=1,2,3` — o CLIENTE pergunta o nome legível de vários itens.
+ *
+ * Mesma forma da rota de skills, e pelo mesmo motivo: o rAthena manda só o ID
+ * em inventário e drop, e uma requisição por item encheria a rede de chamadas
+ * com uma bolsa aberta. O teto de 200 existe para o parâmetro não virar uma
+ * varredura da tabela inteira.
+ */
+const IdsQuerySchema = z.object({
+  ids: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((s) => s.split(",").map(Number).filter(Number.isInteger).slice(0, 200)),
+});
+
 export function itemRoutes(repo: ItemRepository, security: SecurityContext | null = null) {
   return async function registerItemRoutes(app: FastifyInstance) {
     app.get("/", async (req, reply) => {
       const q = ListQuerySchema.safeParse(req.query);
       if (!q.success) return reply.code(400).send({ error: q.error.issues });
       return repo.list(q.data);
+    });
+
+    // ANTES do `/:id`: o Fastify casa rota por ordem de registro, e "by-id"
+    // seria engolido como um `:id` que não é número
+    app.get("/by-id", async (req, reply) => {
+      const q = IdsQuerySchema.safeParse(req.query);
+      if (!q.success) return reply.code(400).send({ error: q.error.issues });
+      const found = await Promise.all(q.data.ids.map((id) => repo.get(id)));
+      return { items: found.filter((i) => i !== null) };
     });
 
     app.get("/:id", async (req, reply) => {

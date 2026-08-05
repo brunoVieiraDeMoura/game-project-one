@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { usePlayStore } from "./playStore";
+import { useAimStore } from "../net/aimStore";
 import { CLICK_SLOP_PX, DOUBLE_CLICK_MS, NORTH_AZIMUTH, SNAP_EASE, shortestTurn } from "./cameraNorth";
 
 /**
@@ -44,8 +44,6 @@ export function FollowCamera({
   const { camera, gl } = useThree();
   const dist = useRef(1);
   const pitch = useRef(0.52);
-  const lookYaw = useRef(0); // olhar temporário (esquerdo); volta a 0 ao soltar
-  const leftDragging = useRef(false);
   /** azimute de destino do "voltar ao norte"; null = ninguém pediu */
   const snapAz = useRef<number | null>(null);
   const desired = useRef(new THREE.Vector3());
@@ -74,8 +72,11 @@ export function FollowCamera({
         rightDrag = true;
         arrastou = 0;
       }
-      // esquerdo só olha no modo WASD livre
-      else if (e.button === 0 && usePlayStore.getState().mode === "free") leftDragging.current = true;
+      // O botão ESQUERDO não arrasta a câmera.
+      //
+      // Ele fazia isso só no modo "WASD livre", que saiu junto com o WASD. No
+      // clique-tile o esquerdo pertence ao CHÃO: é ele que manda andar, e
+      // roubá-lo para girar a câmera engoliria o comando de movimento.
     };
     const onMove = (e: PointerEvent) => {
       const dx = e.clientX - lastX;
@@ -86,9 +87,6 @@ export function FollowCamera({
         arrastou += Math.abs(dx) + Math.abs(dy);
         azimuthRef.current -= dx * rot.current; // muda movimento + câmera
         pitch.current = THREE.MathUtils.clamp(pitch.current + dy * rot.current * 0.83, 0.15, 1.45);
-      } else if (leftDragging.current) {
-        lookYaw.current -= dx * rot.current; // só visão
-        pitch.current = THREE.MathUtils.clamp(pitch.current + dy * rot.current * 0.83, 0.15, 1.45);
       }
     };
     const onUp = (e: PointerEvent) => {
@@ -98,6 +96,20 @@ export function FollowCamera({
         // se o ponteiro praticamente não andou — senão duas rotações rápidas
         // seguidas jogariam a câmera para o norte no meio do movimento.
         if (arrastou <= CLICK_SLOP_PX) {
+          /**
+           * Com skill mirando, o clique limpo do direito CANCELA a mira — o
+           * mesmo que o Esc faz.
+           *
+           * E não conta para o duplo-clique do norte: quem apertou o direito
+           * estava desistindo da magia, não pedindo para girar a câmera. Sem o
+           * `ultimoClique = 0`, cancelar duas magias seguidas jogaria a visão
+           * para o norte no meio do jogo.
+           */
+          if (useAimStore.getState().skill) {
+            useAimStore.getState().cancel();
+            ultimoClique = 0;
+            return;
+          }
           const agora = performance.now();
           if (agora - ultimoClique < DOUBLE_CLICK_MS) {
             snapAz.current = NORTH_AZIMUTH;
@@ -107,7 +119,6 @@ export function FollowCamera({
           }
         }
       }
-      if (e.button === 0) leftDragging.current = false; // solta → lookYaw volta a 0
     };
     const onWheel = (e: WheelEvent) => {
       dist.current = THREE.MathUtils.clamp(dist.current + e.deltaY * 0.0015, 0.4, maxZ.current);
@@ -142,10 +153,14 @@ export function FollowCamera({
         azimuthRef.current += delta * SNAP_EASE;
       }
     }
-    // ao soltar o esquerdo, o olhar temporário volta suave pra 0 (atrás do movimento)
-    if (!leftDragging.current) lookYaw.current = THREE.MathUtils.lerp(lookYaw.current, 0, 0.12);
-
-    const az = azimuthRef.current + lookYaw.current; // visão = movimento + olhar
+    /**
+     * A visão É o azimute — não há mais "olhar temporário".
+     *
+     * O `lookYaw` existia para o arrasto com o botão ESQUERDO, que só valia no
+     * modo WASD livre. Sem aquele modo, o esquerdo pertence ao chão (é ele que
+     * manda andar) e o olhar temporário virou um valor preso em zero.
+     */
+    const az = azimuthRef.current;
     const t = targetRef.current;
     const ty = t.y + targetHeight * 0.5; // meio do corpo
     const r = distance * dist.current;

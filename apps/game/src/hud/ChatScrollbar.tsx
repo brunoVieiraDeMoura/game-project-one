@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CHAT_ART, CHAT_ART_SIZE, FRAME_SCALE } from "../ui/chatFrame";
 
-const K = FRAME_SCALE;
-const LARGURA = CHAT_ART_SIZE.scrollCap.w * K; // o cursor é a peça mais larga
-const CAP = CHAT_ART_SIZE.scrollCap.h * K;
-const SETA = CHAT_ART_SIZE.scrollArrow.h * K;
+/** largura padrão: a do chat, onde a arte foi medida */
+const LARGURA_PADRAO = CHAT_ART_SIZE.scrollCap.w * FRAME_SCALE; // o cursor é a peça mais larga
 const PASSO = 48; // px por clique na seta
 
 /**
@@ -25,10 +23,32 @@ export function ChatScrollbar({
   alvo,
   /** muda quando chega mensagem — obriga a remedir o conteúdo */
   revisao,
+  largura = LARGURA_PADRAO,
+  auto = false,
 }: {
   alvo: React.RefObject<HTMLDivElement | null>;
   revisao: unknown;
+  /**
+   * Largura de render. As alturas das peças acompanham na MESMA proporção — a
+   * seta e a ponta do cursor são desenhos, e esticar só um eixo os deforma. A
+   * janela de amigos usa a barra num vão maior que o do chat, e sem isto ela
+   * saía fina e encostada num lado do vão.
+   */
+  largura?: number;
+  /**
+   * Some quando não há o que rolar.
+   *
+   * Não dá para simplesmente não montar o componente: quem mede o excedente é o
+   * `medir`, e ele precisa do trilho no DOM para saber a altura do vão — sem o
+   * elemento a barra nunca descobriria que passou a ser necessária e ficaria
+   * escondida para sempre. Então ela continua montada e some por LARGURA ZERO.
+   */
+  auto?: boolean;
 }) {
+  const LARGURA = largura;
+  const escala = largura / CHAT_ART_SIZE.scrollCap.w;
+  const CAP = CHAT_ART_SIZE.scrollCap.h * escala;
+  const SETA = CHAT_ART_SIZE.scrollArrow.h * escala;
   const trilho = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ topo: 0, altura: 0, rolavel: false });
   const arrasto = useRef<{ y0: number; scroll0: number } | null>(null);
@@ -120,8 +140,19 @@ export function ChatScrollbar({
     </button>
   );
 
+  const escondida = auto && !pos.rolavel;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: LARGURA }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: escondida ? 0 : LARGURA,
+        overflow: "hidden",
+        transition: "width 120ms ease-out",
+      }}
+    >
       {seta(true)}
       <div
         ref={trilho}
@@ -130,7 +161,7 @@ export function ChatScrollbar({
           width: "100%",
           position: "relative",
           backgroundImage: `url(${CHAT_ART.scrollTrack})`,
-          backgroundSize: `${CHAT_ART_SIZE.scrollTrack.w * K}px ${CHAT_ART_SIZE.scrollTrack.h * K}px`,
+          backgroundSize: `${CHAT_ART_SIZE.scrollTrack.w * escala}px ${CHAT_ART_SIZE.scrollTrack.h * escala}px`,
           backgroundRepeat: "repeat-y",
           backgroundPosition: "center top",
         }}

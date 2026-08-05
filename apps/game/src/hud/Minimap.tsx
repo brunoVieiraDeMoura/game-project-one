@@ -6,10 +6,29 @@ import { legacyMapping, serverToLocal } from "../net/legacyCells";
 import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { MINIMAP_WIDTH, MM_ART, MM_COLORS, MM_LAYOUT, MM_PLATE, MM_ZOOM, isDaytime } from "../ui/minimap";
+import { canvasDeColisao } from "./colisaoCanvas";
+import { medir } from "../core/diagnostics/medir";
 import { NotificationBell } from "./NotificationBell";
 
 const escala = MINIMAP_WIDTH / MM_PLATE.w;
 const px = (v: number) => v * escala;
+
+/**
+ * Quantas vezes por segundo o minimapa se redesenha.
+ *
+ * Ele tem um `requestAnimationFrame` PRÓPRIO, independente do laço do R3F, e
+ * cada passada refaz `interpolatedCell` de TODA entidade (a mesma conta que o
+ * `NetEntity` já fez naquele quadro), um `drawImage` da janela inteira e um arco
+ * com traço por mob. Com ~25 mobs isso é uma segunda varredura completa do mundo
+ * em Canvas2D, na mesma thread, 60 vezes por segundo — e rodava mesmo com todo
+ * mundo parado.
+ *
+ * A 12 fps nada se perde: um mob anda uma célula a cada ~200 ms e a célula do
+ * minimapa tem poucos pixels. O rAF continua sendo o relógio — é ele que faz o
+ * laço parar quando a aba perde o foco; o limitador só decide quais quadros
+ * desenham.
+ */
+const MINIMAPA_FPS = 12;
 
 /**
  * Minimapa (topo-direita), vestido com a arte de `ui_definitiva/mini-map`.
@@ -42,40 +61,13 @@ export function Minimap({ map, playerPos }: { map: GameMap; playerPos: React.Mut
    * Colisão pré-desenhada num canvas do TAMANHO DO MAPA (uma vez por mapa).
    *
    * O zoom depois só recorta um pedaço dele — redesenhar 160.000 células por
-   * quadro para seguir o personagem seria impagável.
+   * quadro para seguir o personagem seria impagável. Mora em `colisaoCanvas`
+   * porque a janela do Alt+M desenha o MESMO mapa: com um canvas por tela seria
+   * o dobro do bitmap (640 KB cada num 400×400) para o mesmo pixel.
    */
-  const fonte = useMemo(() => {
-    const { width, height } = map.size;
-    const off = document.createElement("canvas");
-    off.width = width;
-    off.height = height;
-    const ctx = off.getContext("2d");
-    if (!ctx) return off;
-    const img = ctx.createImageData(width, height);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const t = map.collision[y * width + x];
-        // norte em cima: inverte y
-        const di = ((height - 1 - y) * width + x) * 4;
-        const c =
-          t === "wall"
-            ? MM_COLORS.wall
-            : t === "water"
-              ? MM_COLORS.water
-              : t === "cliff"
-                ? MM_COLORS.cliff
-                : MM_COLORS.walkable;
-        img.data[di] = c[0];
-        img.data[di + 1] = c[1];
-        img.data[di + 2] = c[2];
-        img.data[di + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    return off;
-  }, [map]);
+  const fonte = useMemo(() => medir("minimapa→bitmap", () => canvasDeColisao(map)), [map]);
 
-  // mapa + entidades + seta, por quadro
+  // mapa + entidades + seta, no ritmo de MINIMAPA_FPS
   useEffect(() => {
     const c = viewRef.current;
     if (!c) return;
@@ -91,9 +83,16 @@ export function Minimap({ map, playerPos }: { map: GameMap; playerPos: React.Mut
     const janelaH = height / zoom;
 
     let raf = 0;
+    let ultimoDesenho = 0;
+    const intervalo = 1000 / MINIMAPA_FPS;
     const loop = () => {
-      const world = useWorldStore.getState();
       const now = performance.now();
+      if (now - ultimoDesenho < intervalo) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      ultimoDesenho = now;
+      const world = useWorldStore.getState();
 
       // onde está o personagem, em célula LOCAL do mapa
       let eu = { col: 0, row: 0 };

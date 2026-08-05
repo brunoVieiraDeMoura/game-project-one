@@ -1,0 +1,56 @@
+Escolha a opção **2 (Personagem + monstros)**, porém com um ajuste importante.
+
+O objetivo não é adicionar movimentação sub-célula aos monstros. O objetivo é impedir qualquer snap desnecessário para o centro da célula quando uma entidade apenas muda de estado (parar, castar, atacar, trocar animação etc.).
+
+Regras desejadas:
+
+* O jogo continua visualmente igual.
+* Continua sendo movimentação por clique em grid.
+* Pathfinding continua baseado em tiles.
+* Alcance continua baseado em tiles.
+* Servidor continua autoritativo.
+
+Porém:
+
+* Nenhuma entidade deve ser reposicionada apenas porque mudou de estado.
+* Se um personagem ou monstro estava entre duas células quando recebeu STOPMOVE, CAST ou equivalente, a posição visual deve permanecer exatamente onde estava.
+* Só deve existir reposicionamento imediato quando realmente houver uma divergência grande entre cliente e servidor (warp, knockback, teleporte, correção de vários tiles etc.).
+
+Não quero introduzir sub-célula para a IA dos monstros agora.
+
+Quero apenas remover os snaps artificiais causados pela mudança de estado.
+
+Se isso exigir separar posição lógica (grid) de posição física (renderização), descreva essa arquitetura antes de implementá-la.
+
+
+O ajuste é este:
+
+Não quero que a regra seja baseada em "1 célula".
+
+O problema não é a distância em células, e sim o snap para o centro do tile.
+
+Quero que você revise essa lógica.
+
+Hoje você propôs:
+
+* gap > 3 células → teleporte
+* gap < 1 célula → NÃO MOVE
+* restante → desliza 120 ms
+
+Minha preocupação é que "gap < 1 célula → NÃO MOVE" possa deixar cliente e servidor permanentemente divergentes.
+
+Prefiro esta regra:
+
+* divergência muito pequena (alguns pixels ou uma tolerância bem definida): não fazer snap para o centro da célula;
+* divergência média: corrigir suavemente (interpolação);
+* divergência grande (warp, teleporte, knockback, correção do servidor): teleporte imediato.
+
+O objetivo não é ignorar diferenças menores que uma célula.
+
+O objetivo é impedir que STOPMOVE, CAST, ATTACK ou mudança de estado forcem a entidade para o centro do tile.
+
+Quero que a posição visual permaneça exatamente onde estava quando a caminhada foi interrompida.
+
+Se o servidor precisar corrigir a posição, essa correção deve acontecer apenas quando realmente existir uma divergência relevante entre o estado do cliente e o estado autoritativo do servidor, e não simplesmente porque a entidade parou de andar.
+
+Antes de implementar, explique se essa abordagem é compatível com a arquitetura atual de Client-side Prediction e Server Reconciliation e qual tolerância faz mais sentido utilizar.

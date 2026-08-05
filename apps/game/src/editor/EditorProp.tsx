@@ -32,14 +32,22 @@ function EditorPropModel({ prop, index, url }: { prop: MapProp; index: number; u
     return c;
   }, [gltf]);
 
-  const selected = useEditorStore((s) => s.selected === index);
-  const inMulti = useEditorStore((s) => s.multi.includes(index));
-  const multiCount = useEditorStore((s) => s.multi.length);
-  const tool = useEditorStore((s) => s.tool);
-  const camMove = useEditorStore((s) => s.camMove);
-  const select = useEditorStore((s) => s.select);
-  const toggleMulti = useEditorStore((s) => s.toggleMulti);
-  const startDrag = useEditorStore((s) => s.startDrag);
+  /**
+   * UMA assinatura, e só do que MUDA O DESENHO.
+   *
+   * Eram oito `useEditorStore` por prop. Cada `set()` do store — e uma
+   * pincelada faz dezenas por segundo — mandava o zustand avaliar oito
+   * seletores em CADA prop do mapa; num mapa com uma floresta gerada isso é
+   * dezenas de milhares de avaliações por pincelada, para desenhar o mesmo
+   * quadro.
+   *
+   * `tool`, `camMove` e as ações não mudam nada na tela: são lidos com
+   * `getState()` dentro do handler, no instante do clique, que é quando o valor
+   * importa. Sobra o anel de seleção, que é o único efeito visual.
+   */
+  const selecao = useEditorStore((s) => (s.selected === index ? 2 : s.multi.includes(index) ? 1 : 0));
+  const selected = selecao === 2;
+  const inMulti = selecao === 1;
 
   const body = (
     <group
@@ -47,19 +55,19 @@ function EditorPropModel({ prop, index, url }: { prop: MapProp; index: number; u
       rotation={prop.rotation}
       scale={prop.scale}
       onPointerDown={(e) => {
-        if (tool === "select" && !camMove && e.button === 0) {
-          e.stopPropagation();
-          // Shift+clique = adiciona/remove da seleção múltipla (sem arrastar)
-          if (e.nativeEvent.shiftKey) {
-            toggleMulti(index);
-          } else if (inMulti && multiCount > 1) {
-            // já faz parte do lote: arrasta preservando a seleção (não chama
-            // select, que zeraria multi). dragTo usa este índice como âncora.
-            startDrag("prop", index);
-          } else {
-            select(index);
-            startDrag("prop", index); // arrastar = mover no chão
-          }
+        const st = useEditorStore.getState();
+        if (st.tool !== "select" || st.camMove || e.button !== 0) return;
+        e.stopPropagation();
+        // Shift+clique = adiciona/remove da seleção múltipla (sem arrastar)
+        if (e.nativeEvent.shiftKey) {
+          st.toggleMulti(index);
+        } else if (st.multi.includes(index) && st.multi.length > 1) {
+          // já faz parte do lote: arrasta preservando a seleção (não chama
+          // select, que zeraria multi). dragTo usa este índice como âncora.
+          st.startDrag("prop", index);
+        } else {
+          st.select(index);
+          st.startDrag("prop", index); // arrastar = mover no chão
         }
       }}
     >

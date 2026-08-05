@@ -1,0 +1,172 @@
+{
+  "escalaPadrao": {
+    "grass": 24,
+    "dirt": 20,
+    "stone": 28,
+    "sand": 18,
+    "snow": 24,
+    "water": 12,
+    "river": 12
+  },
+  "superficies": {
+    "grass": [
+      {
+        "id": "grass",
+        "rotulo": "Procedural (gerada)",
+        "fonte": "procedural"
+      },
+      {
+        "id": "grass-aerial_rocks_01",
+        "rotulo": "Musgo com seixos",
+        "fonte": "grama/aerial_rocks_01"
+      },
+      {
+        "id": "grass-aerial_rocks_04",
+        "rotulo": "Musgo escuro",
+        "fonte": "grama/aerial_rocks_04"
+      },
+      {
+        "id": "grass-coast_sand_rocks_02",
+        "rotulo": "Musgo e pedras",
+        "fonte": "grama/coast_sand_rocks_02"
+      }
+    ],
+    "dirt": [
+      {
+        "id": "dirt",
+        "rotulo": "Terra batida lisa",
+        "fonte": "terra/baseball_playground"
+      },
+      {
+        "id": "dirt-brown_mud_dry",
+        "rotulo": "Terra com cascalho",
+        "fonte": "terra/brown_mud_dry"
+      },
+      {
+        "id": "dirt-brown_mud_02",
+        "rotulo": "Lama escura",
+        "fonte": "terra/brown_mud_02"
+      },
+      {
+        "id": "dirt-leaves_forest_ground",
+        "rotulo": "Folhas secas",
+        "fonte": "terra/leaves_forest_ground"
+      },
+      {
+        "id": "dirt-procedural",
+        "rotulo": "Procedural (gerada)",
+        "fonte": "procedural"
+      }
+    ],
+    "stone": [
+      {
+        "id": "stone",
+        "rotulo": "Rocha áspera",
+        "fonte": "pedra/coral_fort_wall_03"
+      },
+      {
+        "id": "stone-rock_boulder_cracked",
+        "rotulo": "Rocha rachada clara",
+        "fonte": "pedra/rock_boulder_cracked"
+      },
+      {
+        "id": "stone-Rock034",
+        "rotulo": "Rocha com líquen",
+        "fonte": "pedra/Rock034"
+      },
+      {
+        "id": "stone-Rock033",
+        "rotulo": "Rocha escura",
+        "fonte": "pedra/Rock033"
+      },
+      {
+        "id": "stone-broken_wall",
+        "rotulo": "Alvenaria de pedra",
+        "fonte": "pedra/broken_wall"
+      },
+      {
+        "id": "stone-procedural",
+        "rotulo": "Procedural (gerada)",
+        "fonte": "procedural"
+      }
+    ],
+    "sand": [
+      {
+        "id": "sand",
+        "rotulo": "Areia de praia",
+        "fonte": "areia/coast_sand_01"
+      },
+      {
+        "id": "sand-procedural",
+        "rotulo": "Procedural (gerada)",
+        "fonte": "procedural"
+      }
+    ],
+    "snow": [
+      {
+        "id": "snow",
+        "rotulo": "Neve lisa",
+        "fonte": "neve/Snow001"
+      },
+      {
+        "id": "snow-snow_field_aerial",
+        "rotulo": "Campo nevado",
+        "fonte": "neve/snow_field_aerial"
+      },
+      {
+        "id": "snow-snow_covered_ground-4K",
+        "rotulo": "Neve com relevo",
+        "fonte": "neve/snow_covered_ground-4K"
+      },
+      {
+        "id": "snow-procedural",
+        "rotulo": "Procedural (gerada)",
+        "fonte": "procedural"
+      }
+    ],
+    "water": [
+      {
+        "id": "water",
+        "rotulo": "Aquarela funda",
+        "fonte": "agua/Water_01"
+      },
+      {
+        "id": "water-Water_02",
+        "rotulo": "Aquarela clara",
+        "fonte": "agua/Water_02"
+      },
+      {
+        "id": "water-Water_03",
+        "rotulo": "Aquarela esverdeada",
+        "fonte": "agua/Water_03"
+      },
+      {
+        "id": "water-Water_04",
+        "rotulo": "Aquarela suave",
+        "fonte": "agua/Water_04"
+      }
+    ],
+    "river": [
+      {
+        "id": "water",
+        "rotulo": "Aquarela funda",
+        "fonte": "agua/Water_01"
+      },
+      {
+        "id": "water-Water_02",
+        "rotulo": "Aquarela clara",
+        "fonte": "agua/Water_02"
+      },
+      {
+        "id": "water-Water_03",
+        "rotulo": "Aquarela esverdeada",
+        "fonte": "agua/Water_03"
+      },
+      {
+        "id": "water-Water_04",
+        "rotulo": "Aquarela suave",
+        "fonte": "agua/Water_04"
+      }
+    ]
+  }
+}

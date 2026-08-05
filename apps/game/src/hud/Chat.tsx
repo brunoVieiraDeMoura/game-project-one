@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHudStore } from "./hudStore";
 import { gateway } from "../net/gateway";
 import { usePlayerStore } from "../net/playerStore";
+import { useFriendStore } from "../net/friendStore";
 import { FRAME_FONT } from "../ui/charFrame";
 import { CurvedBox } from "../ui/CurvedBox";
 import { ScrollbarHider } from "../ui/ScrollbarHider";
@@ -86,7 +87,14 @@ export function Chat() {
     const socket = gateway();
     const onMessage = (p: { gid?: number; text: string; scope: string }) => {
       const tab = SCOPE_TO_TAB[p.scope] ?? "geral";
-      setMsgs((m) => [...m.slice(-99), { tab, ...separarLinha(p.text) }]);
+      const linha = separarLinha(p.text);
+      // Quem falou entra em "Recentes" (janela de amigos): é assim que se
+      // convida alguém do canal global sem ter que digitar o nome. `self` fica
+      // de fora — ninguém precisa de si mesmo na lista.
+      if (linha.autor && p.scope !== "self" && p.scope !== "announce") {
+        useFriendStore.getState().verJogador(linha.autor, "chat");
+      }
+      setMsgs((m) => [...m.slice(-99), { tab, ...linha }]);
     };
     socket.on("chat:message", onMessage);
     return () => {

@@ -8,6 +8,7 @@ import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui
 import { JOB_NAMES } from "../character/jobNames";
 import { CHAT_ART } from "../ui/chatFrame";
 import { CurvedBox } from "../ui/CurvedBox";
+import { TYPE } from "../ui/windowChrome";
 import { useNineSlice } from "../ui/nineSlice";
 import { SB_ART, SLOT_FRAME } from "../ui/skillBar";
 import {
@@ -137,7 +138,7 @@ export function StatusWindow() {
           simplesmente não aparecia. Ela é o cenário, ele é o boneco na frente. */}
       {/* `pointerEvents` LIGADO: é aqui que o arrasto gira o personagem */}
       <div style={{ ...caixa(ST_LAYOUT.avatar), overflow: "hidden" }}>
-        <CharacterPortrait inteiro fundo={false} giravel />
+        <CharacterPortrait dono="status" inteiro fundo={false} giravel />
       </div>
 
       <div
@@ -148,7 +149,7 @@ export function StatusWindow() {
           justifyContent: "center",
           fontFamily: FRAME_FONT,
           fontWeight: 700,
-          fontSize: px(17),
+          fontSize: px(TYPE.title),
           lineHeight: 1,
           color: ST_COLORS.ink,
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -243,7 +244,7 @@ export function StatusWindow() {
         <span
           style={{
             fontFamily: FRAME_FONT,
-            fontSize: px(10),
+            fontSize: px(TYPE.label),
             lineHeight: 1,
             color: ST_COLORS.label,
             textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -257,7 +258,7 @@ export function StatusWindow() {
             fontFamily: FRAME_NUM_FONT,
             fontVariantNumeric: FRAME_NUM_VARIANT,
             fontWeight: 700,
-            fontSize: px(15),
+            fontSize: px(TYPE.name),
             lineHeight: 1,
             color: sobrando > 0 ? "#ffd07a" : ST_COLORS.inkDim,
             textShadow: `0 1px 3px ${ST_COLORS.shadow}`,
@@ -307,7 +308,7 @@ function BotaoDica({ texto }: { texto: string }) {
           border: `1px solid rgba(190,150,90,0.65)`,
           background: "rgba(30,24,14,0.9)",
           color: ST_COLORS.label,
-          font: `700 ${px(10)}px ${FRAME_FONT}`,
+          font: `700 ${px(TYPE.label)}px ${FRAME_FONT}`,
           lineHeight: 1,
           padding: 0,
           cursor: "help",
@@ -327,7 +328,7 @@ function BotaoDica({ texto }: { texto: string }) {
             border: `1px solid rgba(190,150,90,0.5)`,
             background: "rgba(24,18,10,0.96)",
             boxShadow: "0 6px 16px rgba(8,5,2,0.5)",
-            font: `${px(9)}px ${FRAME_FONT}`,
+            font: `${px(TYPE.small)}px ${FRAME_FONT}`,
             lineHeight: 1.45,
             color: ST_COLORS.inkDim,
             textAlign: "left",
@@ -368,7 +369,7 @@ function Cabecalho({ children }: { children: React.ReactNode }) {
         textAlign: "center",
         fontFamily: FRAME_FONT,
         fontWeight: 700,
-        fontSize: px(14),
+        fontSize: px(TYPE.section),
         lineHeight: 1,
         color: ST_COLORS.ink,
         textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -387,7 +388,7 @@ function Linha({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: st
       <span
         style={{
           fontFamily: FRAME_FONT,
-          fontSize: px(11),
+          fontSize: px(TYPE.label),
           lineHeight: 1,
           color: cor ?? ST_COLORS.label,
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -401,7 +402,7 @@ function Linha({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: st
           fontFamily: FRAME_NUM_FONT,
           fontVariantNumeric: FRAME_NUM_VARIANT,
           fontWeight: 700,
-          fontSize: px(10),
+          fontSize: px(TYPE.label),
           lineHeight: 1,
           color: cor ?? ST_COLORS.ink,
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -445,7 +446,7 @@ function LinhaAtributo({
           textOverflow: "ellipsis",
           fontFamily: FRAME_FONT,
           fontWeight: 700,
-          fontSize: px(10.5),
+          fontSize: px(TYPE.label),
           lineHeight: 1,
           color: ST_COLORS.ink,
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -461,7 +462,7 @@ function LinhaAtributo({
           fontFamily: FRAME_NUM_FONT,
           fontVariantNumeric: FRAME_NUM_VARIANT,
           fontWeight: 700,
-          fontSize: px(11),
+          fontSize: px(TYPE.label),
           lineHeight: 1,
           // ponto ainda nao confirmado sai destacado: e o que o Cancelar desfaz.
           // No teto, o numero esmaece junto com o "+".
@@ -626,7 +627,7 @@ function Botao({
         style={{
           fontFamily: FRAME_FONT,
           fontWeight: 700,
-          fontSize: px(9),
+          fontSize: px(TYPE.small),
           lineHeight: 1,
           color: ST_COLORS.ink,
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
@@ -668,7 +669,7 @@ function Ajuda({ titulo, texto, onFechar }: { titulo: string; texto: string; onF
             textAlign: "center",
             fontFamily: FRAME_FONT,
             fontWeight: 700,
-            fontSize: px(10),
+            fontSize: px(TYPE.label),
             color: ST_COLORS.ink,
             textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
           }}
@@ -680,7 +681,7 @@ function Ajuda({ titulo, texto, onFechar }: { titulo: string; texto: string; onF
       <div
         style={{
           fontFamily: FRAME_FONT,
-          fontSize: px(9),
+          fontSize: px(TYPE.small),
           lineHeight: 1.45,
           color: ST_COLORS.inkDim,
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,

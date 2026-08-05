@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useHudStore } from "./hudStore";
 import { useSkillBar } from "./skillBarStore";
+import { ATAQUE_BASICO, ATAQUE_BASICO_ID, baterNoAlvo, useAtaqueBasico } from "../net/ataqueBasico";
+import { useAttackStore } from "../net/attackStore";
 import { usePlayerStore } from "../net/playerStore";
 import { useWorldStore } from "../net/worldStore";
 import { useAimStore } from "../net/aimStore";
@@ -59,6 +61,7 @@ export function SkillBar() {
   const setPage = useHudStore((s) => s.setSkillPage);
   const slots = useSkillBar((s) => s.slots);
   const skills = usePlayerStore((s) => s.skills);
+  const ataqueBasicoAtivo = useAtaqueBasico((s) => s.ativo);
   const stats = usePlayerStore((s) => s.stats);
   const online = usePlayerStore((s) => s.known);
   const aiming = useAimStore((s) => s.skill);
@@ -95,6 +98,22 @@ export function SkillBar() {
 
   function trigger(slotIndex: number) {
     const skillId = slots[slotIndex] ?? 0;
+
+    /**
+     * ATAQUE BÁSICO é um MODO, não um comando: alterna.
+     *
+     * Ligando com um alvo já selecionado, bate nele na hora — senão o jogador
+     * teria de escolher o alvo de novo só para a skill perceber. Desligando, a
+     * ordem de perseguição morre junto: deixá-la de pé faria o personagem
+     * continuar correndo atrás do mob depois de o modo ter sido desligado.
+     */
+    if (skillId === ATAQUE_BASICO_ID) {
+      useAtaqueBasico.getState().alternar();
+      if (useAtaqueBasico.getState().ativo) baterNoAlvo();
+      else useAttackStore.getState().parar();
+      return;
+    }
+
     const skill = skills.find((s) => s.id === skillId);
     if (!skill) return;
 
@@ -137,16 +156,20 @@ export function SkillBar() {
       <div style={{ ...caixa(SB_LAYOUT.slots), display: "flex", gap: px(SLOT_GAP) }}>
         {Array.from({ length: 9 }).map((_, i) => {
           const slotIndex = page * 9 + i;
-          const skill = skills.find((s) => s.id === (slots[slotIndex] ?? 0));
+          const id = slots[slotIndex] ?? 0;
+          const basico = id === ATAQUE_BASICO_ID;
+          const skill = basico ? ATAQUE_BASICO : skills.find((s) => s.id === id);
           return (
             <SkillSlot
               key={slotIndex}
               numero={i + 1}
               slotIndex={slotIndex}
               skillId={skill?.id}
-              nome={skill ? (catalog[skill.id]?.name ?? skill.name) : undefined}
-              detalhe={skill ? `Lv ${skill.level} · ${skill.spCost} SP` : undefined}
-              mirando={Boolean(skill) && aiming?.id === skill?.id}
+              nome={skill ? (basico ? skill.name : (catalog[skill.id]?.name ?? skill.name)) : undefined}
+              detalhe={skill ? (basico ? "Auto-ataque" : `Lv ${skill.level} · ${skill.spCost} SP`) : undefined}
+              // o realce de "mirando" serve ao modo LIGADO: são a mesma
+              // pergunta na tela — "este slot está esperando alguma coisa"
+              mirando={basico ? ataqueBasicoAtivo : Boolean(skill) && aiming?.id === skill?.id}
               onUse={() => trigger(slotIndex)}
             />
           );

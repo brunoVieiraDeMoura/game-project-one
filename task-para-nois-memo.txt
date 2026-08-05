@@ -1,29 +1,71 @@
+DEFINIR HISTÓRIA:
+1 - DEFINIR HISTORIA DO JOGO E ROTA (PARA CRIAÇÃO DE SENTIDO | LINHA CRONOLÓGICA DE ATUALIZAÇÕES | ROTA DOS MAPAS)
+2 - DEFINIR BIOMAS
+3 - DEFINIR ROTA DE MAPAS
+4 - DEFINIR MONSTROS DOS MAPAS
+
+
+DEFINIR CONTROLADOR:
+1 - DEFINIR QUAIS NPCS VAMOS USAR, DELETAR O RESTO DO BD
+2 - DEFINIR ITENS QUE FICAM, (VERIFICAR CATEGORIAS, RELACIONAR COM OUTROS ELEMENTOS [EX: ARMAS DEPENDEM DE BALANCEAMENTO, CARTAS DE MONSTROS]
+3 - DEFINIR MONSTROS (CHECAR CORRELAÇÃO COM ITENS E BALANCEAMENTO COM A CALÇA)
+4 - DEFINIR AS CLASSES | SKILLS
+
+
+UI : 
+
+1 - Criar LoadScreen para quando passar no portal
+2 - Criar SPRITE DO PORTAL
+3 - FAZER A SETINHA DE ATCK, DE SQUARE MOVE , CLIQUE, MÃO PARA PEGAR ITEM(ANIMADA)
+
+
+
+EDITOR MAPA : 
+
+1 - Quero criar mapas com a mesma dimensão de tamanho do ragnarok( proporção px x px) , sendo ele com o mesmo nome ex: 	prt_fild08	400×400
+só que ao invés de simular todo terreno, criar ele com relevo plano para que eu possa editar, criar uma borda "não andável, para todos os mapas" [proporção aleatória,mas nunca passar de min 7% max 12% das bordas em relação a área total do mapa]
+2 - criar um portal (NPC portal) , dentro do editor de mapa, podendo vincular o mapa destino e coordenada
+
+
+GAMEPLAY:
+
 1 - movimentação
-
 2 - atack base (relativos ao atack)
-
-
-
-3 - skills (todos comportamentos [single,aoe etc])
+3 - skills (todos comportamentos [single,aoe etc]) (DANO DA SKILL NAO ESTA APARECENDO)
 4 - atack do monstro (todos comportamentos [skill,atack etc..])
 5 - drop em geral [mostrar na tela] (refresh do drop no ivintário em tempo real)
 6 - block colision do mapa
 7- barra de skill = ragnarok (bloquear comandos f1-f12[habilidades em tile mode f1-f12~os mesmos atalhos do ragnarok])
 8- checar ivintário e seus comportamentos [drop,equipar itens para slot de equipamentos etc.. ] (botão para organizar itens por categoria[ex: dentro de consumiveis, organizar e ordenar poções, depois consumiveis, depois itens para captura])
-
 9- todas as abas que abrir invintory , status, hab, mapas, quests, friends, config
 [devem ter drag and drop], para arrastar dentro da área do canva.
-
 10- atributos e equipamentos (double click para desequipar algo, drag and drop para arrastar)
-ao equipar algum item, mostrar 
-
-11- skills, [descrição , separar elas por classes em tabs, ex: noviço, mago, wizard, high wizzard, warlock e suas respectivas skills da classe]
-
-
-
+ao equipar algum item, mostrar os atributos de um em relação ao outro[status a mais etc..] shift
+11 - Drop de itens no chão drag and drop com aviso, tem certeza que quer dropar?
+12- Tooltip com descrição para tudo [skill, itens, equipamentos etc..]
+13- RANGE DE RENDERIZAÇÃO DOS MONSTROS (AUMENTAR) [obss: colocar isso em config]
 
 
+SETTINGS: 
+
+Abaixar o effeito
+Desligar o effeito
+aumentar a distancia da vizualização mapa
+aumentar a distancia da vizualização monstro
+mostrar ou não o dano
+movimentação wasd / click
+tecla de atalhos(bind)
+volume effeito
+volume da musica
+volume de notificações
+Configurações de contraste/fps
+desligar a barrinha de hp em baixo do personagem
+desligar a barrinha de hp em baixo do mob
+desligar nome do mob
+desligar negociação
+desligar ShowEquipments
+desligar Invite
+desligar Convite de amizade
+Desligar wisper
 
 
-
-Tooltip com descrição para tudo [skill, itens, equipamentos etc..]

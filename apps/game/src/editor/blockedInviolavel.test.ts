@@ -190,12 +190,92 @@ describe("nenhum caminho abre passagem", () => {
     expect(bloqueiosIntactos()).toEqual([]);
   });
 
-  it("relevo procedural (colinas e lagos) não corta bloqueio", () => {
+  it("relevo procedural (colinas e montanhas) não corta bloqueio", () => {
     for (const escopo of ["all", "inside", "border", "hole"] as const) {
       st().init(mapaImportado());
       st().setEditScope(escopo);
       st().setTerrainFeature("hill", 90);
-      st().setTerrainFeature("lake", 90);
+      st().setTerrainFeature("mountain", 90);
+      expect(bloqueiosIntactos(), `escopo ${escopo}`).toEqual([]);
+    }
+  });
+});
+
+/**
+ * Os pincéis que MEXEM na passagem (montanha e rio) são os únicos do editor com
+ * essa permissão — então são eles que precisam da trava mais firme: podem
+ * FECHAR chão andável, nunca ABRIR o bloqueio que veio do mapa original.
+ */
+describe("montanha e rio", () => {
+  function pintar(brush: Parameters<ReturnType<typeof st>["setBrush"]>[0], col: number, row: number, vezes = 1) {
+    st().setBrush(brush);
+    st().setBrushSize(1);
+    st().setBrushStrength(1);
+    st().beginStroke();
+    for (let k = 0; k < vezes; k++) st().paintCell(col, row);
+  }
+
+  it("montanha fecha o chão andável e sobe bem mais que o Subir ▲", () => {
+    st().setEditScope("all");
+    pintar("mountain", 8, 8, 3);
+    const i = idx(8, 8);
+    expect(mapa().collision[i]).toBe("wall");
+    expect(mapa().surface[i]).toBe("stone");
+    expect(mapa().heightmap[i]!).toBeGreaterThan(6);
+  });
+
+  it("montanha continua editável no escopo Dentro depois de virar parede", () => {
+    // sem a brecha por `surface === "stone"`, a segunda pincelada seria ignorada
+    st().setEditScope("inside");
+    pintar("mountain", 8, 8, 1);
+    const depoisDeUma = mapa().heightmap[idx(8, 8)]!;
+    pintar("mountain", 8, 8, 2);
+    expect(mapa().heightmap[idx(8, 8)]!).toBeGreaterThan(depoisDeUma);
+    // e o Subir ▲ também alcança a montanha nossa, ainda em "Dentro"
+    pintar("raise", 8, 8, 1);
+    expect(mapa().heightmap[idx(8, 8)]!).toBeGreaterThan(depoisDeUma);
+  });
+
+  it("desfazer devolve a montanha ao chão", () => {
+    st().setEditScope("all");
+    pintar("mountain", 8, 8, 2);
+    pintar("mountainClear", 8, 8, 1);
+    const i = idx(8, 8);
+    expect(mapa().collision[i]).toBe("walkable");
+    expect(mapa().heightmap[i]).toBe(0);
+  });
+
+  it("desfazer NÃO abre a mata nem a ravina do mapa original", () => {
+    for (const escopo of ["all", "inside", "border", "hole"] as const) {
+      st().init(mapaImportado());
+      st().setEditScope(escopo);
+      pintar("mountainClear", 0, 8, 2); // em cima da moldura
+      pintar("mountainClear", 11, 11, 2); // em cima da ravina
+      expect(bloqueiosIntactos(), `escopo ${escopo}`).toEqual([]);
+    }
+  });
+
+  it("rio fundo bloqueia e afunda; rio raso continua andável", () => {
+    st().setEditScope("all");
+    pintar("riverDeep", 8, 8, 1);
+    expect(mapa().collision[idx(8, 8)]).toBe("wall");
+    expect(mapa().surface[idx(8, 8)]).toBe("river");
+    expect(mapa().heightmap[idx(8, 8)]!).toBeLessThan(0);
+
+    pintar("riverShallow", 15, 15, 1);
+    expect(mapa().collision[idx(15, 15)]).toBe("water");
+    expect(mapa().heightmap[idx(15, 15)]!).toBeLessThan(0);
+  });
+
+  it("nenhum dos dois pincéis de rio abre a mata ou a ravina", () => {
+    for (const escopo of ["all", "inside", "border", "hole"] as const) {
+      st().init(mapaImportado());
+      st().setEditScope(escopo);
+      // o caminho de dois passos: fundo (fica bloqueado) e depois raso (abriria)
+      pintar("riverDeep", 0, 8, 1);
+      pintar("riverShallow", 0, 8, 1);
+      pintar("riverDeep", 11, 11, 1);
+      pintar("riverShallow", 11, 11, 1);
       expect(bloqueiosIntactos(), `escopo ${escopo}`).toEqual([]);
     }
   });

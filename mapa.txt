@@ -1,0 +1,227 @@
+H6 - Asterion- Continente central, sede dos grandes impérios e das cidades mais antigas
+G2 - Huang-Zhen - Terras orientais, montanhas, templos e antigas dinastias
+J3 - Damarak - Região ocidental, marcada por desertos, fortalezas e ruínas
+H9 - Seraphel - Continente sulista,Gelo eterno e civilizações antigas
+J7 - Bellwyn - vila agrícola próxima à capital
+I4 - Ravenor — pequena cidade de mercadores e aventureiros
+C2 - Shinmei — vila próxima às montanhas e aos templos
+D4 - Jin-Hua — cidade conhecida por artesãos e ferreiros
+k3 - Khar-Dun — assentamento no deserto
+M5 - Alzarek — cidade comercial na fronteira
+F8 - Lunara — vila construída sobre canais gélidos
+K8 - Veyru — pequena cidade cercada por gelos e montanhas
+M2 - Túmulo do Imperador Eterno - Uma gigantesca tumba subterrânea onde repousa o primeiro imperador
+E6 - Palácio das Mil Lâminas - Um antigo palácio tomado por guerreiros mortos-vivos e guardas imperiais.
+L9 - Abismo de Kharaz - Uma cidade esquecida pelo gelo consumida por criaturas antigas.
+C4 - Templo do Dragão Celestial - Um templo ancestral no topo de uma montanha, protegido por uma criatura divina.
+F6 - Catacumbas de Asterion - Túneis abaixo da capital.
+J0 - Coração dos Exilados - Uma região abandonada onde vivem monstros e asassinos.
+M4 - Ruínas de Shen-Kai - Ruínas de uma antiga civilização destruída.
+F1 - Gruta dos Ossos - Cavernas infestadas por monstros e bandidos.
+
+🌍 Os 4 Continentes e lvls
+Continente
+Identidade
+Eryndor (1-25 [tirando dungeons e subdungeons]
+Continente central, sede dos grandes impérios e das cidades mais antigas
+Kaishan(15-75 [tirando dungeons e subdungeons]
+Terras orientais, montanhas, templos e antigas dinastias
+Valthera (50-100 [tirando dungeons e subdungeons]
+Região ocidental, marcada por desertos, fortalezas e ruínas
+Nayrath (75-100 [tirando dungeons e subdungeons]
+Continente sulista,Gelo eterno e civilizações antigas
+
+
+
+Locais próximos:
+
+G5 — Bosque dos Primeiros Reis
+H5 — Distrito Imperial
+I5 — Mercado de Asterion
+G6 — Quartel da Guarda Real
+I6 — Academia Arcana
+G7 — Campos Dourados
+H7 — Bellwyn (já definido)
+I7 — Estrada dos Mercadores
+J7 — Bellwyn
+
+Pequena vila agrícola.
+
+Campos ao redor:
+
+J6 — Fazendas de Trigo
+K6 — Vinhedos Reais
+K7 — Moinho Antigo
+J8 — Campos Verdes
+I8 — Ponte de Bellwyn
+I4 — Ravenor
+
+Cidade mercantil.
+
+Campos próximos:
+
+H4 — Porto Secundário
+J4 — Mercado Fluvial
+I3 — Torre do Vigia
+H3 — Estrada dos Aventureiros
+J5 — Estalagem da Lua
+I5 — Guilda dos Comerciantes
+F6 — Catacumbas de Asterion
+
+Subsolo da capital.
+
+Ao redor:
+
+E5 — Entrada Selada
+F5 — Mausoléu Imperial
+G5 — Túneis Esquecidos
+E6 — Palácio das Mil Lâminas (já definido)
+G6 — Prisões Antigas
+F7 — Câmara das Almas
+E6 — Palácio das Mil Lâminas
+
+Próximos:
+
+D6 — Jardim das Estátuas
+E7 — Campo dos Mortos
+F7 — Salão dos Generais
+D5 — Torre da Vigília
+🏔 KAISHAN (Montanhas Orientais) – Lv. 15–75
+G2 — Huang-Zhen
+
+Campos vizinhos:
+
+F2 — Floresta de Jade
+H2 — Campos de Arroz Celestial
+G1 — Pico do Dragão Branco
+F3 — Caminho dos Monges
+H3 — Vale das Lanternas
+G3 — Praça Imperial
+C2 — Shinmei
+
+Ao redor:
+
+B2 — Vila dos Pescadores
+C1 — Penhascos Nebulosos
+D2 — Estrada Imperial
+B3 — Bosque dos Espíritos
+D3 — Ponte de Pedra
+D4 — Jin-Hua
+
+Campos próximos:
+
+C5 — Minas de Ferro
+D5 — Bairro dos Ferreiros
+E4 — Mercado Oriental
+E3 — Campos de Chá
+C4 — Templo do Dragão Celestial (já definido)
+C4 — Templo do Dragão Celestial
+
+Próximos:
+
+B4 — Escadaria Celestial
+B5 — Bosque Sagrado
+C3 — Pátio dos Discípulos
+D4 — Jin-Hua
+D5 — Jardim do Dragão
+F1 — Gruta dos Ossos
+
+Ao redor:
+
+E1 — Penhascos Gelados
+G1 — Pico da Tempestade
+F0 — Entrada da Caverna
+E2 — Covil dos Bandidos
+G2 — Huang-Zhen
+🏜 VALTHERA (Deserto) – Lv. 50–100
+J3 — Damarak
+
+Campos próximos:
+
+I3 — Dunas Perdidas
+K3 — Khar-Dun (já definido)
+J2 — Ruínas Enterradas
+J4 — Oasis de Damarak
+I4 — Estrada da Seda
+K4 — Desfiladeiro Escarlate
+K3 — Khar-Dun
+
+Ao redor:
+
+L3 — Arena dos Gladiadores
+K2 — Fortaleza das Dunas
+J3 — Damarak
+L4 — Acampamento Mercenário
+M5 — Alzarek
+
+Campos próximos:
+
+L5 — Entreposto Comercial
+M6 — Porto do Sul
+N5 — Mercado Negro
+L4 — Caravana Imperial
+N4 — Caminho das Especiarias
+J0 — Coração dos Exilados
+
+Ao redor:
+
+I0 — Penhascos Vermelhos
+K0 — Terras Malditas
+J1 — Vale dos Proscritos
+I1 — Covil dos Assassinos
+K1 — Fortaleza Esquecida
+M2 — Túmulo do Imperador Eterno
+
+Próximos:
+
+L2 — Cidade Soterrada
+N2 — Campos de Cinzas
+L1 — Mausoléus Reais
+M3 — Câmara do Imperador
+N3 — Pirâmides Menores
+M4 — Ruínas de Shen-Kai
+
+Ao redor:
+
+L4 — Praça Destruída
+N4 — Ruínas Externas
+L5 — Biblioteca Perdida
+M3 — Templo Arruinado
+N5 — Salões Colapsados
+❄ NAYRATH (Gelo) – Lv. 75–100
+H9 — Seraphel
+
+Campos próximos:
+
+G9 — Muralha Congelada
+I9 — Porto Glacial
+H8 — Catedral do Gelo
+G8 — Bosque Branco
+I8 — Estrada Congelada
+F8 — Lunara
+
+Ao redor:
+
+E8 — Lagos Congelados
+F9 — Canais de Gelo
+G8 — Campos Nevados
+E9 — Porto Congelado
+G9 — Colinas Brancas
+K8 — Veyru
+
+Campos próximos:
+
+J8 — Passagem do Gelo
+L8 — Muralha Congelada
+K9 — Vale Branco
+J9 — Cavernas Azuis
+L9 — Abismo de Kharaz (já definido)
+L9 — Abismo de Kharaz
+
+Ao redor:
+
+K9 — Ruínas Congeladas
+M9 — Campos da Morte Branca
+L8 — Entrada do Abismo
+K10 — Gelo Profundo
+M10 — Trono do Leviatã

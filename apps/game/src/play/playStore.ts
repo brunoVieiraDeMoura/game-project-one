@@ -1,14 +1,17 @@
 import { create } from "zustand";
-import type { MovementMode } from "@ragnarok/engine-core";
 
 /**
  * Estado do modo jogável que muda raramente (skill-r3f-conventions: zustand
- * pra estado de app, NÃO pra transform por frame). Modo de movimento + destino
- * de clique-pra-andar. A posição do player vive em refs no componente Player.
+ * pra estado de app, NÃO pra transform por frame). A posição do player vive em
+ * refs no componente Player.
+ *
+ * O campo `mode` ("grid" | "free") saiu junto com o WASD: havia UM caminho de
+ * movimento de verdade — o clique-tile — e um segundo, ligado por um botão nas
+ * Configurações, que pulava a validação de alcance e disputava a mesma janela de
+ * 200 ms. Escolher entre dois caminhos quando só um é mantido é convite a
+ * divergência.
  */
 interface PlayState {
-  mode: MovementMode;
-  setMode: (m: MovementMode) => void;
   /** destino de clique no chão (mundo x/z); null = sem alvo pendente */
   moveTarget: { x: number; z: number } | null;
   setMoveTarget: (t: { x: number; z: number } | null) => void;
@@ -25,8 +28,6 @@ interface PlayState {
 let warpSeq = 1;
 
 export const usePlayStore = create<PlayState>((set) => ({
-  mode: "grid",
-  setMode: (mode) => set({ mode }),
   moveTarget: null,
   setMoveTarget: (moveTarget) => set({ moveTarget }),
   warp: null,

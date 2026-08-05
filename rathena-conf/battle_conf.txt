@@ -9,6 +9,36 @@
 // sempre vazia.
 show_mob_info: 5
 
+// Quantas células o servidor aceita num pedido de caminhada. O padrão 17 é do
+// cliente 2D; com 30 (teto do rAthena é MAX_WALKPATH = 32) uma caminhada longa
+// vai em menos idas e voltas, e o cliente emenda um trecho no outro sem parar.
+// `apps/game/src/net/pathfind.ts: MAX_WALK_PATH_DEFAULT` TEM que ter o mesmo
+// número: acima do limite o map-server descarta o pedido EM SILÊNCIO.
+max_walk_path: 30
+
+// ---- alcance de visão -----------------------------------------------------
+// Quantas células ao redor do jogador o servidor ANUNCIA (spawn/vanish/move).
+// O padrão do rAthena é 14, herdado do cliente 2D, onde a tela mostrava pouco
+// mais que isso — com ele o monstro aparecia do nada bem à frente do
+// personagem, num campo aberto e limpo.
+//
+// O número certo é onde a névoa FECHA, não onde ela começa: `gameplay.fogFar`
+// = 0,92 × renderDistance = 120 unidades de mundo, e a célula do rAthena mede
+// 2 → **60 células**. Assim o mob nasce já coberto pela névoa e EMERGE dela
+// conforme o jogador se aproxima, em vez de estalar no meio do campo limpo.
+// (Antes disto o valor era 45, que é a névoa COMEÇANDO: tudo entre 45 e 60
+// células estava à vista e vazio.)
+//
+// É a mesma regra do terreno e dos props (`play/viewRadius.ts`): desenha-se da
+// névoa para dentro. Se a névoa mudar no /game-editor, este número muda junto —
+// não há como derivá-lo daqui, então é cópia e precisa ser revisada à mão.
+//
+// NÃO é de graça: a área anunciada cresce com o QUADRADO do raio — de 29×29 =
+// 841 células (o padrão) para 121×121 = 14.641, ~17× mais entidade por jogador
+// em pacote e em processamento. Num servidor de desenvolvimento é irrelevante;
+// com multidão, é o primeiro número a revisar.
+area_size: 60
+
 // Respawn quase imediato (100 = o tempo normal do mob_db, em %). Campo de
 // teste repõe o monstro assim que ele morre — esperar o timer do mapa oficial
 // só atrapalha quem está testando combate.

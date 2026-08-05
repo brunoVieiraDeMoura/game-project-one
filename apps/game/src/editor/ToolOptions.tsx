@@ -1,4 +1,4 @@
-import { useEditorStore, SPAWN_MONSTERS, SPAWN_NPCS, TRIGGER_KINDS, type Brush } from "./editorStore";
+import { useEditorStore, SPAWN_MONSTERS, SPAWN_NPCS, TRIGGER_KINDS, LEDGE_ANGLES, type Brush } from "./editorStore";
 import type { TriggerKind } from "@ragnarok/map-format";
 import { propLabel } from "../props/registry";
 import { IconBtn, TextBtn, VSep } from "./EditorUi";
@@ -9,9 +9,33 @@ import { IcRotL, IcRotR, IcPlus, IcMinus, IcDuplicate, IcCopy, IcPaste, IcFocus,
 // pode ficar alinhado com os vizinhos, nunca torto (regra do usuário).
 const ROT_STEP = Math.PI / 3; // 60°
 
+/**
+ * Paleta de SUPERFÍCIE, com a textura de verdade ao lado do nome.
+ *
+ * O nome sozinho não diz o que vai aparecer no chão — "pedra" pode ser laje,
+ * cascalho ou paredão. A miniatura é a MESMA imagem que o terreno amostra
+ * (`public/assets/terrain/thumb/*.png`, gerada pelo `terrain:textures` a partir
+ * do mesmo pixel), então o que se escolhe é o que se vê.
+ *
+ * Água e rio não têm textura: a lâmina é material próprio, colorido por
+ * profundidade — a miniatura deles reproduz esse degradê com as mesmas cores do
+ * shader.
+ */
+const SURFACES: { brush: Brush; label: string; thumb: string; title: string }[] = [
+  { brush: "grass", label: "Grama", thumb: "grass", title: "campo aberto — o chão padrão do mapa" },
+  { brush: "dirt", label: "Terra", thumb: "dirt", title: "terra batida: trilha, praça, chão pisado" },
+  { brush: "stone", label: "Pedra", thumb: "stone", title: "rocha — a mesma textura da montanha, mas ANDÁVEL" },
+  { brush: "sand", label: "Areia", thumb: "sand", title: "praia e deserto" },
+  { brush: "snow", label: "Neve", thumb: "snow", title: "campo nevado" },
+  {
+    brush: "water",
+    label: "Lago",
+    thumb: "water",
+    title: "água parada: célula ANDÁVEL com lâmina d'água por cima (é assim no rAthena)",
+  },
+];
+
 const BRUSHES: { brush: Brush; label: string; color: string; title?: string }[] = [
-  { brush: "grass", label: "Grama", color: "#4ade80" },
-  { brush: "water", label: "Água", color: "#38bdf8", title: "vira lago: célula andável com lâmina d'água por cima" },
   { brush: "raise", label: "Subir ▲", color: "#fbbf24" },
   { brush: "lower", label: "Descer ▼", color: "#f87171" },
   { brush: "smooth", label: "Suavizar", color: "#a78bfa" },
@@ -50,6 +74,13 @@ const SCULPT_BRUSHES: { brush: Brush; label: string; color: string; title: strin
     color: "#94a3b8",
     title: "raspa só o que está ACIMA do centro do pincel, criando platô (nunca preenche buraco)",
   },
+  {
+    brush: "ledge",
+    label: "Promontório ◤",
+    color: "#84cc16",
+    title:
+      "arraste da raiz para fora: ergue um morro BICUDO com a face no ângulo escolhido, mato em cima e rocha embaixo. Largura pelo Tamanho, altura pelo Ângulo.",
+  },
 ];
 
 /**
@@ -64,8 +95,83 @@ const CLIFF_BRUSHES: { brush: Brush; label: string; color: string; title: string
   { brush: "cliffDown", label: "Afundar ⤓", color: "#7c5b3f", title: "vira buraco/ravina (continua bloqueado)" },
 ];
 
+/**
+ * Pincéis que MUDAM A PASSAGEM — o resto do editor nunca fecha nem abre célula.
+ *
+ * Ficam num grupo próprio e nomeado por isso: "Subir ▲" faz morro em que se
+ * anda, "Montanha" faz parede. Os dois erguem relevo, e só o rótulo separa um
+ * do outro na hora de usar.
+ */
+const BLOCK_BRUSHES: { brush: Brush; label: string; color: string; title: string }[] = [
+  {
+    brush: "mountain",
+    label: "Montanha ⛰",
+    color: "#8b8f98",
+    title: "ergue MUITO e fecha a passagem (parede de pedra) — o Subir ▲ faz morro andável",
+  },
+  {
+    brush: "mountainClear",
+    label: "Desfazer ⛏",
+    color: "#c084fc",
+    title: "devolve ao chão a montanha pintada aqui (não toca em mata nem penhasco do mapa original)",
+  },
+  {
+    brush: "riverShallow",
+    label: "Rio raso 〰",
+    color: "#67e8f9",
+    title: "água CORRENTE rasa: atravessa a pé. Diferente do Lago só no visual da lâmina",
+  },
+  {
+    brush: "riverDeep",
+    label: "Rio fundo 🌊",
+    color: "#1d4ed8",
+    title: "canal fundo: bloqueia a passagem (pinte o raso nas margens)",
+  },
+];
+
 const inputStyle = { background: ink.slot, border: `1px solid ${ink.border}`, borderRadius: 6, color: ink.text, font: "11px system-ui", padding: "4px 6px" } as const;
 const lbl = { font: "10px system-ui", color: ink.faint, whiteSpace: "nowrap" as const };
+
+/** botão de superfície: amostra da textura + nome, no lugar de um quadradinho de cor */
+function SurfaceBtn({
+  item,
+  active,
+  onPick,
+}: {
+  item: { brush: Brush; label: string; thumb: string; title: string };
+  active: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      title={item.title}
+      onClick={onPick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "3px 8px 3px 3px",
+        borderRadius: 7,
+        cursor: "pointer",
+        font: `${active ? 600 : 400} 11px system-ui`,
+        color: active ? ink.text : ink.dim,
+        background: active ? "rgba(255,255,255,0.12)" : "transparent",
+        border: `1px solid ${active ? ink.text : ink.border}`,
+      }}
+    >
+      <img
+        src={`/assets/terrain/thumb/${item.thumb}.png`}
+        alt=""
+        width={22}
+        height={22}
+        // a textura ladrilha no chão; a amostra também, senão a miniatura de uma
+        // textura de padrão largo vira uma mancha de cor sem informação
+        style={{ borderRadius: 4, display: "block", border: `1px solid ${ink.border}`, objectFit: "cover" }}
+      />
+      {item.label}
+    </button>
+  );
+}
 
 /**
  * Barra de opções contextual (abaixo da top bar): mostra os controles da
@@ -81,6 +187,10 @@ export function ToolOptions() {
   if (tool === "brush") {
     content = (
       <>
+        {SURFACES.map((s2) => (
+          <SurfaceBtn key={s2.brush} item={s2} active={s.brush === s2.brush} onPick={() => s.setBrush(s2.brush)} />
+        ))}
+        <VSep />
         {BRUSHES.map((b) => (
           <span key={b.brush} title={b.title} style={{ display: "flex" }}>
             <TextBtn active={s.brush === b.brush} accent={b.color} onClick={() => s.setBrush(b.brush)}>{b.label}</TextBtn>
@@ -103,13 +213,51 @@ export function ToolOptions() {
                 <TextBtn active={s.brush === b.brush} accent={b.color} onClick={() => s.setBrush(b.brush)}>{b.label}</TextBtn>
               </span>
             ))}
+            <VSep />
+            <span style={lbl}>Passagem</span>
+            {BLOCK_BRUSHES.map((b) => (
+              <span key={b.brush} title={b.title} style={{ display: "flex" }}>
+                <TextBtn active={s.brush === b.brush} accent={b.color} onClick={() => s.setBrush(b.brush)}>{b.label}</TextBtn>
+              </span>
+            ))}
           </>
         )}
         <VSep />
         <span style={lbl}>Tamanho {s.brushSize}</span>
         <input type="range" min={0} max={12} value={s.brushSize} onChange={(e) => s.setBrushSize(Number(e.target.value))} style={{ width: 90 }} />
         {/* força só faz sentido nos pincéis de relevo — grama/água é tudo-ou-nada */}
-        {["raise", "lower", "smooth", "flatten", "noise", "grab", "inflate", "scrape"].includes(s.brush) && (
+        {s.brush === "mountain" && (
+          <span
+            title="0 = cúpula lisa. Acima disso a montanha ganha cristas, sulcos e lascas em vez de morro redondo — é a deformidade de rocha da referência."
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <span style={lbl}>Aspereza {s.mountainRough.toFixed(2)}</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={s.mountainRough}
+              onChange={(e) => s.setMountainRough(Number(e.target.value))}
+              style={{ width: 90 }}
+            />
+          </span>
+        )}
+        {/* o promontório não tem Força: quem decide a altura é o ÂNGULO da face */}
+        {s.brush === "ledge" && (
+          <span
+            title="inclinação da face do morro. Mais graus = mais alto e mais íngreme, porque a altura sai da largura vezes a tangente do ângulo."
+            style={{ display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <span style={lbl}>Ângulo</span>
+            {LEDGE_ANGLES.map((g) => (
+              <TextBtn key={g} active={s.ledgeAngle === g} accent="#84cc16" onClick={() => s.setLedgeAngle(g)}>
+                {g}°
+              </TextBtn>
+            ))}
+          </span>
+        )}
+        {["raise", "lower", "smooth", "flatten", "noise", "grab", "inflate", "scrape", "mountain"].includes(s.brush) && (
           <span title="quanto o CENTRO do pincel se move por aplicação; a vizinhança acompanha em degradê (Proportional Editing)" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={lbl}>Força {s.brushStrength.toFixed(2)}</span>
             <input
@@ -151,7 +299,9 @@ export function ToolOptions() {
         <TextBtn active={s.spawnKind === "mob"} onClick={() => s.setSpawnKind("mob")}>Monstro</TextBtn>
         <TextBtn active={s.spawnKind === "npc"} onClick={() => s.setSpawnKind("npc")}>NPC</TextBtn>
         <TextBtn active={s.spawnKind === "road"} onClick={() => s.setSpawnKind("road")}>Nó de estrada</TextBtn>
+        <TextBtn active={s.spawnKind === "river"} onClick={() => s.setSpawnKind("river")}>Nó de rio</TextBtn>
         {s.spawnKind === "road" && <span style={{ font: "11px system-ui", color: ink.faint }}>Ponha ≥2 nós; depois "Estradas" liga eles.</span>}
+        {s.spawnKind === "river" && <span style={{ font: "11px system-ui", color: ink.faint }}>Ponha ≥2 nós; depois "Rio" liga eles. Sem nó nenhum, o rio sai de borda a borda.</span>}
         {s.spawnKind === "mob" && (
           <>
             <VSep />

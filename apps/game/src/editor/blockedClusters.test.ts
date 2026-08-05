@@ -22,6 +22,7 @@ function mapaDe(linhas: string[]): GameMap {
     heightmap: new Array(width * height).fill(0),
     collision,
     surface: [],
+    terrainStyle: {},
     waterLevel: null,
     props: [], spawns: [], triggers: [], ramps: [],
     lighting: { sunAzimuth: 40, sunElevation: 55, sunIntensity: 1.2, ambient: 0.75 },

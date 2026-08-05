@@ -17,6 +17,7 @@ function sampleMap(id: string, w = 3, h = 2): GameMap {
     heightmap: new Array(n).fill(0),
     collision: ["walkable", "wall", "walkable", "water", "walkable", "cliff"].slice(0, n) as GameMap["collision"],
     surface: [],
+    terrainStyle: {},
     waterLevel: null,
     props: [],
     spawns: [

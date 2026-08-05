@@ -1,7 +1,10 @@
+import { useMemo } from "react";
 import { useEditorStore, type EditScope } from "./editorStore";
+import { scopeCounts } from "./editScope";
 import { IconBtn, TextBtn, VSep } from "./EditorUi";
 import { ink } from "../ui/rpg";
-import { IcNew, IcUndo, IcRedo, IcPlay, IcSave, IcSnap } from "../ui/icons";
+import { IcNew, IcUndo, IcRedo, IcPlay, IcSave, IcSnap, IcTrash } from "../ui/icons";
+import { saveDraft } from "./draftStorage";
 
 /**
  * Barra superior slim: ações de arquivo (Novo/Undo/Redo/Play), visões de
@@ -22,6 +25,33 @@ export function TopBar({ onSave, saving, status }: { onSave: () => void; saving:
   const triggerCount = useEditorStore((s) => s.map?.triggers?.length ?? 0);
   const dirty = useEditorStore((s) => s.dirty);
   const mapName = useEditorStore((s) => s.map?.name ?? "—");
+  const clearAll = useEditorStore((s) => s.clearAll);
+
+  /**
+   * Zera o mapa aberto — campo plano andável, sem nada em cima.
+   *
+   * Diferente do "Novo mapa em branco": aqui o mapa continua sendo ELE (id,
+   * nome, tamanho e o vínculo `legacy` com o mapa do servidor), só sem conteúdo.
+   *
+   * O rascunho do localStorage é REESCRITO na hora, de propósito: o auto-save só
+   * roda a cada 12 s, e nesse intervalo o banner de "restaurar rascunho"
+   * continuaria oferecendo o mapa CHEIO — clicar nele desfazia a limpeza sem
+   * passar pelo undo. Reescrevendo, o que o banner oferece é o mapa já limpo.
+   */
+  const limparTudo = () => {
+    const m = useEditorStore.getState().map;
+    if (!m) return;
+    const cells = m.size.width * m.size.height;
+    const aviso =
+      `Zerar "${m.name}" por inteiro?\n\n` +
+      `${cells.toLocaleString("pt-BR")} células viram campo plano andável, e somem ` +
+      `${m.props.length} props, ${m.spawns.length} spawns e ${m.triggers?.length ?? 0} gatilhos.\n\n` +
+      `Ctrl+Z desfaz enquanto não salvar.`;
+    if (!confirm(aviso)) return;
+    clearAll();
+    const limpo = useEditorStore.getState().map;
+    if (limpo) saveDraft(limpo);
+  };
 
   const playCurrent = () => {
     const m = useEditorStore.getState().map;
@@ -63,6 +93,7 @@ export function TopBar({ onSave, saving, status }: { onSave: () => void; saving:
 
       <VSep />
       <IconBtn icon={<IcNew />} label="Novo mapa em branco" onClick={() => { if (confirm("Novo mapa em branco? Alterações não salvas serão perdidas.")) newMap(); }} />
+      <IconBtn icon={<IcTrash />} label="Limpar tudo — zera o mapa aberto (terreno, props, spawns, gatilhos)" danger onClick={limparTudo} />
       <IconBtn icon={<IcUndo />} label="Desfazer (Ctrl+Z)" shortcut="⌃Z" disabled={!canUndo} onClick={undo} />
       <IconBtn icon={<IcRedo />} label="Refazer (Ctrl+Y)" shortcut="⌃Y" disabled={!canRedo} onClick={redo} />
 
@@ -109,11 +140,34 @@ export function TopBar({ onSave, saving, status }: { onSave: () => void; saving:
  * Só aparece em mapa importado do rAthena: mapa autorado no editor não tem essa
  * divisão entre miolo e moldura.
  */
+/** quantas células o escopo ativo alcança */
+function celulasDoEscopo(
+  escopo: EditScope,
+  c: { inside: number; border: number; hole: number },
+  total: number,
+): number {
+  if (escopo === "inside") return c.inside;
+  if (escopo === "border") return c.border;
+  if (escopo === "hole") return c.hole;
+  return total;
+}
+
 function ScopePicker() {
   const escopo = useEditorStore((s) => s.editScope);
   const setEditScope = useEditorStore((s) => s.setEditScope);
-  const importado = useEditorStore((s) => s.map?.terrainMode === "square");
-  if (!importado) return null;
+  const map = useEditorStore((s) => s.map);
+  const importado = map?.terrainMode === "square";
+  /**
+   * Quantas celulas cada regiao tem — o numero que faltava na tela.
+   *
+   * Num `prt_fild08` importado a divisao e buraco 7.899 / borda 56.669 / dentro
+   * 95.432, e com "Dentro" escolhido o pincel alcanca 56,7% do mapa. Sem o
+   * numero, o resto "nao responde ao pincel" e parece defeito. Memorizado pela
+   * IDENTIDADE da colisao: o editor recria o array a cada gesto, e a varredura
+   * e de 160.000 celulas.
+   */
+  const contagem = useMemo(() => (map ? scopeCounts(map) : null), [map?.collision, map?.surface]);
+  if (!importado || !map) return null;
 
   const opcoes: Array<[EditScope, string, string]> = [
     ["inside", "Dentro", "edições só no miolo jogável (não encosta em buraco nem na moldura)"],
@@ -132,6 +186,14 @@ function ScopePicker() {
           </TextBtn>
         </span>
       ))}
+      {contagem && (
+        <span
+          title="quantas celulas o escopo ativo alcanca — o resto do mapa fica sombreado na cena"
+          style={{ font: "10px system-ui", color: ink.faint, marginLeft: 6 }}
+        >
+          {celulasDoEscopo(escopo, contagem, map.size.width * map.size.height).toLocaleString("pt-BR")} celulas
+        </span>
+      )}
     </>
   );
 }

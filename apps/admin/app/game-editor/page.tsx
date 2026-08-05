@@ -146,9 +146,30 @@ const GROUPS: Group[] = [
   {
     title: "Renderização & Névoa",
     fields: [
-      { key: "renderDistance", label: "Distância de renderização", step: 5, min: 10, max: 1000, hint: "raio — mantenha maior que o fim da névoa" },
-      { key: "fogNear", label: "Névoa — início", step: 2, min: 0, max: 1000, hint: "onde começa a desbotar" },
-      { key: "fogFar", label: "Névoa — fim (opaco)", step: 2, min: 1, max: 2000, hint: "menor = névoa mais perto" },
+      {
+        key: "renderDistance",
+        label: "Distância de renderização",
+        step: 5,
+        min: 10,
+        max: 1000,
+        hint: "raio do mundo desenhado, em unidades — é ELE que manda; a névoa abaixo é uma fração dele",
+      },
+      {
+        key: "fogNearFrac",
+        label: "Névoa — início (fração do raio)",
+        step: 0.01,
+        min: 0,
+        max: 1,
+        hint: "onde começa a desbotar. 0,69 de 130 = 90 unidades",
+      },
+      {
+        key: "fogFarFrac",
+        label: "Névoa — fim, opaco (fração do raio)",
+        step: 0.01,
+        min: 0.05,
+        max: 1,
+        hint: "abaixo de 1 sempre: é a folga que esconde a borda da malha. 0,92 de 130 = 120 unidades",
+      },
     ],
   },
 ];

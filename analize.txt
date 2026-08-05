@@ -1,0 +1,8 @@
+quero analisar a possibilidade de deixar todo mapa do jogo em cache para tentar diminuir o peso dos chuncks em renderização, isso faz sentido?
+deixar tudo já pré renderizado (ex: tela de loading para carregar o mapa, deixar o mapa que a pessoa vai usar em cache, enquanto ele está nesse mapa)
+
+
+estou sentindo o mapa lento, qual possibilidades eu posso fazer para deixar o jogo mais fluido? devo passar tudo para c++ e fazer un instalador?
+devo trazer tudo pra ts?
+devo seguir como eu estou e fazer correções?
+me da possibilidades

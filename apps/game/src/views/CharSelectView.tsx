@@ -4,12 +4,30 @@ import { gateway, type CharSummary } from "../net/gateway";
 import { useSessionStore } from "../net/sessionStore";
 import { usePlayerStore } from "../net/playerStore";
 import { JOB_NAMES } from "../character/jobNames";
-import { Panel, RpgBar, RpgButton, ink } from "../ui/rpg";
+import { CharacterPortrait } from "../hud/CharacterPortrait";
+import { CurvedBar } from "../ui/CurvedBar";
+import { CurvedBox } from "../ui/CurvedBox";
+import { FRAME_FONT, HP_FILL, SP_FILL } from "../ui/charFrame";
+import { LOGIN_COLORS, LOGIN_PANEL } from "../ui/login";
+import {
+  LoginBack,
+  LoginBackdrop,
+  LoginButton,
+  LoginError,
+  LoginField,
+  LoginPanel,
+  LoginTitle,
+  LOGIN_NUM,
+} from "../ui/LoginChrome";
 
 /**
  * Seleção de personagem, no formato do RO: fileira de slots, painel com a ficha
  * do escolhido, e as ações criar/apagar/entrar. Quem manda na lista é o
  * char-server — aqui só desenhamos o que veio pelo gateway.
+ *
+ * A casa é a mesma do `/login` (`ui/LoginChrome`): cena pintada de fundo e
+ * painel com a moldura de folhagem. As duas telas são vistas em sequência, e
+ * qualquer diferença de moldura, campo ou botão entre elas salta aos olhos.
  */
 export function CharSelectView() {
   const navigate = useNavigate();
@@ -65,11 +83,37 @@ export function CharSelectView() {
   };
 
   return (
-    <div style={backdrop}>
-      <Panel style={{ width: 720, padding: 20 }}>
-        <h1 style={title}>Escolha seu personagem</h1>
+    <LoginBackdrop>
+      {/* o palco posiciona tudo por cima da pintura, então o painel precisa de
+          um container próprio para se centrar nele — e de `overflow: auto`,
+          porque nove slots numa janela baixa passam da altura da cena */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          overflow: "auto",
+          padding: 16,
+        }}
+      >
+      <LoginPanel width={LOGIN_PANEL.charW}>
+        {/* Voltar ao login. Sai pelo `reset` da sessão: o gateway derruba as
+            conexões de login/char junto, e sem isso a próxima entrada acharia
+            uma conta já autenticada do outro lado. */}
+        <div style={{ position: "absolute", left: 30, top: 26 }}>
+          <LoginBack
+            titulo="Voltar ao login"
+            onClick={() => {
+              useSessionStore.getState().reset();
+              navigate("/login");
+            }}
+          />
+        </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+        <LoginTitle sub={`${chars.length} de ${total} slots`}>Escolha seu personagem</LoginTitle>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
           {Array.from({ length: total }, (_, slot) => (
             <SlotCard
               key={slot}
@@ -89,52 +133,67 @@ export function CharSelectView() {
         </div>
 
         {creatingAt !== null ? (
-          <div style={{ marginTop: 18, display: "flex", gap: 8, alignItems: "flex-end" }}>
-            <label style={{ display: "grid", gap: 4, font: "12px system-ui", color: ink.dim }}>
-              Nome do personagem (slot {creatingAt})
-              <input
+          <div style={{ marginTop: 22, display: "flex", gap: 12, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <LoginField
+                label={`Nome do personagem (slot ${creatingAt})`}
                 autoFocus
                 value={newName}
                 maxLength={23}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                style={input}
               />
-            </label>
-            <RpgButton color="blue" onClick={create}>
+            </div>
+            <LoginButton primario onClick={create} disabled={!newName.trim()}>
               Criar
-            </RpgButton>
-            <RpgButton onClick={() => setCreatingAt(null)}>Cancelar</RpgButton>
+            </LoginButton>
+            <LoginButton onClick={() => setCreatingAt(null)}>Cancelar</LoginButton>
           </div>
         ) : (
-          <div style={{ marginTop: 18, display: "flex", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ marginTop: 22, display: "flex", gap: 24, alignItems: "flex-start" }}>
             <CharSheet char={current} />
-            <div style={{ display: "grid", gap: 8 }}>
-              <RpgButton
-                color="blue"
-                onClick={() => current && enter(current.slot)}
-                style={{ padding: "8px 18px", opacity: current ? 1 : 0.4 }}
-              >
+            <div style={{ display: "grid", gap: 10, minWidth: 170 }}>
+              <LoginButton primario disabled={!current} onClick={() => current && enter(current.slot)}>
                 Entrar no jogo
-              </RpgButton>
-              <RpgButton
-                color="brown"
+              </LoginButton>
+              <LoginButton
+                disabled={!current}
                 onClick={() => current && gateway().emit("char:delete", { gid: current.gid, email: "" })}
-                style={{ opacity: current ? 1 : 0.4 }}
               >
                 Apagar
-              </RpgButton>
+              </LoginButton>
             </div>
           </div>
         )}
 
-        {phase === "entering" && <p style={{ ...hint, color: ink.dim }}>entrando no mapa…</p>}
-        {error && <p style={errorStyle}>{error}</p>}
-      </Panel>
-    </div>
+        {phase === "entering" && (
+          <p
+            style={{
+              margin: "16px 0 0",
+              fontFamily: FRAME_FONT,
+              fontSize: 13,
+              color: LOGIN_COLORS.inkDim,
+              textAlign: "center",
+            }}
+          >
+            entrando no mapa…
+          </p>
+        )}
+        {error && <LoginError>{error}</LoginError>}
+      </LoginPanel>
+      </div>
+    </LoginBackdrop>
   );
 }
 
+/**
+ * Cartão de slot: o personagem, ou o convite para criar.
+ *
+ * A moldura é a curva das barras (`ui/CurvedBox`), a mesma dos slots do
+ * inventário e da barra de habilidades — é a peça que o jogo usa para "uma coisa
+ * que se escolhe". O selecionado ganha o mesmo dourado do botão primário: a
+ * mesma cor querendo dizer a mesma coisa na tela inteira.
+ */
 function SlotCard({
   slot,
   char,
@@ -152,95 +211,167 @@ function SlotCard({
     <button
       onClick={char ? onSelect : onCreate}
       style={{
-        width: 150,
-        height: 130,
-        borderRadius: 10,
-        border: `1px solid ${selected ? "#6366f1" : ink.border}`,
-        background: selected ? "rgba(99,102,241,0.14)" : "rgba(255,255,255,0.04)",
-        color: ink.text,
+        appearance: "none",
+        border: "none",
+        background: "transparent",
+        padding: 0,
         cursor: "pointer",
-        display: "grid",
-        placeItems: "center",
-        gap: 4,
-        padding: 8,
-        textAlign: "center",
       }}
     >
-      {char ? (
-        <>
-          <span style={{ font: "600 14px system-ui" }}>{char.name}</span>
-          <span style={{ font: "11px system-ui", color: ink.dim }}>
-            {JOB_NAMES[char.job] ?? `classe ${char.job}`}
-          </span>
-          <span style={{ font: "11px system-ui", color: ink.faint }}>Base {char.level}</span>
-        </>
-      ) : (
-        <>
-          <span style={{ font: "22px system-ui", color: ink.faint }}>+</span>
-          <span style={{ font: "11px system-ui", color: ink.faint }}>slot {slot} vazio</span>
-        </>
-      )}
+      <CurvedBox
+        border={9}
+        background={selected ? "rgba(150,112,38,0.5)" : "rgba(10,8,5,0.66)"}
+        style={{ width: 178, height: 140 }}
+        inner={{
+          display: "grid",
+          placeContent: "center",
+          gap: 5,
+          padding: 12,
+          textAlign: "center",
+          fontFamily: FRAME_FONT,
+        }}
+      >
+        {char ? (
+          <>
+            {/* nome de personagem do RO vai a 23 caracteres e estourava o
+                cartão: uma linha só, com reticência, como no inventário */}
+            <span
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: LOGIN_COLORS.ink,
+                textShadow: `0 1px 3px ${LOGIN_COLORS.shadow}`,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: 150,
+              }}
+            >
+              {char.name}
+            </span>
+            <span style={{ fontSize: 12, color: LOGIN_COLORS.inkDim }}>
+              {JOB_NAMES[char.job] ?? `classe ${char.job}`}
+            </span>
+            <span style={{ fontSize: 12, color: LOGIN_COLORS.inkFaint, ...LOGIN_NUM }}>
+              Base {char.level}
+            </span>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: 26, color: LOGIN_COLORS.inkFaint, lineHeight: 1 }}>+</span>
+            <span style={{ fontSize: 12, color: LOGIN_COLORS.inkFaint }}>slot {slot} vazio</span>
+          </>
+        )}
+      </CurvedBox>
     </button>
   );
 }
 
+/**
+ * A ficha do personagem escolhido.
+ *
+ * As barras são as MESMAS do HUD (`ui/CurvedBar` com as curvas de preenchimento
+ * de `ui/charFrame`): a primeira vez que o jogador vê o HP dele é aqui, e mudar
+ * de barra na tela seguinte seria estranho.
+ */
 function CharSheet({ char }: { char: CharSummary | null }) {
   if (!char) {
-    return <div style={{ flex: 1, color: ink.faint, font: "12px system-ui" }}>Nenhum personagem no slot.</div>;
+    return (
+      <div style={{ flex: 1, fontFamily: FRAME_FONT, fontSize: 14, color: LOGIN_COLORS.inkFaint }}>
+        Nenhum personagem neste slot.
+      </div>
+    );
   }
 
+  const atributos: [string, number][] = [
+    ["STR", char.str],
+    ["AGI", char.agi],
+    ["VIT", char.vit],
+    ["INT", char.int],
+    ["DEX", char.dex],
+    ["LUK", char.luk],
+  ];
+
   return (
-    <div style={{ flex: 1, display: "grid", gap: 8 }}>
-      <div style={{ font: "600 16px system-ui", color: ink.text }}>{char.name}</div>
-      <div style={{ font: "12px system-ui", color: ink.dim }}>
-        {JOB_NAMES[char.job] ?? `classe ${char.job}`} · Base {char.level} · Job {char.jobLevel} ·{" "}
-        {char.mapName || "—"}
+    <div style={{ flex: 1, display: "flex", gap: 18, fontFamily: FRAME_FONT }}>
+      {/**
+       * O MINI PERSONAGEM — o mesmo retrato 3D do HUD (`hud/CharacterPortrait`).
+       *
+       * Faltava, e ele é o que faz a ficha parecer um personagem em vez de uma
+       * tabela: é a primeira vez que o jogador vê o boneco que vai controlar.
+       *
+       * `inteiro` enquadra dos pés ao topo (não o busto do medalhão), e
+       * `giravel` deixa arrastar para girar — a mesma janela de Status já faz
+       * isso, e aqui é onde se escolhe o personagem, então poder olhá-lo de
+       * todos os lados é o mínimo.
+       *
+       * O modelo é o `knight` para toda classe: o kit tem três bonecos e nenhum
+       * mapeamento classe→modelo existe ainda (é a mesma lacuna que o `/play`
+       * tem, ver `CHARACTER_URLS`). Escolher um por classe seria inventar.
+       */}
+      <div
+        style={{
+          position: "relative",
+          width: 150,
+          height: 210,
+          flex: "0 0 auto",
+          borderRadius: 8,
+          overflow: "hidden",
+          background: "linear-gradient(180deg, rgba(30,24,14,0.6), rgba(8,6,4,0.75))",
+          boxShadow: `inset 0 0 0 1px ${LOGIN_COLORS.goldFaint}`,
+        }}
+      >
+        <CharacterPortrait dono="char-select" characterKey="knight" inteiro fundo={false} giravel />
       </div>
-      <RpgBar value={char.hp} max={char.maxHp} color="red" width={260} label={`HP ${char.hp}/${char.maxHp}`} />
-      <RpgBar value={char.sp} max={char.maxSp} color="yellow" width={260} label={`SP ${char.sp}/${char.maxSp}`} />
-      <div style={{ display: "flex", gap: 12, font: "12px system-ui", color: ink.dim, flexWrap: "wrap" }}>
-        <span>STR {char.str}</span>
-        <span>AGI {char.agi}</span>
-        <span>VIT {char.vit}</span>
-        <span>INT {char.int}</span>
-        <span>DEX {char.dex}</span>
-        <span>LUK {char.luk}</span>
+
+      <div style={{ flex: 1, display: "grid", gap: 10, alignContent: "start", minWidth: 0 }}>
+      <div
+        style={{
+          fontSize: 22,
+          fontWeight: 700,
+          color: LOGIN_COLORS.ink,
+          textShadow: `0 2px 5px ${LOGIN_COLORS.shadow}`,
+        }}
+      >
+        {char.name}
       </div>
-      <div style={{ font: "12px system-ui", color: ink.faint }}>{char.zeny.toLocaleString("pt-BR")} zeny</div>
+      <div style={{ fontSize: 13, color: LOGIN_COLORS.inkDim }}>
+        {JOB_NAMES[char.job] ?? `classe ${char.job}`} ·{" "}
+        <span style={LOGIN_NUM}>Base {char.level}</span> ·{" "}
+        <span style={LOGIN_NUM}>Job {char.jobLevel}</span> · {char.mapName || "—"}
+      </div>
+
+      <div style={{ display: "grid", gap: 6, maxWidth: 340 }}>
+        <CurvedBar
+          value={char.hp}
+          max={char.maxHp}
+          height={20}
+          fill={HP_FILL}
+          left="HP"
+          right={`${char.hp} / ${char.maxHp}`}
+        />
+        <CurvedBar
+          value={char.sp}
+          max={char.maxSp}
+          height={20}
+          fill={SP_FILL}
+          left="SP"
+          right={`${char.sp} / ${char.maxSp}`}
+        />
+      </div>
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13, color: LOGIN_COLORS.inkDim }}>
+        {atributos.map(([nome, v]) => (
+          <span key={nome}>
+            {nome} <span style={{ ...LOGIN_NUM, color: LOGIN_COLORS.ink }}>{v}</span>
+          </span>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13, color: LOGIN_COLORS.inkFaint, ...LOGIN_NUM }}>
+        {char.zeny.toLocaleString("pt-BR")} de ouro
+      </div>
+      </div>
     </div>
   );
 }
-
-const backdrop: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  display: "grid",
-  placeItems: "center",
-  background: "radial-gradient(circle at 50% 30%, #1b2233 0%, #070910 70%)",
-  overflow: "auto",
-};
-
-const title: React.CSSProperties = { margin: 0, font: "700 20px system-ui", color: ink.text };
-
-const input: React.CSSProperties = {
-  background: "rgba(0,0,0,0.45)",
-  border: `1px solid ${ink.border}`,
-  borderRadius: 7,
-  color: ink.text,
-  font: "13px system-ui",
-  padding: "8px 10px",
-  outline: "none",
-  width: 240,
-};
-
-const hint: React.CSSProperties = { margin: "12px 0 0", font: "12px system-ui" };
-
-const errorStyle: React.CSSProperties = {
-  margin: "12px 0 0",
-  padding: "8px 10px",
-  borderRadius: 7,
-  background: "rgba(220,38,38,0.14)",
-  border: "1px solid rgba(248,113,113,0.4)",
-  color: "#fca5a5",
-  font: "12px system-ui",
-};

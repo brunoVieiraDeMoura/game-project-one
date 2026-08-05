@@ -123,6 +123,42 @@ const TARGET_TYPE_MAP: Record<string, { type: Skill["type"]; target: Skill["targ
  * rAthena SkillDatabase::parseNode semantics. Returns scalar when the value
  * is uniform across levels, otherwise an array of length maxLevel.
  */
+/**
+ * Área de uma skill de CHÃO, que não mora no `SplashArea`.
+ *
+ * Skill que planta unidade no chão guarda a área em dois lugares, e são
+ * mecanismos diferentes:
+ *
+ *  • **`Unit.Layout`** — quantas CÉLULAS de unidade são plantadas, e ele é o
+ *    RAIO: `skill_init_unit_layout` (skill.cpp:14122) monta o quadrado de lado
+ *    `2i+1` com deslocamentos de `−i` a `+i`. Layout 4, da Storm Gust, é o 9×9
+ *    que todo mundo conhece;
+ *  • **`Unit.Range`** — quão longe CADA célula plantada bate. É o que dá a área
+ *    da Thunderstorm, que não tem `Layout` nenhum: uma unidade só, batendo a 2
+ *    de distância — o 5×5 clássico.
+ *
+ * Para a prévia de mira interessa a pegada visível, então vale o que existir,
+ * nessa ordem. Lendo só o `SplashArea`, TODA skill de chão saía com área zero —
+ * e a prévia não tinha o que desenhar justamente onde ela mais importa.
+ *
+ * `-1` é o layout ESPECIAL (parede, linha, cruz — formas montadas à mão em
+ * `skill_init_unit_layout`); ali não existe raio, e devolver um número seria
+ * desenhar um círculo que não é o que a skill pega.
+ */
+export function raioDaUnidade(
+  unit: { Layout?: number | LevelEntry[]; Range?: number | LevelEntry[] } | undefined,
+  maxLevel: number,
+): number | number[] | undefined {
+  return semNegativos(perLevelInt(unit?.Layout, "Size", maxLevel)) ?? semNegativos(perLevelInt(unit?.Range, "Size", maxLevel));
+}
+
+/** `-1` (forma especial) não é raio: vira "não sei desenhar isto" */
+export function semNegativos(v: number | number[] | undefined): number | number[] | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === "number") return v < 0 ? undefined : v;
+  return v.map((n) => (n < 0 ? 0 : n));
+}
+
 function perLevelInt(
   raw: number | LevelEntry[] | undefined,
   valueKey: string,
@@ -332,7 +368,7 @@ function main() {
       flags: flagArray(raw.Flags),
       range: perLevelInt(raw.Range, "Size", max) ?? 0,
       hits: perLevelInt(raw.HitCount, "Count", max) ?? 1,
-      areaRadius: perLevelInt(raw.SplashArea, "Area", max),
+      areaRadius: perLevelInt(raw.SplashArea, "Area", max) ?? raioDaUnidade(raw.Unit, max),
       knockback: perLevelInt(raw.Knockback, "Amount", max),
       activeInstances: perLevelInt(raw.ActiveInstance, "Max", max),
       giveAp: perLevelInt(raw.GiveAp, "Amount", max),

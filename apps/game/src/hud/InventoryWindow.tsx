@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
+import { useItemCatalog } from "../net/itemCatalog";
 import { useHudStore } from "./hudStore";
 import { IconSquare } from "../ui/rpg";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
@@ -8,11 +9,15 @@ import { CHAT_ART } from "../ui/chatFrame";
 import { CurvedBox } from "../ui/CurvedBox";
 import { useNineSlice } from "../ui/nineSlice";
 import { SLOT_FRAME } from "../ui/skillBar";
+import { CHROME, TYPE } from "../ui/windowChrome";
+import { ChatScrollbar } from "./ChatScrollbar";
+import { ScrollbarHider } from "../ui/ScrollbarHider";
 import {
   BAG_ART,
   BAG_COLORS,
   BAG_CONTENT,
   BAG_GRID,
+  encurtarNome,
   BAG_LAYOUT,
   BAG_PLATE,
   BAG_TABS,
@@ -56,6 +61,18 @@ export function InventoryWindow() {
   const stats = usePlayerStore((s) => s.stats);
   const fechar = () => useHudStore.getState().setWindow(null);
 
+  /**
+   * Nome de verdade dos itens da bolsa.
+   *
+   * O pedido é pelo INVENTÁRIO INTEIRO, não pela aba visível: trocar de aba não
+   * pode disparar rede, e o `ensure` só busca o que ainda falta — pedir tudo de
+   * uma vez é uma requisição contra três.
+   */
+  const nomes = useItemCatalog((s) => s.byId);
+  useEffect(() => {
+    useItemCatalog.getState().ensure(inventory.map((it) => it.itemId));
+  }, [inventory]);
+
   const items = inventory.filter((it) =>
     cat === "consumiveis"
       ? CONSUMABLE_TYPES.has(it.type)
@@ -74,12 +91,34 @@ export function InventoryWindow() {
     if (CONSUMABLE_TYPES.has(item.type)) gateway().emit("item:use", { index: item.index });
   };
 
-  const total = BAG_GRID.cols * BAG_GRID.rows;
   const gap = px(BAG_GRID.gap);
+  const barraW = px(BAG_GRID.barra);
+  /** largura útil da grade: o vão da arte menos a coluna da barra de rolagem */
+  const gradeW = px(BAG_LAYOUT.grid.w) - barraW - px(BAG_GRID.barraGap);
   // O lado do slot SAI da grade, não de um número da arte: o ícone e a
   // quantidade se medem por ele. Com tamanho fixo, o ícone ficava maior que o
   // miolo do slot e vazava por cima da moldura.
-  const slotPx = (px(BAG_LAYOUT.grid.w) - gap * (BAG_GRID.cols - 1)) / BAG_GRID.cols;
+  const slotPx = (gradeW - gap * (BAG_GRID.cols - 1)) / BAG_GRID.cols;
+  /**
+   * Quantos slots DESENHAR.
+   *
+   * Enche a última fileira para a grade não terminar num degrau, e nunca mostra
+   * menos que a janela cabe — assim uma bolsa quase vazia continua com a moldura
+   * preenchida, como na referência.
+   */
+  const visiveis = BAG_GRID.cols * BAG_GRID.rows;
+  const total = Math.max(visiveis, Math.ceil(items.length / BAG_GRID.cols) * BAG_GRID.cols);
+
+  /**
+   * A rolagem é a MESMA do chat (`hud/ChatScrollbar`).
+   *
+   * O navegador não veste a barra do sistema com imagem, então a nativa é
+   * escondida (`.chat-scroll`, via `ui/ScrollbarHider`) e esta é desenhada por
+   * cima. `auto` a faz sumir por LARGURA ZERO quando não há excedente —
+   * desmontá-la seria pior, porque quem mede o excedente precisa do trilho no
+   * DOM para descobrir que ela voltou a ser necessária.
+   */
+  const rolavel = useRef<HTMLDivElement>(null);
 
   return (
     <div style={{ position: "relative", width: BAG_WIDTH, height: (BAG_WIDTH * BAG_PLATE.h) / BAG_PLATE.w }}>
@@ -98,7 +137,7 @@ export function InventoryWindow() {
           justifyContent: "center",
           fontFamily: FRAME_FONT,
           fontWeight: 700,
-          fontSize: px(19),
+          fontSize: px(TYPE.title),
           lineHeight: 1,
           color: BAG_COLORS.ink,
           textShadow: `0 1px 2px ${BAG_COLORS.shadow}`,
@@ -114,26 +153,39 @@ export function InventoryWindow() {
         ))}
       </div>
 
-      <div
-        style={{
-          ...caixa(BAG_LAYOUT.grid),
-          display: "grid",
-          gridTemplateColumns: `repeat(${BAG_GRID.cols}, 1fr)`,
-          gridTemplateRows: `repeat(${BAG_GRID.rows}, 1fr)`,
-          gap,
-        }}
-      >
+      <div style={{ ...caixa(BAG_LAYOUT.grid), display: "flex", gap: px(BAG_GRID.barraGap) }}>
+        <ScrollbarHider />
+        <div
+          ref={rolavel}
+          className="chat-scroll"
+          style={{
+            flex: "1 1 auto",
+            minWidth: 0,
+            overflowY: "auto",
+            display: "grid",
+            gridTemplateColumns: `repeat(${BAG_GRID.cols}, 1fr)`,
+            // `auto` e não `1fr`: com fileira fracionária a grade tentaria
+            // caber TODAS na altura visível, e os slots encolheriam conforme o
+            // inventário enchesse. A fileira tem a altura do slot, e o que
+            // passar da moldura rola.
+            gridAutoRows: slotPx,
+            gap,
+            alignContent: "start",
+          }}
+        >
         {Array.from({ length: total }).map((_, i) => {
           const it = items[i];
           return (
             <Slot
               key={it ? it.index : `vazio-${i}`}
-              rotulo={it ? String(it.itemId) : undefined}
+              // o nome de verdade, do catálogo (`net/itemCatalog`). Enquanto ele
+              // não volta da API, o `#id` — a lacuna honesta.
+              rotulo={it ? encurtarNome(nomes[it.itemId]?.name ?? `#${it.itemId}`) : undefined}
               quantidade={it && it.amount > 1 ? it.amount : undefined}
               equipado={it?.equipped}
               titulo={
                 it
-                  ? `#${it.itemId}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — clique usa/equipa, botão direito joga no chão`
+                  ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — clique usa/equipa, botão direito joga no chão`
                   : undefined
               }
               onClick={it ? () => usar(it) : undefined}
@@ -147,6 +199,8 @@ export function InventoryWindow() {
             />
           );
         })}
+        </div>
+        <ChatScrollbar alvo={rolavel} revisao={items.length} largura={barraW} auto />
       </div>
 
       <Contador
@@ -174,7 +228,7 @@ export function InventoryWindow() {
             right: px(BAG_CONTENT.x),
             top: px(150),
             textAlign: "center",
-            font: `12px ${FRAME_FONT}`,
+            font: `${px(TYPE.label)}px ${FRAME_FONT}`,
             color: BAG_COLORS.inkDim,
             textShadow: `0 1px 2px ${BAG_COLORS.shadow}`,
             pointerEvents: "none",
@@ -201,7 +255,7 @@ function Aba({
 }) {
   return (
     <CurvedBox
-      border={px(7)}
+      border={px(CHROME.tabBorder)}
       background={cor}
       style={{
         flex: 1,
@@ -227,7 +281,7 @@ function Aba({
         style={{
           fontFamily: FRAME_FONT,
           fontWeight: 700,
-          fontSize: px(9),
+          fontSize: px(TYPE.tab),
           lineHeight: 1,
           color: BAG_COLORS.ink,
           textShadow: `0 1px 2px ${BAG_COLORS.shadow}`,
@@ -268,7 +322,18 @@ function Slot({
 }) {
   const frame = useNineSlice(SLOT_FRAME);
   const [hover, setHover] = useState(false);
-  const borda = Math.max(6, lado * 0.24);
+
+  /**
+   * O nome mora numa faixa ABAIXO do quadrado, não dentro dele.
+   *
+   * Dentro cabia uma palavra e meia — e nome de item do RO ("Wing Of Fly",
+   * "Awakening Potion") passa longe disso, então o rótulo saía cortado ou
+   * ilegível por cima do ícone. Aqui ele tem a largura inteira da célula e uma
+   * linha só, com reticência quando não couber.
+   */
+  const alturaNome = Math.max(9, lado * 0.22);
+  const quadrado = Math.max(12, lado - alturaNome - lado * 0.06);
+  const borda = Math.max(6, quadrado * 0.24);
 
   return (
     <div
@@ -285,13 +350,18 @@ function Slot({
       onDragStart={(e) => indice != null && e.dataTransfer.setData("application/x-ro-item", String(indice))}
       title={titulo}
       style={{
-        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "flex-start",
         cursor: onClick ? "pointer" : "default",
         transform: hover && onClick ? "translateY(-2px)" : "none",
         filter: hover && onClick ? "brightness(1.12)" : undefined,
         transition: "transform 110ms ease-out, filter 110ms ease-out",
       }}
     >
+      {/* o quadrado do ícone — tudo o que era `inset: 0` mora aqui dentro */}
+      <div style={{ position: "relative", width: quadrado, height: quadrado, flex: "0 0 auto" }}>
       <div
         style={{
           position: "absolute",
@@ -327,7 +397,10 @@ function Slot({
             pointerEvents: "none",
           }}
         >
-          <IconSquare seed={`item-${rotulo}`} size={lado * 0.56} label={rotulo} />
+          {/* sem `label`: o nome saiu de DENTRO do quadrado e foi para a faixa
+              abaixo dele (ver `Slot`) — cabia uma palavra e meia aqui, e nome de
+              item do RO passa longe disso */}
+          <IconSquare seed={`item-${rotulo}`} size={lado * 0.56} />
         </div>
       )}
       {equipado && (
@@ -360,6 +433,35 @@ function Slot({
           {quantidade}
         </span>
       )}
+      </div>
+
+      {/**
+       * A faixa do nome, sob o quadrado.
+       *
+       * Uma linha e reticência: nome de item do RO chega a três palavras, e
+       * deixar quebrar empurraria a fileira de baixo para fora da grade — a
+       * altura de cada célula é fixa pela arte da bolsa.
+       */}
+      {rotulo && (
+        <span
+          style={{
+            width: "100%",
+            marginTop: lado * 0.02,
+            textAlign: "center",
+            fontFamily: FRAME_FONT,
+            fontSize: alturaNome * 0.86,
+            lineHeight: 1,
+            color: BAG_COLORS.ink,
+            textShadow: `0 1px 2px ${BAG_COLORS.shadow}`,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            pointerEvents: "none",
+          }}
+        >
+          {rotulo}
+        </span>
+      )}
     </div>
   );
 }
@@ -378,7 +480,7 @@ function Contador({
 }) {
   return (
     <CurvedBox
-      border={px(8)}
+      border={px(CHROME.boxBorder)}
       background={BAG_COLORS.counter}
       style={caixa(rect)}
       inner={{ display: "flex", alignItems: "center", gap: px(4), padding: `0 ${px(6)}px`, overflow: "hidden" }}
@@ -387,13 +489,13 @@ function Contador({
         src={icone}
         alt=""
         draggable={false}
-        style={{ height: px(15), width: "auto", flex: "none", pointerEvents: "none" }}
+        style={{ height: px(CHROME.iconH), width: "auto", flex: "none", pointerEvents: "none" }}
       />
       <span
         style={{
           fontFamily: FRAME_FONT,
           fontWeight: 700,
-          fontSize: px(10),
+          fontSize: px(TYPE.label),
           lineHeight: 1,
           color: BAG_COLORS.ink,
           textShadow: `0 1px 2px ${BAG_COLORS.shadow}`,
@@ -407,7 +509,7 @@ function Contador({
           marginLeft: "auto",
           fontFamily: FRAME_NUM_FONT,
           fontVariantNumeric: FRAME_NUM_VARIANT,
-          fontSize: px(10),
+          fontSize: px(TYPE.label),
           lineHeight: 1,
           color: BAG_COLORS.ink,
           textShadow: `0 1px 2px ${BAG_COLORS.shadow}`,

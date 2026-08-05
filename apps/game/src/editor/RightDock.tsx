@@ -3,6 +3,7 @@ import { Palette } from "./Palette";
 import { ScenePanel } from "./ScenePanel";
 import { ProceduralPanel } from "./ProceduralPanel";
 import { TerrainPanel } from "./TerrainPanel";
+import { TexturePanel } from "./TexturePanel";
 import { PrefabPanel } from "./PrefabPanel";
 import { Hierarchy } from "./Hierarchy";
 import { BlockedPanel } from "./BlockedPanel";
@@ -48,6 +49,9 @@ export function RightDock() {
       </DockSection>
       <DockSection icon={<IcTerrain size={15} />} title="Relevo, água & estradas" defaultOpen={false}>
         <TerrainPanel />
+      </DockSection>
+      <DockSection icon={<IcLayers size={15} />} title="Texturas do terreno" defaultOpen={false}>
+        <TexturePanel />
       </DockSection>
       <DockSection icon={<IcSparkles size={15} />} title="Vegetação & construções" defaultOpen={false}>
         <ProceduralPanel embedded />

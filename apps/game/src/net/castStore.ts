@@ -32,3 +32,27 @@ export const useCastStore = create<CastState>((set) => ({
     set(duracaoMs >= 150 ? { atual: { skillId, fim: performance.now() + duracaoMs, duracaoMs } } : { atual: null }),
   parar: () => set({ atual: null }),
 }));
+
+/**
+ * CONJURANDO AGORA — e por isso o personagem não pode andar.
+ *
+ * Não é regra nossa, é a do servidor: `unit_can_move` (unit.cpp:1813) devolve
+ * `false` enquanto `ud->skilltimer` está ativo. Sem consultar isto, o cliente
+ * PREVIA uma caminhada que o rAthena ia recusar — e recusar do pior jeito, porque
+ * `unit_walktoxy` com pedido de cliente não descarta: ele AGENDA
+ * (`add_timer(ud->canmove_tick+1, unit_delay_walktoxy_timer, …)`, unit.cpp:876).
+ * O clique dado no meio da conjuração ressuscitava depois dela e levava o
+ * personagem para um destino de segundos atrás.
+ *
+ * Compara com `fim` em vez de olhar só `atual !== null`: a conjuração
+ * INTERROMPIDA nem sempre traz um `skill:cast` para limpar o store, e um `atual`
+ * pendurado travaria a caminhada para sempre. O relógio resolve sozinho.
+ *
+ * Fora daqui, de propósito: `SA_FREECAST` (o Sage anda conjurando) é a exceção
+ * do próprio `unit_can_move` e vai precisar do estado da skill, que o cliente
+ * ainda não tem. Enquanto isso, bloquear é o que bate com o servidor.
+ */
+export function estaCastando(agora: number): boolean {
+  const atual = useCastStore.getState().atual;
+  return atual !== null && agora < atual.fim;
+}

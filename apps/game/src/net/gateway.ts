@@ -1,4 +1,14 @@
 import { io, type Socket } from "socket.io-client";
+import {
+  aplicarPingSimulado,
+  guardarPing,
+  lerPingGuardado,
+  pingDaUrl,
+  SEM_PING,
+  type PingSimulado,
+  type SocketEmbrulhavel,
+} from "./pingSimulado";
+import { ativo, quadro, registrarEvento, registrarMeta } from "../core/diagnostics/flightRecorder";
 
 /**
  * Único ponto de contato com o gateway (apps/gateway, porta 4100).
@@ -107,6 +117,14 @@ export interface ServerEvents {
   "self:move": (p: { from: Cell; to: Cell; startTime: number }) => void;
   /** teleporte/empurrão: nova célula do próprio personagem, sem caminhada */
   "self:warp": (p: Cell) => void;
+  /**
+   * O alvo está longe demais para bater.
+   *
+   * O rAthena NÃO persegue por conta do jogador (só monstro faz isso,
+   * unit.cpp:3259): ele manda esta resposta e desiste. Aproximar-se é trabalho
+   * do cliente, e é o que o cliente oficial faz.
+   */
+  "attack:too-far": (p: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void;
   "self:stat": (p: { name: string; id: number; value: number; bonus?: number }) => void;
   "self:status": (p: Record<string, number>) => void;
   "inv:list": (p: InventoryItemPayload[]) => void;
@@ -137,7 +155,36 @@ export interface ServerEvents {
   }) => void;
   "entity:hp": (p: { gid: number; hp: number; maxHp: number }) => void;
   "chat:message": (p: { gid?: number; text: string; scope: string }) => void;
+  "friend:list": (p: FriendPayload[]) => void;
+  "friend:state": (p: { accountId: number; charId: number; online: boolean }) => void;
+  "friend:request": (p: { accountId: number; charId: number; name: string }) => void;
+  "friend:added": (p: { result: number; reason: string; friend: FriendPayload | null }) => void;
+  "friend:removed": (p: { accountId: number; charId: number }) => void;
+  "guild:members": (p: GuildMemberPayload[]) => void;
+  "ignore:list": (p: string[]) => void;
   "session:closed": (p: { stage: string; reason: string }) => void;
+}
+
+/**
+ * Amigo da lista do servidor. Sem nível, classe ou mapa DE PROPÓSITO: em
+ * PACKETVER 20130618 o ZC_FRIENDS_LIST só carrega ids e nome (clif.cpp:15355).
+ */
+export interface FriendPayload {
+  accountId: number;
+  charId: number;
+  name: string;
+  online: boolean;
+}
+
+/** Membro da guilda (ZC_MEMBERMGR_INFO): esta, sim, traz nível e classe. */
+export interface GuildMemberPayload {
+  accountId: number;
+  charId: number;
+  name: string;
+  job: number;
+  level: number;
+  online: boolean;
+  position: number;
 }
 
 export interface ClientEvents {
@@ -163,6 +210,14 @@ export interface ClientEvents {
   "npc:menu": (p: { gid: number; choice: number }) => void;
   "npc:close": (p: { gid: number }) => void;
   "entity:info": (p: { gid: number }) => void;
+  "friend:add": (p: { name: string }) => void;
+  "friend:remove": (p: { accountId: number; charId: number }) => void;
+  "friend:answer": (p: { accountId: number; charId: number; accept: boolean }) => void;
+  "guild:request": () => void;
+  "ignore:add": (p: { name: string }) => void;
+  "ignore:remove": (p: { name: string }) => void;
+  /** gasta 1 ponto de habilidade (CZ_UPGRADE_SKILLLEVEL); o servidor valida */
+  "skill:raise": (p: { skillId: number }) => void;
 }
 
 export type GatewaySocket = Socket<ServerEvents, ClientEvents>;
@@ -177,13 +232,126 @@ let socket: GatewaySocket | null = null;
 export function gateway(): GatewaySocket {
   if (!socket) {
     socket = io(GATEWAY_URL, { transports: ["websocket"] });
-    if (import.meta.env.DEV) {
+    // `typeof window` porque este módulo é alcançado por TESTE (ambiente node),
+    // onde `import.meta.env.DEV` é verdadeiro e `window` não existe — a mesma
+    // guarda que o `net/movDebug` já usa
+    if (import.meta.env.DEV && typeof window !== "undefined") {
       // console do navegador fala com o servidor: útil para @comandos de GM e
       // para testar um pacote sem passar pela UI
       (window as unknown as { __gateway?: GatewaySocket }).__gateway = socket;
+      instalarPingSimulado(socket);
+      instalarGravadorDeRede(socket);
     }
   }
   return socket;
+}
+
+/**
+ * Espelha o tráfego de MOVIMENTO no flight recorder (DEV).
+ *
+ * Usa `onAny`/`onAnyOutgoing` em vez de embrulhar `on`/`emit`, e a razão é
+ * concreta: quem embrulha `on` tem de manter o mapa original→embrulhado para o
+ * `off` conseguir remover o handler certo (é o que o `pingSimulado` faz, e é a
+ * única regra de verdade daquele módulo). Dois embrulhos empilhados dobrariam
+ * essa armadilha — um `off` que falhasse deixaria o mundo processando cada
+ * pacote duas vezes, que é bem pior que não ter medida. `onAny` é um caminho
+ * separado e não interfere em registro nenhum.
+ *
+ * O PREÇO disso, e ele está anotado no dado: com ping simulado, `onAny` vê o
+ * pacote ANTES do atraso de descida, porque o atraso mora no handler embrulhado.
+ * Então este evento é "chegou no socket"; "foi processado pelo mundo" é o que o
+ * `worldStore` registra. Quando os dois estiverem no mesmo caso, a diferença
+ * entre eles É o atraso simulado — e é assim que se confere que ele está agindo.
+ *
+ * Só entra o que diz respeito ao PRÓPRIO personagem. `entity:move` chega
+ * dezenas de vezes por segundo com `area_size: 60` e encheria o anel de 512
+ * eventos em poucos segundos, empurrando para fora justamente o que interessa.
+ */
+function instalarGravadorDeRede(s: GatewaySocket): void {
+  /** o que o próprio personagem faz — o resto é ruído para esta investigação */
+  const INTERESSA = new Set(["self:move", "self:warp", "world:enter", "self:status"]);
+  /** chegada do pacote de movimento anterior, para o intervalo entre eles */
+  let ultimoMove = 0;
+  /** maior `startTime` já visto: um menor é pacote FORA DE ORDEM */
+  let maiorTick = 0;
+
+  s.onAny((evento: string, ...args: unknown[]) => {
+    if (!ativo() || !INTERESSA.has(evento)) return;
+    const agora = performance.now();
+    const p = args[0] as { from?: Cell; to?: Cell; startTime?: number } | undefined;
+
+    if (evento === "self:move" && p) {
+      const dt = ultimoMove > 0 ? agora - ultimoMove : NaN;
+      ultimoMove = agora;
+      quadro().dtEntreSnapshots = dt;
+      const tick = p.startTime ?? 0;
+      // o rAthena manda um pacote por TRECHO, então o tick só pode crescer;
+      // menor que o maior visto é reordenação no caminho (ou relógio virado)
+      if (tick > 0 && tick < maiorTick) {
+        registrarEvento("network", "fora-de-ordem", { tick, maiorTick, atraso: maiorTick - tick }, agora);
+      }
+      if (tick > maiorTick) maiorTick = tick;
+      registrarEvento(
+        "network",
+        "self:move",
+        { de: `${p.from?.x},${p.from?.y}`, para: `${p.to?.x},${p.to?.y}`, tick, dtMs: dt },
+        agora,
+      );
+      return;
+    }
+    registrarEvento("network", evento, undefined, agora);
+  });
+
+  s.onAnyOutgoing((evento: string, ...args: unknown[]) => {
+    if (!ativo() || evento !== "move:to") return;
+    const alvo = args[0] as Cell | undefined;
+    registrarEvento("network", "move:to", { alvo: `${alvo?.x},${alvo?.y}` }, performance.now());
+  });
+}
+
+/**
+ * Ping falso, para poder DESENVOLVER netcode com o servidor a zero ms daqui.
+ *
+ * Predição, reconciliação e interpolação são remédios para latência: no WSL
+ * local o RTT é ~0 e nenhuma delas se manifesta, então o código pode estar
+ * errado e parecer perfeito. `?ping=120&jitter=40` na URL liga o banco de
+ * provas, e `__ping(rtt, jitter)` no console muda ao vivo — a configuração é
+ * lida POR REFERÊNCIA a cada evento, então não é preciso reconectar nem
+ * re-registrar handler nenhum.
+ *
+ * Embrulha o socket UMA vez, aqui, porque este é o único ponto de contato com o
+ * servidor. Só em DEV; em produção nada disto existe.
+ */
+function instalarPingSimulado(s: GatewaySocket): void {
+  /**
+   * A URL manda quando traz `?ping`; senão, vale o que ficou guardado.
+   *
+   * O socket nasce no LOGIN — é lá que `gateway()` é chamado primeiro —, então
+   * `?ping=150` na URL do `/play` chegava tarde demais e não fazia nada. Com o
+   * valor guardado, o parâmetro vale a partir de qualquer tela e sobrevive à
+   * navegação; `?ping=0` limpa.
+   */
+  const daUrl = window.location.search.includes("ping=") ? pingDaUrl(window.location.search) : null;
+  const cfg = daUrl ?? lerPingGuardado() ?? { ...SEM_PING };
+  if (daUrl) guardarPing(daUrl);
+  aplicarPingSimulado(s as unknown as SocketEmbrulhavel, cfg);
+  // sem isto, um JSON exportado não diz se foi colhido com ping simulado — e a
+  // mesma sessão lida com 0 e com 120 ms de RTT conta histórias diferentes
+  registrarMeta({ pingSimulado: { ...cfg } });
+  const w = window as unknown as { __ping?: (rtt?: number, jitter?: number) => PingSimulado };
+  w.__ping = (rtt, jitter) => {
+    if (rtt !== undefined) {
+      cfg.subida = Math.max(0, rtt / 2);
+      cfg.descida = Math.max(0, rtt / 2);
+    }
+    if (jitter !== undefined) cfg.jitter = Math.max(0, jitter);
+    guardarPing(cfg);
+    return { ...cfg };
+  };
+  if (cfg.subida > 0 || cfg.jitter > 0) {
+    // eslint-disable-next-line no-console
+    console.info(`[gateway] ping simulado: ${cfg.subida + cfg.descida} ms RTT, jitter ${cfg.jitter} ms`);
+  }
 }
 
 export function disconnectGateway(): void {

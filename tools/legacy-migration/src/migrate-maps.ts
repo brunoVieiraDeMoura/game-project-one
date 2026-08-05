@@ -197,6 +197,9 @@ function main() {
       heightmap: new Array(expected).fill(0),
       collision,
       surface: [],
+      // textura/escala por superfície são AUTORAIS (editor): o mapa importado
+      // nasce com o padrão do cliente
+      terrainStyle: {},
       waterLevel: null,
       props: [],
       spawns: spawnsByMap.get(name) ?? [],

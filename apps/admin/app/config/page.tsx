@@ -178,20 +178,6 @@ export default function ConfigPage() {
       <div className="mt-4 space-y-4">
         <OverrideList title="Overrides de drop" overrides={config.dropRateOverrides} onChange={(v) => set("dropRateOverrides", v)} allowItemType />
         <OverrideList title="Overrides de EXP (por mapa)" overrides={config.expRateOverrides} onChange={(v) => set("expRateOverrides", v)} allowItemType={false} />
-
-        <Section title="Movimento">
-          <div className="flex items-end gap-6">
-            <Field label="Modo padrão (novos personagens)" className="w-56">
-              <Select value={config.defaultMovementMode} onChange={(e) => set("defaultMovementMode", e.target.value as ServerConfig["defaultMovementMode"])}>
-                <option value="grid">grid (célula)</option>
-                <option value="free">free (livre)</option>
-              </Select>
-            </Field>
-            <div className="pb-2">
-              <Checkbox label="Permite trocar de modo em runtime" checked={config.allowMovementModeSwitch} onChange={(v) => set("allowMovementModeSwitch", v)} />
-            </div>
-          </div>
-        </Section>
       </div>
     </main>
   );
