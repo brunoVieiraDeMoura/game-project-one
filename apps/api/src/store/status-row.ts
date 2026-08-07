@@ -24,6 +24,8 @@ export interface StatusRow {
   effects: unknown | null;
   icon: string | null;
   description: string | null;
+  status_group: string;
+  params: unknown;
 }
 
 export function statusToRow(s: StatusEffectDef): StatusRow {
@@ -49,6 +51,8 @@ export function statusToRow(s: StatusEffectDef): StatusRow {
     effects: s.effects ?? null,
     icon: s.icon ?? null,
     description: s.description ?? null,
+    status_group: s.group,
+    params: s.params,
   };
 }
 
@@ -75,5 +79,7 @@ export function rowToStatus(row: StatusRow): StatusEffectDef {
     effects: row.effects ?? undefined,
     icon: row.icon ?? undefined,
     description: row.description ?? undefined,
+    group: row.status_group,
+    params: row.params,
   });
 }

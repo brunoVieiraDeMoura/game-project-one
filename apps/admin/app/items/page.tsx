@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { Item } from "@ragnarok/game-data";
+import type { Item, ItemType } from "@ragnarok/game-data";
+import { ITEM_TYPE_LABELS, labelOf, selectOptions } from "@ragnarok/game-data";
 import { deleteItem, listItems } from "@/lib/api";
-import { Button, Input, Select } from "@/components/ui";
+import { Badge, Button, FilterSelect, Input, Pager, Select } from "@/components/ui";
 
 const PAGE_SIZES = [10, 20, 50, 100];
+const TYPE_OPTIONS = selectOptions(ITEM_TYPE_LABELS, "Todos os tipos");
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -14,6 +16,7 @@ export default function ItemsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
+  const [type, setType] = useState<"" | ItemType>("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +31,7 @@ export default function ItemsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    listItems(page, pageSize, debouncedSearch)
+    listItems({ page, pageSize, search: debouncedSearch, type: type || undefined })
       .then((res) => {
         setItems(res.items);
         setTotal(res.total);
@@ -36,7 +39,7 @@ export default function ItemsPage() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, pageSize, debouncedSearch]);
+  }, [page, pageSize, debouncedSearch, type]);
 
   useEffect(load, [load]);
 
@@ -67,6 +70,14 @@ export default function ItemsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
+        />
+        <FilterSelect
+          value={type}
+          onChange={(v) => {
+            setType(v);
+            setPage(1);
+          }}
+          options={TYPE_OPTIONS}
         />
         <Select
           value={pageSize}
@@ -123,7 +134,7 @@ export default function ItemsPage() {
                   <td className="px-3 py-2">{item.name}</td>
                   <td className="px-3 py-2 text-zinc-400">{item.aegisName}</td>
                   <td className="px-3 py-2">
-                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs">{item.type}</span>
+                    <Badge>{labelOf(ITEM_TYPE_LABELS, item.type)}</Badge>
                   </td>
                   <td className="px-3 py-2">{item.attack}</td>
                   <td className="px-3 py-2">{item.defense}</td>
@@ -145,25 +156,7 @@ export default function ItemsPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>
-            «
-          </Button>
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-            »
-          </Button>
-        </div>
-      </div>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </main>
   );
 }

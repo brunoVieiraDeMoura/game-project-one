@@ -14,6 +14,7 @@ import {
   zerarCena,
 } from "./cenaProbe";
 import { zerarAssets, observarCarregamento, type GerenciadorObservavel } from "./assetProbe";
+import { medir, zerarMedidas } from "./medir";
 import { casosCapturados, configurarGatilho, estado, eventosOrdenados, forcarFlag, limpar, quadro } from "./flightRecorder";
 
 /**
@@ -79,6 +80,7 @@ beforeEach(() => {
   limpar();
   zerarCena();
   zerarAssets();
+  zerarMedidas();
   forcarFlag(true);
   configurarGatilho("mundoVazio", true, 0);
   relogio = vi.spyOn(performance, "now").mockReturnValue(0);
@@ -303,6 +305,44 @@ describe("chunks e props", () => {
     const ev = eventosOrdenados().filter((e) => e.tipo === "props").at(-1)!;
     expect(ev.dados).toMatchObject({ de: 12, para: 15 });
     expect(retratoDaCena(glFalso, cenaFalsa(), cameraFalsa(), 250).propsMudouHaMs).toBe(50);
+  });
+});
+
+describe("o acumulado do `medir` não sobrevive ao voo desligado", () => {
+  it("zera mesmo com o gravador PARADO — senão o primeiro quadro gravado mente", () => {
+    /**
+     * O `medir()` acumula sempre que roda em DEV; quem ZERA é a escrita da
+     * coluna, dentro do `amostrarCena`. Enquanto essa escrita ficou dentro do
+     * `if (ativo())`, um período com o voo desligado empilhava tudo e despejava
+     * o total no PRIMEIRO quadro gravado.
+     *
+     * Foi o que aconteceu: o `voo-1785966296680.json` saiu com
+     * `trocaMs.max = 514,5 ms` num dump **sem um único evento `cena/custo` e
+     * sem portal nenhum**. Um pico fantasma — exatamente o tipo de coisa que já
+     * mandou esta investigação atrás de causa errada.
+     */
+    let t = 0;
+    relogio.mockImplementation(() => t);
+
+    forcarFlag(false); // voo parado
+    medir("carga antes de gravar", () => {
+      t += 500;
+    });
+    amostrarCena(cenaFalsa(), cameraFalsa(), 100); // não grava, mas TEM de zerar
+
+    forcarFlag(true); // agora sim
+    amostrarCena(cenaFalsa(), cameraFalsa(), 100);
+    expect(quadro().trocaMs).toBe(0);
+  });
+
+  it("…e continua contando o que acontece DURANTE a gravação", () => {
+    let t = 0;
+    relogio.mockImplementation(() => t);
+    medir("trabalho de verdade", () => {
+      t += 40;
+    });
+    amostrarCena(cenaFalsa(), cameraFalsa(), 100);
+    expect(quadro().trocaMs).toBe(40);
   });
 });
 

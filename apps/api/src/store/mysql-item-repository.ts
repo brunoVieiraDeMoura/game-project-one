@@ -1,7 +1,14 @@
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import type { Item } from "@ragnarok/game-data";
 import type { ItemListQuery, ItemListResult, ItemRepository } from "./item-repository.js";
-import { itemToMysqlRow, mysqlRowToItem, type MysqlItem, type MysqlItemRow } from "./mysql-item-row.js";
+import {
+	itemSubTypeToRathena,
+	itemToMysqlRow,
+	itemTypeToRathena,
+	mysqlRowToItem,
+	type MysqlItem,
+	type MysqlItemRow,
+} from "./mysql-item-row.js";
 import { roDatabase } from "./mysql.js";
 
 /**
@@ -19,7 +26,7 @@ export class MysqlItemRepository implements ItemRepository {
 		this.table = table;
 	}
 
-	async list({ page, pageSize, search }: ItemListQuery): Promise<ItemListResult> {
+	async list({ page, pageSize, search, type, subType }: ItemListQuery): Promise<ItemListResult> {
 		const db = roDatabase();
 		const where: string[] = [];
 		const params: unknown[] = [];
@@ -28,6 +35,25 @@ export class MysqlItemRepository implements ItemRepository {
 			where.push("(name_english LIKE ? OR name_aegis LIKE ?" + (/^\d+$/.test(search) ? " OR id = ?" : "") + ")");
 			params.push(`%${search}%`, `%${search}%`);
 			if (/^\d+$/.test(search)) params.push(Number(search));
+		}
+		if (type) {
+			const raw = itemTypeToRathena(type);
+			// tipo NULL na coluna lê como "etc" (mysqlRowToItem) — o filtro de "etc"
+			// tem que casar os dois lados, senão esses itens somem da lista.
+			if (type === "etc") {
+				where.push("(`type` = ? OR `type` IS NULL)");
+				params.push(raw);
+			} else {
+				where.push("`type` = ?");
+				params.push(raw);
+			}
+		}
+		if (subType) {
+			const raw = itemSubTypeToRathena(subType);
+			if (raw) {
+				where.push("`subtype` = ?");
+				params.push(raw);
+			}
 		}
 
 		const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -108,7 +134,7 @@ export class MysqlItemRepository implements ItemRepository {
 	}
 }
 
-export type ReloadKind = "itemdb" | "mobdb" | "skilldb" | "script" | "battleconf";
+export type ReloadKind = "itemdb" | "mobdb" | "skilldb" | "script" | "battleconf" | "pcdb";
 
 /**
  * Pede ao map-server que releia a base.

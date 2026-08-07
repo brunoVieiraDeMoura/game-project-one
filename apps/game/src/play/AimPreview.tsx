@@ -5,6 +5,7 @@ import type { TerrainQuery } from "@ragnarok/engine-core";
 import { useAimStore } from "../net/aimStore";
 import { distanciaDeAtaque } from "../net/attackStore";
 import { raioDeAlcance, useSkillCatalog } from "../net/skillCatalog";
+import { moldarMalhaTerreno } from "./pickGround";
 
 /**
  * O que a skill mirada vai pegar, e de onde dá para lançá-la.
@@ -120,6 +121,25 @@ export function AimPreview({
   const matAlcance = useMaterialDeMira(true);
   const area = useRef<THREE.Mesh>(null);
   const alcance = useRef<THREE.Mesh>(null);
+  /**
+   * Em que célula cada malha foi MOLDADA pela última vez — mesma cache do
+   * marcador de destino (`play/GroundInteract.marcadorEm`). Remoldar é
+   * reescrever `(MIRA_SEGS+1)²` vértices; parado ou dentro da mesma célula, o
+   * resultado é idêntico ao do quadro anterior.
+   */
+  const areaEm = useRef<string | null>(null);
+  const alcanceEm = useRef<string | null>(null);
+  const raio = raioDeAlcance(info?.range);
+  const raioArea = Math.max(0, info?.areaRadius ?? 0);
+  // raio mudou (trocou de skill/nível): a malha antiga tem outra extensão —
+  // sem isto ela ficaria com a forma da skill anterior até o hover mudar de
+  // célula de novo.
+  useEffect(() => {
+    areaEm.current = null;
+  }, [raioArea]);
+  useEffect(() => {
+    alcanceEm.current = null;
+  }, [raio]);
 
   useFrame((_, dt) => {
     /**
@@ -141,8 +161,22 @@ export function AimPreview({
 
     const anelMesh = alcance.current;
     if (anelMesh) {
-      // o anel acompanha o personagem — ele anda enquanto a mira está aberta
-      anelMesh.position.set(p.x, terrain.getHeight(p.x, p.z) + ALTURA, p.z);
+      // o anel acompanha o personagem — ele anda enquanto a mira está aberta.
+      // A malha veste o relevo (ver `moldarMalhaTerreno`), então o mesh fica
+      // na ORIGEM e os vértices já são escritos em coordenada de mundo.
+      const chave = `${Math.round(p.x / cellSize)},${Math.round(p.z / cellSize)}`;
+      if (alcanceEm.current !== chave && raio > 0) {
+        alcanceEm.current = chave;
+        moldarMalhaTerreno(
+          anelMesh.geometry as THREE.BufferGeometry,
+          p.x,
+          p.z,
+          (raio + 0.5) * cellSize,
+          MIRA_SEGS,
+          ALTURA,
+          terrain,
+        );
+      }
     }
 
     const areaMesh = area.current;
@@ -152,7 +186,19 @@ export function AimPreview({
       return;
     }
     areaMesh.visible = true;
-    areaMesh.position.set(h.x, terrain.getHeight(h.x, h.z) + ALTURA, h.z);
+    const chaveArea = `${Math.round(h.x / cellSize)},${Math.round(h.z / cellSize)}`;
+    if (areaEm.current !== chaveArea && raioArea > 0) {
+      areaEm.current = chaveArea;
+      moldarMalhaTerreno(
+        areaMesh.geometry as THREE.BufferGeometry,
+        h.x,
+        h.z,
+        (raioArea + 0.5) * cellSize,
+        MIRA_SEGS,
+        ALTURA,
+        terrain,
+      );
+    }
 
     /**
      * Fora do alcance, a área fica VERMELHA.
@@ -164,7 +210,6 @@ export function AimPreview({
      * `hypot` cru pintaria de vermelho uma célula que o servidor aceitaria (e
      * vice-versa) bem na borda, que é onde o jogador olha.
      */
-    const raio = raioDeAlcance(info?.range);
     const dx = Math.round((h.x - p.x) / cellSize);
     const dz = Math.round((h.z - p.z) / cellSize);
     const dentro = raio <= 0 || distanciaDeAtaque(dx, dz) <= raio;
@@ -173,24 +218,25 @@ export function AimPreview({
 
   if (!mirando || mirando.mode !== "ground") return null;
 
-  const raio = raioDeAlcance(info?.range);
-  const raioArea = Math.max(0, info?.areaRadius ?? 0);
-
   return (
     <group>
       {raio > 0 && (
-        <mesh ref={alcance} rotation={[-Math.PI / 2, 0, 0]} material={matAlcance} renderOrder={-1}>
+        // sem `rotation`: os vértices já são escritos em coordenada de mundo
+        // no useFrame (mesmo truque do marcador de destino), então a malha
+        // veste a curvatura do terreno em vez de flutuar como um plano só —
+        // era isso que fazia o círculo "desaparecer" (afundar) numa ladeira.
+        <mesh ref={alcance} material={matAlcance} renderOrder={-1}>
           {/* +0,5 célula: o aro marca a BORDA EXTERNA da última célula que o
               servidor aceita, não o centro dela — desenhado no raio cravado, a
               cor ainda dizia "pode" com o cursor já fora do aro */}
-          <planeGeometry args={[(raio + 0.5) * 2 * cellSize, (raio + 0.5) * 2 * cellSize]} />
+          <planeGeometry args={[1, 1, MIRA_SEGS, MIRA_SEGS]} />
         </mesh>
       )}
       {raioArea > 0 && (
-        <mesh ref={area} rotation={[-Math.PI / 2, 0, 0]} material={matArea} renderOrder={-1}>
+        <mesh ref={area} material={matArea} renderOrder={-1} visible={false}>
           {/* +0,5 célula: a área do RO é contada em células INTEIRAS ("5x5"),
               então o raio 2 cobre do centro da célula até a borda da segunda */}
-          <planeGeometry args={[(raioArea + 0.5) * 2 * cellSize, (raioArea + 0.5) * 2 * cellSize]} />
+          <planeGeometry args={[1, 1, MIRA_SEGS, MIRA_SEGS]} />
         </mesh>
       )}
     </group>
@@ -199,3 +245,12 @@ export function AimPreview({
 
 /** um dedo acima do chão, para não brigar em z com o terreno */
 const ALTURA = 0.08;
+
+/**
+ * Subdivisões da mira por lado — mesma ordem de grandeza do marcador de
+ * destino (`play/pickGround.MARKER_SEGS`). O disco é uma MÁSCARA por
+ * fragmento (`vUv`, no shader), então a subdivisão não precisa ser fina para
+ * ficar redondo; ela só precisa bastar para a malha acompanhar a curvatura do
+ * terreno sob a área.
+ */
+const MIRA_SEGS = 10;

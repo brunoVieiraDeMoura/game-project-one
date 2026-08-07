@@ -18,6 +18,8 @@ export function Palette({ embedded }: { embedded?: boolean } = {}) {
       {PROP_BY_CATEGORY.map((group) => (
         <div key={group.cat} style={{ marginBottom: 6 }}>
           <button
+            type="button"
+            aria-expanded={open === group.cat}
             onClick={() => setOpen(open === group.cat ? null : group.cat)}
             style={{
               width: "100%",
@@ -59,7 +61,9 @@ function AssetButton({ item, active }: { item: PropCatalogEntry; active: boolean
   const thumb = useThumbnail(propUrl(item.id));
   return (
     <button
+      type="button"
       title={item.label}
+      aria-pressed={active}
       onPointerEnter={() => preloadProp(item.id)}
       onClick={() => {
         preloadProp(item.id); // carrega antes de colocar (sem suspender a cena)

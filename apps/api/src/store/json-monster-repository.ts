@@ -35,8 +35,11 @@ export class JsonMonsterRepository implements MonsterRepository {
     await writeFile(this.dataPath, JSON.stringify([...this.monsters.values()], null, 1), "utf-8");
   }
 
-  async list({ page, pageSize, search, dropsItem }: MonsterListQuery): Promise<MonsterListResult> {
+  async list({ page, pageSize, search, dropsItem, levelMin, levelMax, element }: MonsterListQuery): Promise<MonsterListResult> {
     let all = [...this.monsters.values()];
+    if (levelMin !== undefined) all = all.filter((m) => m.level >= levelMin);
+    if (levelMax !== undefined) all = all.filter((m) => m.level <= levelMax);
+    if (element) all = all.filter((m) => m.element.type === element);
     if (search) {
       const q = search.toLowerCase();
       all = all.filter(

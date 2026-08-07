@@ -9,6 +9,14 @@ const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
   search: z.string().trim().min(1).optional(),
+  /** filtro por classe: prefixos crus separados por vírgula (ex. "SM,KN,LK") */
+  classPrefix: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((s) => s.split(",").map((p) => p.trim().toUpperCase()).filter(Boolean))
+    .pipe(z.array(z.string().regex(/^[A-Z0-9]{1,8}$/)).min(1))
+    .optional(),
 });
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });

@@ -21,6 +21,17 @@ const NEW_MAP = params.get("new") === "1" || !MAP_ID;
 // prefab: abre o mapa de demo em código (não existe no banco ainda) pra editar
 // e salvar (o admin faz create-ou-update)
 const IS_PREFAB = MAP_ID === "hexdemo";
+/**
+ * Nome e dimensão escolhidos no admin (`NovoMapaForm` em `/maps`), repassados
+ * pela URL do iframe. Lidos aqui — não em `newMap()` — porque a store não
+ * conhece `window.location`; ela recebe os três já resolvidos.
+ *
+ * `NaN`/ausente cai no default de `createBlankMap` (32×32, "Novo mapa"): um
+ * link antigo sem esses parâmetros continua funcionando como sempre funcionou.
+ */
+const NEW_MAP_NAME = params.get("name") || undefined;
+const NEW_MAP_W = Number(params.get("w")) || undefined;
+const NEW_MAP_H = Number(params.get("h")) || undefined;
 
 /**
  * Editor de mapas 3D hexagonal (substitui o /maps 2D do admin). Carrega um
@@ -41,7 +52,7 @@ export function EditorView() {
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    if (NEW_MAP) newMap();
+    if (NEW_MAP) newMap(NEW_MAP_NAME, NEW_MAP_W, NEW_MAP_H);
   }, [newMap]);
 
   // O EDITOR desenha no hexScale atual (EditorScene faz setHexScale), mas as
@@ -123,8 +134,30 @@ export function EditorView() {
   // prop, G/R/S gizmo, Esc deseleciona
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = document.activeElement;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      const tipo = tag === "INPUT" ? (el as HTMLInputElement).type : undefined;
+      /**
+       * Foco TEXTUAL (nome do mapa, campo numérico…): o usuário pode estar
+       * DIGITANDO ali, então nenhum atalho — nem Ctrl+Z — passa por cima.
+       */
+      const textual = tag === "TEXTAREA" || (tag === "INPUT" && !["range", "checkbox", "radio", "button", "color"].includes(tipo ?? ""));
+      if (textual) return;
+      /**
+       * Foco NÃO-textual só bloqueia atalho SEM modificador (seta, letra solta,
+       * Delete) — esses têm significado NATIVO no próprio controle focado (seta
+       * em `<input type=range>` move o slider; Delete/Backspace em nada não faz
+       * mal, mas Espaço em `<button>` clicaria o botão).
+       *
+       * Ctrl+Z/Y/D/C/V continuam valendo mesmo com um slider focado: nenhum
+       * desses tipos de input usa Ctrl+tecla para nada nativo, e é justamente
+       * isso que fazia "Subir" (e qualquer pincel ajustado pela Força/Tamanho
+       * logo antes de pintar) parecer não desfazer — o slider retém o foco
+       * depois do arrasto e o Ctrl+Z morria aqui, calado, sem erro nenhum.
+       */
+      const controleNaoTextualComFoco = !!el && tag !== "BODY";
+      const semModificador = !e.ctrlKey && !e.metaKey;
+      if (controleNaoTextualComFoco && semModificador) return;
       const s = useEditorStore.getState();
       if (e.code === "Space") {
         e.preventDefault();

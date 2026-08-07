@@ -1,47 +1,104 @@
-substituir a ui do http://localhost:3001/login 
-http://localhost:3001/char-select
+glitch se eu clicar para atacar no atack basico o monstro, depois castar uma spell que é single target, e essa skill matar o mob, ele anda até o monstro depois de morto para atacar, (comportamento esperado: após castar qualquer skill o char é para permanecer na célula que estava)
 
-pelas novas peças e  referencia "referencia.png" que está em C:\Users\Bruno\Desktop\game-project\assets-new\ui_definitiva\login-new
-use background para ambos
-e de o seu melhor para ficar o resto bonito 
+//////
+
+acho que a animação de atack basico está duplicada, da um check
+//////
+
+O personagem principal, deve estar na layer acima de todos os objetos (ex: circulo do target do monstro está sobrepondo o personagem)
+[imagino que só os vfx vão ficar acima do personagem]
+
+//////
+
+montanha / morros e provavelmente outros assets, estão com o target vazado, monstros que estão atrás dessas coisas são alvos targetáveis(consigo pegar o target no blind da montanha, [o alvo atrás da montanha sem ver ele])
+corrija esse comportamento
+
+//////
+
+o circulo de onde vai cair a aoe das skills está desaparecendo, e o circulo que aparece quando a pessoa começa a castar a skill aoe, não está se moldando as curvas, montanhas etc..
+
+//////
+
+o square de indicação para andar também está desaparecendo de vez enquando (o que fica na pota do cursor)
+
+//////
+
+skills que eu preciso estar próximo ao mob para castar, tais como ex: jupter thunder, fire bolt, double strafe, etc.. 
+(comportamento atual: tenho que estar no range para castar, range nao aparece ) (comportamento desejado: mostrar a distancia do range, se eu clicar no mob, e clicar na skill, ir até o range que da para castar a skill e castar ela[tipo o atack basico, mas com skill] e caso ande ou aperte esc. o boneco cancela a ação)
+
+//////
+
+adicionar um Draggable em todas as janelas de menu (ex: ivintario, mapa,skill etc..) todos eles pela parte de cima,
+pode deixar abrir os menus abrindo um por cima do outro, (comportamento atual: ao abrir alt+q por exempo, e logo em seguida abrir alt+e o alt+q fecha.)[obss: faça esc fechar na ordem do que está por cima]
+obss: se tiver 2 menus abertos, e você clicar no canva do menu de baixo, ele vai para frente.
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+IVINTÁRIO
+
+CONSUMIVEIS :
+1 - ARRASTAR PARA A BARRA (clicar como se fosse uma skill, consome o item, arrastar para fora da barra remove da barra)
+2 - USAR CONSUMIVEIS
+3 - VINCULAR OS EFEITOS DOS CONSUMIVEIS E TESTALOS (TAIS COMO EX: FLY WING (teleporte) , Sweet potato (cura), etc..)
+4 - Arrastar do ivintário para o canva de fora ("chão"), [aparece uma telinha caso o item seja stack de quantos quer dropar, você define e da ok] (tela de tem certeza que deseja jogar no chão este item? antes de dropar)
+5 - ao dropar ex: 100 batatas em stack, não cair 100 itens no chão, cair 1 item com stack de 100.
 
 
-//////////////////////////////
+
+EQUIPAMENTOS: 
+1 - poder equipar os equipamentos/armas/ring etc.. no personagem (dois clicks na bag equipa se a classe permitir, dois cliques em cima do item no alt+Q remove o item e manda pra bag)
+2 - verificar se está vinculando os status do item (defesa, atak, etc..)
+obss: as calças eu ainda não criei, depois voltamos para vincular essa parte.
+3 - ao equipar/desequipar um item novo, deixar durante 10segundos uma setinha para cima ou para baixo, mostrando que status você ganhou por equipar ou perdeu ao lado dos "Status especificos" ex: equipei uma espada, mostra ao lado de ATK " ^ +20"  
 
 
-o circulo em baixo do inimigo é vermelho, mas deixa ele mais saturado(visivel)
 
-//////////////////////////////
-
-ao clicar em skills ex: skill pointclick com o target do alvo aberto, ele ir até o range que da para castar e castar a skill(andar para qualquer lado ou apertar esc, cancela a habilidade)[se começar a castar a skill, não pode andar até acabar o cast ou que ele seja cancelado]
-
-//////////////////////////////
-
-os criculos indicativos de habilidades aoe:
-1 - ao clicar na skill e clicar na área (quando ele começa a castar as skill ele cria um circulo no chão, mas não está no tamanho exato da habilidade que está sendo castada [usar a mesma formula de fazer um circulo dentro do square, usada para mostrar a área que vai ser afetada ao clicar na skill])
-2- todos os circulos relacionados a habilidades ficam distorcidos em morros e montanhas, quero que esses circulos demonstrativos fique acima do solo sempre.
-
-//////////////////////////////
-
-quando vira a camera ao lado de uma montanha (da pra ver a parte de dentro da montanha [fica transparente dentro da montanhas], faz um jogo de camera, que quando virar a camera do lado da montanha, aproxime de modo que nunca mostre por dentro da montanha, e se continuar rodando ela volta para o local)
-
-//////////////////////////////
-
-quando eu clico pro personagem andar la na frente e fico com o mouse parado, o cursor do chão UI_Flat_Select02a_1 , não acompanha o boneco andando, ele fica parado no local do primeiro clique, é preciso que eu movimente o mouse, para que ele continue o movimento natural. (corrija)
-
-//////////////////////////////
-
-mostrar o dano das skills no monstro.
-
-/////////////////////////
-
-No alt+a tem um avatar do lado esquerdo nos equipamentos do meu personagem, porque ele sempre entra em "T-Pose"? deixa ele entrnado idle sempre.
+Outros : 
+Conferir a eficiencia dos ETC
+1 - Testar se cartas da para dar doubleclick para equipar no equipamento especifico
+2 - flechas equipavel [obss: criar um slotzinho bem pequeno do lado do shield em alt+Q "etc" para botar a flecha lá 
+3 - Testa o comportamento de todos etc..
 
 
-/////////////////////////
 
-itens na bag alt+e , não estão sendo renderizados, usei consumiveis eles não diminuem o numero usavel, parece não ter refresh dos itens.
+Botão direito em cima de qualquer item ( remover o drop do item ) [adicionar uma box 1fr 2fr mostrando no 1fr a imagem do item e no 2fr descrição do item, com scrollbar caso precise, padronize o tamanho. botão de fechar em cima na direita da box]
 
 
-/////////////////////////
 
+TESTES DE LOCAL 3000
+
+
+CRIAR UM MAPA COM NOME DIFERENTE DO RATHENA
+ADICIONAR UM MONSTRO NOVO DIFERENTE DO RATHENA, NO MAPA NOVO
+ADICIONAR UM MONTRO DO RATHENA NO MAPA NOVO
+
+ADICIONAR E TESTAR DROPS /XP/SKILL DO MONSTRO (NOVOS E VELHOS NO MAPA NOVO)
+
+CRIAR NOVOS ITENS DE TODOS OS TIPOS, COM TODOS OS COMPORTAMENTOS E TESTAR SUAS FUNCIONALIDADES,
+EDITAR ITENS EXISTENTES COM OS COMPORTAMENTES E TESTAR SUAS FUNCIONALIDADES.
+USAR ITENS ANTIGOS EXISTENTES E TESTAR SUAS FUNCIONALIDADE E COMPORTAMENTOS.
+[VERIFICAR OS ITENS EM PLAYER / DESCRIÇÕES ]
+
+CRIAR NOVOS EQUIPAMENTOS DE TODOS OS TIPOS, COM TODOS OS COMPORTAMENTOS E TESTAR SUAS FUNCIONALIDADES,
+EDITAR EQUIPAMENTOS EXISTENTES COM OS COMPORTAMENTES E TESTAR SUAS FUNCIONALIDADES.
+USAR EQUIPAMENTOS ANTIGOS EXISTENTES E TESTAR SUAS FUNCIONALIDADE E COMPORTAMENTOS.
+[VERIFICAR AS EQUIPAMENTOS EM PLAYER / CLASSES / DESCRIÇÕES ]
+
+CRIAR NOVOS SKILL DE TODOS OS TIPOS, COM TODOS OS COMPORTAMENTOS E TESTAR SUAS FUNCIONALIDADES,
+EDITAR SKILL EXISTENTES COM OS COMPORTAMENTES E TESTAR SUAS FUNCIONALIDADES.
+USAR SKILL ANTIGOS EXISTENTES E TESTAR SUAS FUNCIONALIDADE E COMPORTAMENTOS.
+[VERIFICAR AS SKILLS EM PLAYER / CLASSES / MONSTROS / DESCRIÇÕES / ITENS]
+
+CRIAR NOVOS STATUS DE TODOS OS TIPOS, COM TODOS OS COMPORTAMENTOS E TESTAR SUAS FUNCIONALIDADES,
+EDITAR STATUS EXISTENTES COM OS COMPORTAMENTES E TESTAR SUAS FUNCIONALIDADES.
+USAR STATUS ANTIGOS EXISTENTES E TESTAR SUAS FUNCIONALIDADE E COMPORTAMENTOS.
+[VERIFICAR OS STATUS EM PLAYER / CLASSES / MONSTROS / DESCRIÇÕES / ITENS]
+
+CRIAR CLASSES DE TODOS OS TIPOS, COM TODOS OS COMPORTAMENTOS E TESTAR SUAS FUNCIONALIDADES,
+EDITAR CLASSES EXISTENTES COM OS COMPORTAMENTES E TESTAR SUAS FUNCIONALIDADES.
+USAR CLASSES ANTIGOS EXISTENTES E TESTAR SUAS FUNCIONALIDADE E COMPORTAMENTOS.
+[VERIFICAR AS CLASSES XP, HP, SP, ATT BASE]
+
+CRIAR NPCS DE TODOS OS TIPOS, COM TODOS OS COMPORTAMENTOS E TESTAR SUAS FUNCIONALIDADES,
+EDITAR NPCS EXISTENTES COM OS COMPORTAMENTES E TESTAR SUAS FUNCIONALIDADES.
+USAR NPCS ANTIGOS EXISTENTES E TESTAR SUAS FUNCIONALIDADE E COMPORTAMENTOS.

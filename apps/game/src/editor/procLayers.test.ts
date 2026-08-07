@@ -122,17 +122,18 @@ describe("relevo procedural por escopo", () => {
     st().setEditScope("inside");
     st().setTerrainFeature("hill", 50);
     st().setEditScope("border");
-    st().setTerrainFeature("mountain", 20);
+    st().setTerrainFeature("mountainQty", 20);
     expect(st().terrainFeatures.inside.hill).toBe(50);
     expect(st().terrainFeatures.border.hill).toBe(0);
-    expect(st().terrainFeatures.border.mountain).toBe(20);
+    expect(st().terrainFeatures.border.mountainQty).toBe(20);
   });
 
   it("montanha na borda não abre passagem na parede", () => {
     // a montanha FECHA passagem, nunca abre: gerá-la sobre a moldura pode
     // engrossar o bloqueio, jamais transformá-lo em chão
     st().setEditScope("border");
-    st().setTerrainFeature("mountain", 100);
+    st().setTerrainFeature("mountainQty", 100);
+    st().setTerrainFeature("mountainSize", 100);
     const m = st().map!;
     const i = (col: number, row: number) => row * m.size.width + col;
     expect(m.collision[i(0, 0)]).toBe("wall");

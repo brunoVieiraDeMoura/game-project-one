@@ -1,6 +1,6 @@
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { descartarPersonagem, fundirSkinned } from "./entities/personagemGltf";
@@ -19,6 +19,7 @@ const BASE = "/assets";
 
 export const CHARACTER_URLS = {
   knight: `${BASE}/characters/Knight.glb`,
+  mage: `${BASE}/characters/Mage.glb`,
   skeleton_warrior: `${BASE}/characters/Skeleton_Warrior.glb`,
   skeleton_minion: `${BASE}/characters/Skeleton_Minion.glb`,
 } as const;
@@ -27,6 +28,8 @@ export type CharacterKey = keyof typeof CHARACTER_URLS;
 const ANIMATION_URLS = [
   `${BASE}/animations/Rig_Medium_MovementBasic.glb`,
   `${BASE}/animations/Rig_Medium_General.glb`,
+  `${BASE}/animations/Rig_Medium_CombatMelee.glb`,
+  `${BASE}/animations/Rig_Medium_CombatRanged.glb`,
 ];
 
 /** clips que usamos, por papel semântico → nome do clip no kit */
@@ -35,7 +38,11 @@ export const CLIP = {
   walk: "Walking_C",
   run: "Running_A",
   jump: "Jump_Full_Short",
-  attack: "Throw", // kit não traz golpe melee; Throw é o gesto mais próximo (placeholder)
+  attack: "Melee_1H_Attack_Slice_Horizontal",
+  /** conjuração — LOOP enquanto a barra de cast corre (ver `net/combatAnim`) */
+  cast: "Ranged_Magic_Spellcasting",
+  /** a magia SAI — um tiro, tocado uma vez quando a skill sai (`skill:cast`) */
+  castRelease: "Ranged_Magic_Shoot",
   hit: "Hit_A",
   death: "Death_A",
 } as const;
@@ -53,7 +60,12 @@ export function preloadAssets() {
 export function useSharedClips(): THREE.AnimationClip[] {
   const basic = useGLTF(ANIMATION_URLS[0]!);
   const general = useGLTF(ANIMATION_URLS[1]!);
-  return useMemo(() => [...basic.animations, ...general.animations], [basic, general]);
+  const melee = useGLTF(ANIMATION_URLS[2]!);
+  const ranged = useGLTF(ANIMATION_URLS[3]!);
+  return useMemo(
+    () => [...basic.animations, ...general.animations, ...melee.animations, ...ranged.animations],
+    [basic, general, melee, ranged],
+  );
 }
 
 export interface CharacterHandle {
@@ -250,8 +262,21 @@ export function useCharacter(
    * então o fade só tinha o que estragar. O `update(0)` aplica a pose ao
    * esqueleto ali mesmo, para o primeiro quadro DESENHADO já sair certo mesmo
    * que o `useFrame` ainda não tenha rodado.
+   *
+   * **E tem que ser `useLayoutEffect`, não `useEffect`.** O retrato do HUD
+   * (Alt+A/Alt+Q) roda em `frameloop="demand"`: o R3F agenda o primeiro
+   * quadro assim que o `<Bust>` monta (invalidate automático de commit), num
+   * `requestAnimationFrame` — e passive effect (`useEffect`) não tem garantia
+   * de rodar ANTES desse rAF, só antes do próximo paint em geral. Ganhando a
+   * corrida, o quadro desenha bind pose (T-pose) antes da pose idle existir,
+   * e como o retrato só redesenha por `invalidate()` (24 Hz via `Pulso`), a
+   * T-pose fica visível por vários quadros em vez de sumir no seguinte. No
+   * mundo 3D (`frameloop` padrão, 60 Hz) isso nunca se via porque o próximo
+   * quadro chegava sozinho de qualquer forma. `useLayoutEffect` roda
+   * SÍNCRONO, antes de qualquer paint — a pose já está certa quando o
+   * primeiro quadro é agendado.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const a = pegarAction(CLIP.idle);
     if (a) {
       a.reset().play();

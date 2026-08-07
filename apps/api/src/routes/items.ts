@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { ItemSchema } from "@ragnarok/game-data";
+import { ItemSchema, ItemSubTypeSchema, ItemTypeSchema } from "@ragnarok/game-data";
 import type { ItemRepository } from "../store/item-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
@@ -9,6 +9,8 @@ const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
   search: z.string().trim().min(1).optional(),
+  type: ItemTypeSchema.optional(),
+  subType: ItemSubTypeSchema.optional(),
 });
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });

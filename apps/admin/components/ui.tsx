@@ -84,6 +84,83 @@ export function Checkbox({
   );
 }
 
+/** Paginador de 4 botões (« / Anterior / Próxima / ») — extraído das 6 páginas de lista, que tinham o bloco idêntico copiado. */
+export function Pager({
+  page,
+  totalPages,
+  onPage,
+}: {
+  page: number;
+  totalPages: number;
+  onPage: (p: number) => void;
+}) {
+  return (
+    <div className="mt-3 flex items-center justify-between text-sm">
+      <span className="text-zinc-500">
+        Página {page} de {totalPages}
+      </span>
+      <div className="flex gap-2">
+        <Button variant="outline" disabled={page <= 1} onClick={() => onPage(1)}>
+          «
+        </Button>
+        <Button variant="outline" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          Anterior
+        </Button>
+        <Button variant="outline" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
+          Próxima
+        </Button>
+        <Button variant="outline" disabled={page >= totalPages} onClick={() => onPage(totalPages)}>
+          »
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const BADGE_TONES: Record<string, string> = {
+  neutral: "bg-zinc-800 text-zinc-400",
+  sky: "bg-sky-950 text-sky-400",
+  emerald: "bg-emerald-950 text-emerald-400",
+  indigo: "bg-indigo-950 text-indigo-400",
+  amber: "bg-amber-950 text-amber-400",
+  red: "bg-red-950 text-red-400",
+  zinc: "bg-zinc-800 text-zinc-500",
+};
+
+/** Chip de célula de tabela — mesma marcação repetida em items/monsters/npcs/statuses/skills. */
+export function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: keyof typeof BADGE_TONES;
+}) {
+  return <span className={`rounded px-1.5 py-0.5 text-xs ${BADGE_TONES[tone]}`}>{children}</span>;
+}
+
+/** Select de filtro de lista: recebe as opções já com a sentinela "todos" (ver `selectOptions` em @ragnarok/game-data). */
+export function FilterSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  className = "w-auto",
+}: {
+  value: "" | T;
+  onChange: (v: "" | T) => void;
+  options: { value: "" | T; label: string }[];
+  className?: string;
+}) {
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value as "" | T)} className={className}>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 export function Section({
   title,
   children,

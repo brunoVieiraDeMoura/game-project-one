@@ -406,7 +406,7 @@ export function EditorScene() {
       <NpcPaths />
 
       {/* gatilhos de área (boxes translúcidos coloridos por tipo) + rascunho */}
-      <TriggerBoxes />
+      <TriggerBoxes cellToWorld={cellToWorld} cellW={cellW} cellD={cellD} levelY={levelY} />
 
       {/* medição: pontos + linha + distância */}
       <MeasureViz measure={measure} />
@@ -522,22 +522,54 @@ function NpcPaths() {
   );
 }
 
-/** converte uma área de células (col,row,w,h) num box de mundo (centro + tamanho
- * + altura do terreno no centro). Amostra os 4 cantos p/ cobrir o offset hex. */
-function areaToBox(map: NonNullable<ReturnType<typeof useEditorStore.getState>["map"]>, a: { col: number; row: number; w: number; h: number }) {
+/**
+ * Converte uma área de células (col,row,w,h) num box de mundo (centro +
+ * tamanho + altura do terreno no centro).
+ *
+ * Recebe a grade do MAPA (`cellToWorld`/`cellW`/`cellD`/`levelY`) em vez de
+ * importar `hexToWorld`/`HEX_W`/`HEX_V`/`levelToY` direto do mundo hexagonal:
+ * era o único lugar do arquivo que fazia isso — `onDown`/`onMove`/
+ * `propsVisiveis` já usam a grade certa (`gridFor(map)`, hex OU quadrada
+ * conforme `terrainMode`). Num mapa importado do rAthena (`"square"`, o tipo
+ * mais comum — servidor real), `HEX_W()`/`HEX_V()` dependem de `hexScale`,
+ * bem diferente do `SQUARE_SIZE=2` fixo da grade quadrada (ver CLAUDE.md: "A
+ * grade quadrada NÃO passa por hexScale") — a caixa do gatilho saía na
+ * posição/escala erradas, mesmo com a célula gravada certa.
+ *
+ * Exportada só para teste (`EditorScene.areaToBox.test.ts`) — confere que a
+ * caixa de fato usa a grade recebida, não uma fixa.
+ */
+export function areaToBox(
+  map: NonNullable<ReturnType<typeof useEditorStore.getState>["map"]>,
+  a: { col: number; row: number; w: number; h: number },
+  cellToWorld: (col: number, row: number) => { x: number; z: number },
+  cellW: number,
+  cellD: number,
+  levelY: (level: number) => number,
+) {
   const c1 = a.col, r1 = a.row, c2 = a.col + a.w - 1, r2 = a.row + a.h - 1;
-  const pts = [hexToWorld(c1, r1), hexToWorld(c2, r1), hexToWorld(c1, r2), hexToWorld(c2, r2)];
+  const pts = [cellToWorld(c1, r1), cellToWorld(c2, r1), cellToWorld(c1, r2), cellToWorld(c2, r2)];
   const xs = pts.map((p) => p.x), zs = pts.map((p) => p.z);
-  const minX = Math.min(...xs) - HEX_W() / 2, maxX = Math.max(...xs) + HEX_W() / 2;
-  const minZ = Math.min(...zs) - HEX_V() / 2, maxZ = Math.max(...zs) + HEX_V() / 2;
+  const minX = Math.min(...xs) - cellW / 2, maxX = Math.max(...xs) + cellW / 2;
+  const minZ = Math.min(...zs) - cellD / 2, maxZ = Math.max(...zs) + cellD / 2;
   const ccol = Math.round((c1 + c2) / 2), crow = Math.round((r1 + r2) / 2);
-  const y = levelToY(map.heightmap[cellIndex(map, ccol, crow)] ?? 0);
+  const y = levelY(map.heightmap[cellIndex(map, ccol, crow)] ?? 0);
   return { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, sx: maxX - minX, sz: maxZ - minZ, y };
 }
 
 /** gatilhos de área: um box translúcido por trigger (cor por tipo) + o rascunho
  * sendo desenhado. Clicar num box seleciona o trigger (edita no Inspector). */
-function TriggerBoxes() {
+function TriggerBoxes({
+  cellToWorld,
+  cellW,
+  cellD,
+  levelY,
+}: {
+  cellToWorld: (col: number, row: number) => { x: number; z: number };
+  cellW: number;
+  cellD: number;
+  levelY: (level: number) => number;
+}) {
   const map = useEditorStore((s) => s.map);
   const draft = useEditorStore((s) => s.areaDraft);
   const draftKind = useEditorStore((s) => s.triggerKind);
@@ -550,7 +582,7 @@ function TriggerBoxes() {
   return (
     <>
       {(map.triggers ?? []).map((t: MapTrigger, i) => {
-        const b = areaToBox(map, t.area);
+        const b = areaToBox(map, t.area, cellToWorld, cellW, cellD, levelY);
         const col = triggerColor(t.kind);
         const on = selected === i;
         return (
@@ -576,7 +608,7 @@ function TriggerBoxes() {
       })}
       {/* rascunho ao vivo */}
       {draft && (() => {
-        const b = areaToBox(map, draft);
+        const b = areaToBox(map, draft, cellToWorld, cellW, cellD, levelY);
         const col = triggerColor(draftKind);
         return (
           <group position={[b.cx, b.y + H / 2, b.cz]}>

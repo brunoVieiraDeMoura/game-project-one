@@ -76,6 +76,7 @@ export function TexturePanel() {
             </div>
             <select
               value={atual}
+              aria-label={`Textura de ${label}`}
               onChange={(e) => setTerrainStyle(key, { texture: e.target.value })}
               disabled={opcoes.length === 0}
               style={{
@@ -108,11 +109,14 @@ export function TexturePanel() {
                 step={1}
                 value={escala}
                 title="Unidades de mundo por repetição da textura. Aumente se o chão parecer cor sólida."
+                aria-label={`Tamanho da textura de ${label}`}
                 onChange={(e) => setTerrainStyle(key, { scale: Number(e.target.value) })}
                 style={{ marginLeft: "auto", width: 100 }}
               />
               <button
+                type="button"
                 title="Volta ao tamanho padrão desta superfície"
+                aria-label={`Volta o tamanho de ${label} ao padrão`}
                 onClick={() => setTerrainStyle(key, { scale: ESCALA_PADRAO[key] })}
                 style={{
                   padding: "1px 6px",

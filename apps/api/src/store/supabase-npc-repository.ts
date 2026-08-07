@@ -19,7 +19,7 @@ export class SupabaseNpcRepository implements NpcRepository {
     });
   }
 
-  async list({ page, pageSize, search, kind, mapId }: NpcListQuery): Promise<NpcListResult> {
+  async list({ page, pageSize, search, kind, mapId, origin }: NpcListQuery): Promise<NpcListResult> {
     let query = this.client.from("npcs").select("*", { count: "exact" });
     if (search) {
       const q = sanitizeSearch(search);
@@ -27,6 +27,7 @@ export class SupabaseNpcRepository implements NpcRepository {
     }
     if (kind) query = query.eq("kind", kind);
     if (mapId) query = query.eq("map_id", mapId);
+    if (origin) query = query.eq("origin", origin);
     const start = (page - 1) * pageSize;
     const { data, error, count } = await query.order("id").range(start, start + pageSize - 1);
     if (error && error.code === "PGRST103") {

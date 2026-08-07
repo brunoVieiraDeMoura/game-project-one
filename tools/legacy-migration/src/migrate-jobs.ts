@@ -102,8 +102,10 @@ interface RawTreeEntry {
   Tree?: RawTreeSkill[];
 }
 
-/** Parse `enum e_job` from mmo.hpp → Map<lowercased yml name, numeric id>. */
-function parseJobIds(): Map<string, number> {
+/** Parse `enum e_job` from mmo.hpp → Map<lowercased yml name, numeric id>.
+ * Exportado pro Mapper de Classes (job-class-mapper.ts) reusar via um
+ * `JobIdResolver` real em vez de duplicar o parse (leia1.txt requisito 2). */
+export function parseJobIds(): Map<string, number> {
   const src = readFileSync(join(REPO_ROOT, "rathena", "src", "common", "mmo.hpp"), "utf-8");
   const start = src.indexOf("enum e_job {");
   const end = src.indexOf("};", start);
@@ -123,7 +125,7 @@ function parseJobIds(): Map<string, number> {
 }
 
 /** Parse skill_db.yml → Map<skill aegis name, numeric id>. */
-function parseSkillIds(dbDir: string): Map<string, number> {
+export function parseSkillIds(dbDir: string): Map<string, number> {
   const doc = parseYaml(readFileSync(join(dbDir, "skill_db.yml"), "utf-8"), {
     maxAliasCount: -1,
     uniqueKeys: false,

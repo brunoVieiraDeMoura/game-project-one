@@ -97,7 +97,9 @@ export const LOGIN_REGIOES = [
  * horizontal. A posição vertical não está aqui: o painel é CENTRADO na tela,
  * que é o pedido — âncora fixa o deixava baixo demais em janela larga.
  */
-export const LOGIN_FORM = { largura: 26 } as const;
+/** medido em `referencia.png`: o painel vai de ~465 a ~935 px num palco de
+ * 1402 (33,5%) — 26 estava pequeno demais contra a referência */
+export const LOGIN_FORM = { largura: 32 } as const;
 
 export type LoginRegiao = (typeof LOGIN_REGIOES)[number];
 
@@ -198,12 +200,16 @@ export const LOGIN_COLORS = {
   gold: "#c9a227",
   goldSoft: "rgba(201,162,39,0.55)",
   goldFaint: "rgba(201,162,39,0.22)",
-  /** botão de ENTRAR — o vinho da capa do imperador na pintura */
-  entrar: "#6d1f1c",
-  entrarBorda: "#a8452f",
-  /** botão de CRIAR CONTA — o azul das bandeiras */
-  criar: "#1c2c52",
-  criarBorda: "#3f5c96",
+  /**
+   * Botão de ENTRAR — olivo, sampleado direto de `referencia.png` (era o
+   * vinho da capa do imperador, mas a referência mostra a fita verde-oliva;
+   * a arte manda mais que a pintura de fundo).
+   */
+  entrar: "#43441d",
+  entrarBorda: "#373a16",
+  /** botão de CRIAR CONTA — azul, sampleado de `referencia.png` */
+  criar: "#243243",
+  criarBorda: "#202a35",
   /** vermelho do aviso de erro */
   danger: "#e0524a",
 } as const;

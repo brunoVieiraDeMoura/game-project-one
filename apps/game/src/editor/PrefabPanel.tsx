@@ -35,10 +35,11 @@ export function PrefabPanel({ embedded }: { embedded?: boolean } = {}) {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") onSave(); }}
           placeholder="nome do prefab"
+          aria-label="Nome do prefab"
           disabled={selCount === 0}
           style={{ flex: 1, minWidth: 0, background: ink.slot, border: `1px solid ${ink.border}`, borderRadius: 6, color: ink.text, font: "12px system-ui", padding: "5px 8px" }}
         />
-        <RpgButton color="blue" onClick={onSave}>Salvar</RpgButton>
+        <RpgButton color="blue" disabled={selCount === 0} title={selCount === 0 ? "Selecione ao menos um objeto primeiro" : "Salvar prefab"} onClick={onSave}>Salvar</RpgButton>
       </div>
 
       <div style={{ height: 1, background: ink.border, margin: "0 0 8px" }} />
@@ -55,8 +56,8 @@ export function PrefabPanel({ embedded }: { embedded?: boolean } = {}) {
                 <div style={{ font: "600 12px system-ui", color: ink.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pf.name}</div>
                 <div style={{ font: "10px system-ui", color: ink.faint }}>{pf.items.length} props</div>
               </div>
-              <RpgButton color={armed ? "blue" : "grey"} active={armed} onClick={() => armPrefab(armed ? null : pf.id)}>{armed ? "Carimbando…" : "Colocar"}</RpgButton>
-              <RpgButton color="grey" onClick={() => deletePrefab(pf.id)}>🗑</RpgButton>
+              <RpgButton color={armed ? "blue" : "grey"} active={armed} title={armed ? "Clique pra desarmar" : `Carimbar "${pf.name}" no terreno`} onClick={() => armPrefab(armed ? null : pf.id)}>{armed ? "Carimbando…" : "Colocar"}</RpgButton>
+              <RpgButton color="grey" title={`Apagar prefab "${pf.name}"`} onClick={() => deletePrefab(pf.id)}>🗑</RpgButton>
             </div>
           );
         })}
@@ -71,7 +72,7 @@ export function PrefabPanel({ embedded }: { embedded?: boolean } = {}) {
     <Panel style={{ width: 240 }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
         <div style={{ font: "700 13px system-ui", color: ink.text }}>Prefabs</div>
-        <div style={{ marginLeft: "auto" }}><RpgButton color="grey" onClick={close}>✕</RpgButton></div>
+        <div style={{ marginLeft: "auto" }}><RpgButton color="grey" title="Fechar" onClick={close}>✕</RpgButton></div>
       </div>
       {body}
     </Panel>

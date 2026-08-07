@@ -18,8 +18,20 @@ import { useEffect, useState } from "react";
  */
 
 export interface NineSliceSpec {
-  /** PNG com o canto superior-direito */
+  /** PNG com o canto — superior-direito por padrão, ver `cornerAnchor` */
   corner: string;
+  /**
+   * De que canto a arte É, antes de qualquer espelhamento.
+   *
+   * Toda a arte do projeto até aqui trazia o canto SUPERIOR-DIREITO — daí o
+   * default. `bordas-botoes-cards.png` (login-new) é o primeiro caso
+   * contrário: o chanfro corre do canto inferior-esquerdo pro meio da borda
+   * de cima (linha 0 opaca só a partir de x=11, coluna 0 só a partir de y=9 —
+   * conferido no alpha). Montar como se fosse superior-direito giraria o
+   * chanfro para o lado errado em TODO canto — visível de cara, o desenho é
+   * assimétrico.
+   */
+  cornerAnchor?: "top-right" | "top-left";
   /** x da arte onde começa o quadrado do canto (o resto à esquerda é reto) */
   cornerSx: number;
   /** lado do quadrado do canto, em px da arte — vira `border-image-slice` */
@@ -40,7 +52,7 @@ const cache = new Map<string, string>();
 const pendente = new Map<string, Promise<string>>();
 
 function chave(spec: NineSliceSpec): string {
-  return `${spec.corner}|${spec.cornerSx}|${spec.slice ?? 24}|${spec.edge ?? ""}|${spec.edgeThickness}`;
+  return `${spec.corner}|${spec.cornerAnchor ?? "tr"}|${spec.cornerSx}|${spec.slice ?? 24}|${spec.edge ?? ""}|${spec.edgeThickness}`;
 }
 
 function carregar(src: string): Promise<HTMLImageElement> {
@@ -77,10 +89,14 @@ async function montar(spec: NineSliceSpec): Promise<string> {
     g.drawImage(canto, spec.cornerSx, 0, S, S, 0, 0, S, S);
     g.restore();
   };
-  porCanto(OUT - S, 0, 1, 1); // superior-direito: a arte, sem espelho
-  porCanto(0, 0, -1, 1);
-  porCanto(OUT - S, OUT - S, 1, -1);
-  porCanto(0, OUT - S, -1, -1);
+  // `flip` inverte qual slot recebe a arte SEM espelho. Com o default
+  // (superior-direito), `flip = 1` reproduz exatamente o comportamento de
+  // sempre — nenhum consumidor existente muda de resultado.
+  const flip = spec.cornerAnchor === "top-left" ? -1 : 1;
+  porCanto(OUT - S, 0, flip, 1); // superior-direito
+  porCanto(0, 0, -flip, 1); // superior-esquerdo
+  porCanto(OUT - S, OUT - S, flip, -1); // inferior-direito
+  porCanto(0, OUT - S, -flip, -1); // inferior-esquerdo
 
   /**
    * Trechos retos. Todos saem do MESMO desenho de traço horizontal — com peça

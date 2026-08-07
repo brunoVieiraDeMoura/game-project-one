@@ -226,7 +226,15 @@ export const GameMapSchema = z
   .refine((m) => m.ramps.length % 2 === 0, { message: "ramps must be flat [cell, edge] pairs" });
 export type GameMap = z.infer<typeof GameMapSchema>;
 
-/** Cria um mapa novo em branco (terreno em blocos, chão de grama plano). */
+/**
+ * Cria um mapa novo em branco, terreno square (chão de grama plano) — o
+ * mesmo `terrainMode` dos mapas importados do rAthena (`prt_fild08` etc).
+ *
+ * Era `"blocks"` (hexagonal): todo mapa autorado do zero nascia hex, mesmo
+ * o projeto não usando mais hexágono nenhum — só o padrão real do rAthena.
+ * `cellSize` fica só por compatibilidade do schema; o modo square usa o
+ * tamanho fixo de `grid/squareGrid.ts`, não este campo.
+ */
 export function createBlankMap(id: string, name: string, width = 32, height = 32, cellSize = 5): GameMap {
   const n = width * height;
   return {
@@ -234,7 +242,7 @@ export function createBlankMap(id: string, name: string, width = 32, height = 32
     name,
     size: { width, height },
     cellSize,
-    terrainMode: "blocks",
+    terrainMode: "square",
     heightmap: new Array(n).fill(0),
     collision: new Array(n).fill("walkable"),
     surface: new Array(n).fill("grass"),
@@ -257,3 +265,5 @@ export function cellIndex(map: Pick<GameMap, "size">, x: number, y: number): num
 }
 
 export const MAP_SCHEMA_VERSION = 6; // v6: terrainStyle (textura+escala por superfície)
+
+export { resizeGameMap, objetosForaDosLimites, type ResizeMapResult } from "./resize";

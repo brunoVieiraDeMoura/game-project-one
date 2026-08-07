@@ -21,6 +21,7 @@ function NumRow({ label, values, onChange }: { label: string; values: [number, n
           <input
             key={ax}
             type="number"
+            aria-label={`${label} ${ax}`}
             value={Math.round((values[i] ?? 0) * 100) / 100}
             step={0.5}
             onChange={(e) => {
@@ -117,7 +118,7 @@ export function Inspector({ embedded }: { embedded?: boolean } = {}) {
           </>
         )}
 
-        <button onClick={deleteSelected} style={{ width: "100%", padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(248,113,113,0.15)", color: "#f87171", font: "600 12px system-ui", cursor: "pointer", marginTop: 4 }}>Deletar gatilho</button>
+        <button type="button" onClick={deleteSelected} style={{ width: "100%", padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(248,113,113,0.15)", color: "#f87171", font: "600 12px system-ui", cursor: "pointer", marginTop: 4 }}>Deletar gatilho</button>
       </Wrap>
     );
   }
@@ -131,8 +132,8 @@ export function Inspector({ embedded }: { embedded?: boolean } = {}) {
           <b>{multiCount}</b> objetos selecionados. Arraste um deles pra mover todos; ou:
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={duplicateSelected} style={{ flex: 1, padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(255,255,255,0.06)", color: ink.text, font: "600 12px system-ui", cursor: "pointer" }}>Duplicar</button>
-          <button onClick={deleteSelected} style={{ flex: 1, padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(248,113,113,0.15)", color: "#f87171", font: "600 12px system-ui", cursor: "pointer" }}>Deletar</button>
+          <button type="button" onClick={duplicateSelected} style={{ flex: 1, padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(255,255,255,0.06)", color: ink.text, font: "600 12px system-ui", cursor: "pointer" }}>Duplicar</button>
+          <button type="button" onClick={deleteSelected} style={{ flex: 1, padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(248,113,113,0.15)", color: "#f87171", font: "600 12px system-ui", cursor: "pointer" }}>Deletar</button>
         </div>
         <p style={{ font: "10px system-ui", color: ink.faint, marginTop: 8 }}>Shift+clique adiciona/remove da seleção.</p>
       </Wrap>
@@ -162,6 +163,7 @@ export function Inspector({ embedded }: { embedded?: boolean } = {}) {
             <div style={{ height: 1, background: ink.border, margin: "2px 0 8px" }} />
             <div style={{ font: "700 11px system-ui", color: ink.text, marginBottom: 6 }}>Rota de patrulha</div>
             <button
+              type="button"
               onClick={editPath}
               style={{ width: "100%", padding: "6px", borderRadius: 6, border: `1px solid ${tool === "path" ? "#4f46e5" : ink.border}`, background: tool === "path" ? "rgba(79,70,229,0.25)" : "rgba(255,255,255,0.06)", color: ink.text, font: "600 12px system-ui", cursor: "pointer", marginBottom: 8 }}
             >
@@ -178,7 +180,7 @@ export function Inspector({ embedded }: { embedded?: boolean } = {}) {
                 </select>
                 <div style={{ font: "600 11px system-ui", color: ink.dim, marginBottom: 3 }}>Velocidade: {spawn.path?.speed ?? 3}</div>
                 <input type="range" min={0.5} max={12} step={0.5} value={spawn.path?.speed ?? 3} onChange={(e) => setPathSpeed(Number(e.target.value))} style={{ width: "100%", marginBottom: 8 }} />
-                <button onClick={clearPath} style={{ width: "100%", padding: "5px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(255,255,255,0.06)", color: ink.dim, font: "600 11px system-ui", cursor: "pointer", marginBottom: 10 }}>Limpar rota</button>
+                <button type="button" onClick={clearPath} style={{ width: "100%", padding: "5px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(255,255,255,0.06)", color: ink.dim, font: "600 11px system-ui", cursor: "pointer", marginBottom: 10 }}>Limpar rota</button>
               </>
             )}
           </>
@@ -202,6 +204,7 @@ export function Inspector({ embedded }: { embedded?: boolean } = {}) {
           </>
         )}
         <button
+          type="button"
           onClick={deleteSelected}
           style={{ width: "100%", padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(248,113,113,0.15)", color: "#f87171", font: "600 12px system-ui", cursor: "pointer" }}
         >
@@ -257,6 +260,7 @@ export function Inspector({ embedded }: { embedded?: boolean } = {}) {
           />
 
           <button
+            type="button"
             onClick={deleteSelected}
             style={{ width: "100%", padding: "6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(248,113,113,0.15)", color: "#f87171", font: "600 12px system-ui", cursor: "pointer" }}
           >

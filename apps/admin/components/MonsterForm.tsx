@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MonsterSchema, type Monster } from "@ragnarok/game-data";
+import {
+  ELEMENT_LABELS,
+  MONSTER_AI_MODE_LABELS,
+  MONSTER_CLASS_LABELS,
+  MonsterSchema,
+  RACE_LABELS,
+  SIZE_LABELS,
+  labelOf,
+  type Monster,
+} from "@ragnarok/game-data";
 import { createMonster, updateMonster } from "@/lib/api";
 import { Button, Checkbox, Field, Input, Section, Select } from "./ui";
 
@@ -291,14 +300,14 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
           <Field label="Modo de IA (derivado)">
             <Select value={mob.aiMode} onChange={(e) => set("aiMode", e.target.value as Monster["aiMode"])}>
               {AI_MODES.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>{labelOf(MONSTER_AI_MODE_LABELS, m)}</option>
               ))}
             </Select>
           </Field>
           <Field label="Classe">
             <Select value={mob.class} onChange={(e) => set("class", e.target.value as Monster["class"])}>
               {CLASSES.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>{labelOf(MONSTER_CLASS_LABELS, c)}</option>
               ))}
             </Select>
           </Field>
@@ -308,7 +317,7 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
           <Field label="Raça">
             <Select value={mob.race} onChange={(e) => set("race", e.target.value as Monster["race"])}>
               {RACES.map((r) => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>{labelOf(RACE_LABELS, r)}</option>
               ))}
             </Select>
           </Field>
@@ -318,7 +327,7 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
               onChange={(e) => set("element", { ...mob.element, type: e.target.value as Monster["element"]["type"] })}
             >
               {ELEMENTS.map((el) => (
-                <option key={el} value={el}>{el}</option>
+                <option key={el} value={el}>{labelOf(ELEMENT_LABELS, el)}</option>
               ))}
             </Select>
           </Field>
@@ -334,7 +343,7 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
           <Field label="Tamanho">
             <Select value={mob.size} onChange={(e) => set("size", e.target.value as Monster["size"])}>
               {SIZES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{labelOf(SIZE_LABELS, s)}</option>
               ))}
             </Select>
           </Field>

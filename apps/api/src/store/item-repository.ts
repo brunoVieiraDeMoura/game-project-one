@@ -1,10 +1,12 @@
-import type { Item } from "@ragnarok/game-data";
+import type { Item, ItemSubType, ItemType } from "@ragnarok/game-data";
 
 export interface ItemListQuery {
   page: number;
   pageSize: number;
   /** name/aegisName substring filter */
   search?: string | undefined;
+  type?: ItemType | undefined;
+  subType?: ItemSubType | undefined;
 }
 
 export interface ItemListResult {

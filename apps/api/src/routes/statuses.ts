@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { StatusEffectDefSchema } from "@ragnarok/game-data";
+import { StatusCategorySchema, StatusEffectDefSchema, StatusGroupSchema } from "@ragnarok/game-data";
 import type { StatusRepository } from "../store/status-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
@@ -11,6 +11,8 @@ const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(2000).default(20),
   search: z.string().trim().min(1).optional(),
+  category: StatusCategorySchema.optional(),
+  group: StatusGroupSchema.optional(),
 });
 
 const IdParamSchema = z.object({ id: z.string().trim().min(1).max(64) });

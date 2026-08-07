@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useCursorStore } from "../ui/cursorStore";
 import { useAttackStore } from "./attackStore";
 import { useSkillWalkStore } from "./skillWalkStore";
+import { useSkillTargetStore } from "./skillTargetStore";
 
 /**
  * Modo de mira: a skill escolhida está esperando o jogador apontar.
@@ -79,5 +80,6 @@ useAimStore.subscribe((estado, anterior) => {
     // ordem, não empilhar duas. Sem isto, o personagem chegaria ao alcance da
     // ANTERIOR e a lançaria no meio da mira da nova.
     useSkillWalkStore.getState().parar();
+    useSkillTargetStore.getState().parar();
   }
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { GameMap } from "@ragnarok/map-format";
 import { updateMap, createMap } from "@/lib/api";
 
@@ -19,6 +20,23 @@ export default function EditMapPage({ params }: { params: Promise<{ id: string }
   const isNewRoute = decoded === "new";
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [saveState, setSaveState] = useState<string>("");
+  /**
+   * Nome e dimensão do mapa NOVO, escolhidos em `/maps` (NovoMapaForm).
+   *
+   * Chegam pela URL porque quem monta o `GameMap` em branco é o editor 3D
+   * (game/EditorView), não esta página — ela só embute o iframe. `useSearchParams`
+   * e não `params`, porque esses três são query string (`?name=&w=&h=`), não
+   * parte da rota.
+   */
+  const search = useSearchParams();
+  const novoQS = isNewRoute
+    ? new URLSearchParams({
+        new: "1",
+        ...(search.get("name") ? { name: search.get("name")! } : {}),
+        ...(search.get("w") ? { w: search.get("w")! } : {}),
+        ...(search.get("h") ? { h: search.get("h")! } : {}),
+      }).toString()
+    : "";
 
   useEffect(() => {
     const onMsg = async (e: MessageEvent) => {
@@ -55,7 +73,7 @@ export default function EditMapPage({ params }: { params: Promise<{ id: string }
       </div>
       <iframe
         ref={iframeRef}
-        src={isNewRoute ? `${GAME_URL}/editor?new=1` : `${GAME_URL}/editor?map=${encodeURIComponent(decoded)}`}
+        src={isNewRoute ? `${GAME_URL}/editor?${novoQS}` : `${GAME_URL}/editor?map=${encodeURIComponent(decoded)}`}
         className="flex-1 border-0"
         title="Editor de mapas 3D"
       />

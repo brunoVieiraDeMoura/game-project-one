@@ -39,8 +39,10 @@ export class JsonItemRepository implements ItemRepository {
     await writeFile(this.dataPath, JSON.stringify([...this.items.values()], null, 1), "utf-8");
   }
 
-  async list({ page, pageSize, search }: ItemListQuery): Promise<ItemListResult> {
+  async list({ page, pageSize, search, type, subType }: ItemListQuery): Promise<ItemListResult> {
     let all = [...this.items.values()];
+    if (type) all = all.filter((i) => i.type === type);
+    if (subType) all = all.filter((i) => i.subType === subType);
     if (search) {
       const q = search.toLowerCase();
       all = all.filter(

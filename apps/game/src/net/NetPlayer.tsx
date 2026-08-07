@@ -39,6 +39,8 @@ import { estaCastando } from "./castStore";
 import { useAtaqueBasico } from "./ataqueBasico";
 import { alcanceDaSkill } from "./skillCatalog";
 import { celulaNoAlcance, dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
+import { useSkillTargetStore } from "./skillTargetStore";
+import { pulsoDe } from "./combatAnim";
 import { SelfBars } from "./SelfBars";
 
 /**
@@ -136,7 +138,10 @@ export function NetPlayer({
   mapping,
   gameplay,
   positionRef,
-  characterKey = "knight",
+  // o personagem principal usa o modelo do Mago (ver CLAUDE.md, troca do
+  // Knight); NetPlayer é sempre o PRÓPRIO jogador, então não há classe por
+  // enquanto — um único modelo serve a todos até existir seleção por classe.
+  characterKey = "mage",
   cellSize,
 }: {
   map: GameMap;
@@ -150,7 +155,16 @@ export function NetPlayer({
   const group = useRef<THREE.Group>(null);
   /** só o boneco gira; o que fica no grupo raiz não acompanha a virada */
   const model = useRef<THREE.Group>(null);
-  const { scene, play } = useCharacter(CHARACTER_URLS[characterKey], gameplay.animationSpeed);
+  const { scene, play, playOnce } = useCharacter(CHARACTER_URLS[characterKey], gameplay.animationSpeed);
+  /**
+   * Ataque e conjuração são pulsos de OUTRO módulo (`net/combatAnim`), não do
+   * `self` deste store — o mesmo golpe que faz a barra de dano piscar é a
+   * deixa da animação. `ocupadoAte` é até quando a animação de combate É DONA
+   * do loco (nem idle nem walk/run interrompem enquanto ela toca).
+   */
+  const ultimoPulsoVisto = useRef(0);
+  const ocupadoAte = useRef(0);
+  const emCombateAntes = useRef(false);
   const moveTarget = usePlayStore((s) => s.moveTarget);
   const setMoveTarget = usePlayStore((s) => s.setMoveTarget);
   const wasMoving = useRef(false);
@@ -182,6 +196,8 @@ export function NetPlayer({
    * golpe.
    */
   const destinoDaSkill = useRef<{ x: number; y: number } | null>(null);
+  /** o mesmo dedupe, para a ida até o alcance de uma skill de ALVO (ver `perseguirParaCastar`) */
+  const destinoDoCast = useRef<{ x: number; y: number } | null>(null);
   /** posição desenhada no quadro anterior — só para o detector de recuada (DEV) */
   // `geracao`: de QUAL mundo é esta posição — ver o bloco dos detectores
   const ultimoDesenho = useRef<{ x: number; y: number; movedAt: number; t: number; geracao: number } | null>(null);
@@ -608,6 +624,57 @@ export function NetPlayer({
     fila.current.pedir(destino, now, pedirMovimento);
   };
 
+  /**
+   * Anda até o alcance e LANÇA A MAGIA NELE — a quarta ordem de vários
+   * quadros, irmã de `perseguirAlvo` (bater) e `lancarSkillPendente` (célula).
+   *
+   * Diferente do ataque, não há golpe contínuo: chegando ao alcance, sai UM
+   * `skill:use` e a ordem termina — `CZ.USE_SKILL` não tem `stepaction` como o
+   * ataque (unit.cpp:2690 só guarda o pedido enquanto o personagem JÁ anda), então
+   * reenviar não ajudaria um alvo parado fora de alcance a virar alcançável.
+   */
+  const perseguirParaCastar = (now: number) => {
+    const p = useSkillTargetStore.getState().pendente;
+    if (!p) {
+      destinoDoCast.current = null;
+      return;
+    }
+
+    const alvo = useWorldStore.getState().entities[p.gid];
+    if (!alvo) {
+      useSkillTargetStore.getState().parar();
+      return;
+    }
+
+    if (now - p.desde > PERSEGUICAO_MAX_MS) {
+      useSkillTargetStore.getState().parar();
+      return;
+    }
+
+    // o alvo anda: mira a posição ATUAL dele, como `perseguirAlvo` já faz
+    const cel = interpolatedCell(alvo, now);
+    const dele = { x: Math.round(cel.x), y: Math.round(cel.y) };
+    const meu = interpolatedCell(useWorldStore.getState().self, now);
+    const eu = { x: Math.round(meu.x), y: Math.round(meu.y) };
+
+    if (dentroDoAlcance(eu, dele, p.raio)) {
+      // a ordem morre ANTES do emit: `skill:use` não tem resposta de sucesso
+      // aqui, e deixá-la de pé faria o quadro seguinte lançar de novo
+      useSkillTargetStore.getState().parar();
+      destinoDoCast.current = null;
+      destinoFinal.current = null;
+      gateway().emit("skill:use", { skillId: p.skillId, level: p.level, targetGid: p.gid });
+      return;
+    }
+
+    const destino = celulaNoAlcance(eu, dele, p.raio);
+    if (!destino) return;
+    const anterior = destinoDoCast.current;
+    if (anterior && anterior.x === destino.x && anterior.y === destino.y) return;
+    destinoDoCast.current = destino;
+    fila.current.pedir(destino, now, pedirMovimento);
+  };
+
   // Contexto da sessão no export: um JSON que não diz em que mapa foi colhido
   // não se lê semanas depois (DEV; em produção o corpo some com o `ativo()`).
   useEffect(() => {
@@ -677,6 +744,7 @@ export function NetPlayer({
       useAttackStore.getState().parar();
       usePickupStore.getState().parar();
       useSkillWalkStore.getState().parar();
+      useSkillTargetStore.getState().parar();
       /**
        * Clicar FORA do alvo desliga o Ataque Básico.
        *
@@ -750,7 +818,16 @@ export function NetPlayer({
       const atk = useAttackStore.getState().alvo;
       const get = usePickupStore.getState().alvo;
       const sk = useSkillWalkStore.getState().pendente;
-      const ordem = atk ? `atk:${atk.gid}` : get ? `get:${get.gid}` : sk ? `sk:${sk.x},${sk.y}` : null;
+      const skAlvo = useSkillTargetStore.getState().pendente;
+      const ordem = atk
+        ? `atk:${atk.gid}`
+        : get
+          ? `get:${get.gid}`
+          : sk
+            ? `sk:${sk.x},${sk.y}`
+            : skAlvo
+              ? `skAlvo:${skAlvo.gid}`
+              : null;
       if (ordem !== ordemCorrente.current) {
         ordemCorrente.current = ordem;
         if (ordem) {
@@ -763,6 +840,7 @@ export function NetPlayer({
     perseguirAlvo(now, self);
     buscarItem(now);
     lancarSkillPendente(now);
+    perseguirParaCastar(now);
     const cell = interpolatedCell(self, now);
 
     /**
@@ -881,7 +959,34 @@ export function NetPlayer({
     g.position.set(world.x, world.y, world.z);
     positionRef?.current.set(world.x, world.y, world.z);
 
-    if (cell.moving !== wasMoving.current) {
+    /**
+     * ANIMAÇÃO DE COMBATE — lida ANTES da de locomoção, porque ela pode tomar
+     * o loco por cima dela (ver `ocupadoAte`).
+     *
+     * O pulso é o mesmo dado que já faz o dano piscar (`entity:action`,
+     * `skill:casting`, `skill:cast`) — aqui só se decide QUAL clip tocar.
+     * `attack`/`castRelease` são ONE-SHOT (`playOnce`, que devolve a duração
+     * real do clip); `castStart` é LOOP (`play`, como idle/walk/run) e dura o
+     * que a barra de conjuração do servidor durar — `skill:cast` (ou o fim do
+     * prazo) troca para a liberação.
+     */
+    const selfGid = useWorldStore.getState().selfGid;
+    const pulso = pulsoDe(selfGid);
+    if (pulso && pulso.em > ultimoPulsoVisto.current) {
+      ultimoPulsoVisto.current = pulso.em;
+      if (pulso.tipo === "attack") {
+        ocupadoAte.current = now + playOnce("attack") * 1000;
+      } else if (pulso.tipo === "castStart") {
+        play("cast");
+        ocupadoAte.current = now + Math.max(150, pulso.duracaoMs ?? 0);
+      } else {
+        ocupadoAte.current = now + playOnce("castRelease") * 1000;
+      }
+    }
+    const emCombate = now < ocupadoAte.current;
+    const saiuDoCombate = emCombateAntes.current && !emCombate;
+    emCombateAntes.current = emCombate;
+    if (!emCombate && (cell.moving !== wasMoving.current || saiuDoCombate)) {
       wasMoving.current = cell.moving;
       play(cell.moving ? "run" : "idle");
     }

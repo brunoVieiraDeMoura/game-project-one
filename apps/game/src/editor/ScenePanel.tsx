@@ -16,7 +16,7 @@ export function ScenePanel({ embedded }: { embedded?: boolean } = {}) {
   const slider = (label: string, val: number, min: number, max: number, step: number, on: (n: number) => void) => (
     <div style={{ marginBottom: 8 }}>
       <div style={{ font: "600 11px system-ui", color: ink.dim, marginBottom: 2 }}>{label}: {val}</div>
-      <input type="range" min={min} max={max} step={step} value={val} onChange={(e) => on(Number(e.target.value))} style={{ width: "100%" }} />
+      <input type="range" aria-label={label} min={min} max={max} step={step} value={val} onChange={(e) => on(Number(e.target.value))} style={{ width: "100%" }} />
     </div>
   );
 
@@ -52,7 +52,7 @@ export function ScenePanel({ embedded }: { embedded?: boolean } = {}) {
     <Panel style={{ width: 230 }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
         <div style={{ font: "700 13px system-ui", color: ink.text }}>Cena</div>
-        <div style={{ marginLeft: "auto" }}><RpgButton color="grey" onClick={close}>✕</RpgButton></div>
+        <div style={{ marginLeft: "auto" }}><RpgButton color="grey" title="Fechar" onClick={close}>✕</RpgButton></div>
       </div>
       {body}
     </Panel>
@@ -112,6 +112,8 @@ function GroundPreview() {
           return (
             <button
               key={m.id}
+              type="button"
+              aria-pressed={on}
               onClick={() => setPreview({ groundMode: m.id })}
               style={{
                 flex: 1,

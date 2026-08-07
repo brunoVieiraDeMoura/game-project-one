@@ -1,9 +1,13 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChatFrame } from "../hud/ChatFrame";
 import { CurvedBox } from "./CurvedBox";
+import { CardFrame } from "./CardFrame";
+import { ChatFrame } from "../hud/ChatFrame";
+import { FRAME_SCALE, RAIL } from "./chatFrame";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "./charFrame";
-import { CHAT_ART_SIZE, FRAME_SCALE, RAIL } from "./chatFrame";
-import { LOGIN_ART, LOGIN_COLORS, LOGIN_FRAME_SCALE, u } from "./login";
+import { LoginFrame2, loginFrame2Trilhos } from "./LoginFrame2";
+import { LOGIN2_SIZE } from "./loginPanelArt";
+import { CanvaFrame, CharSelectFrame, canvaTrilhos, escalaDoCanva } from "./CanvaFrame";
+import { LOGIN_ART, LOGIN_COLORS, u } from "./login";
 
 /**
  * As peças comuns de `/login` e `/char-select`.
@@ -41,14 +45,37 @@ import { LOGIN_ART, LOGIN_COLORS, LOGIN_FRAME_SCALE, u } from "./login";
  * moldura", que dura um quadro.
  */
 const PalcoPx = createContext(0);
+/**
+ * A ALTURA do palco em px — janela larga e BAIXA (ultrawide, ou qualquer
+ * proporção mais achatada que a pintura) faz `u()` (que só conhece largura)
+ * gerar um título e um painel altos demais para caber: o topo do nome corta
+ * no teto da tela e o botão "Criar conta" corta no rodapé. `LoginColuna`
+ * consome isto para encolher o conjunto quando ele não cabe — sem mexer no
+ * resto (placas de região, atalhos, epígrafe), que são pequenos o bastante
+ * pra nunca estourar a altura.
+ */
+const PalcoAlturaPx = createContext(0);
 
 export function useLarguraDoPalco(): number {
   return useContext(PalcoPx);
 }
 
-export function LoginBackdrop({ children }: { children: ReactNode }) {
+export function useAlturaDoPalco(): number {
+  return useContext(PalcoAlturaPx);
+}
+
+export function LoginBackdrop({
+  children,
+  quadro = "login",
+}: {
+  children: ReactNode;
+  /** qual moldura externa desenhar — `/login` tem banda grossa embaixo,
+   * `/char-select` é fina e uniforme nos 4 lados (ui-change.txt) */
+  quadro?: "login" | "charSelect";
+}) {
   const palco = useRef<HTMLDivElement>(null);
   const [largura, setLargura] = useState(0);
+  const [altura, setAltura] = useState(0);
 
   /**
    * `ResizeObserver` e não `window.resize`: o palco muda de tamanho por
@@ -61,9 +88,11 @@ export function LoginBackdrop({ children }: { children: ReactNode }) {
     if (!el) return;
     const ro = new ResizeObserver(([e]) => {
       const w = e?.contentRect.width ?? 0;
+      const h = e?.contentRect.height ?? 0;
       // só publica na mudança REAL: o observer dispara com fração de pixel e
       // cada `setState` repinta a tela inteira de decoração
       setLargura((antes) => (Math.abs(antes - w) > 0.5 ? w : antes));
+      setAltura((antes) => (Math.abs(antes - h) > 0.5 ? h : antes));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -122,6 +151,32 @@ export function LoginBackdrop({ children }: { children: ReactNode }) {
         }
       >
         {/**
+         * O TOM da referência: `referencia.png` é um mapa em SÉPIA (sampleado:
+         * céu ~rgb(144,109,62), terra ~rgb(59,66,52) — uma família só de
+         * marrom/tan, sem azul nem verde de verdade), enquanto o `background.jpg`
+         * que o jogo usa é a pintura em cor CHEIA (céu azul, água azul, campo
+         * verde). São a MESMA pintura — só a referência aplicou um filtro por
+         * cima para o mapa ler como "página antiga".
+         *
+         * `mix-blend-mode: color` reproduz isso sem precisar de um asset novo:
+         * ele pega o MATIZ/SATURAÇÃO desta camada (um marrom só) e mantém a
+         * LUMINOSIDADE de baixo (a pintura) — o resultado é a pintura inteira
+         * na mesma família de cor, exatamente como a referência.
+         */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "#8a6a3f",
+            mixBlendMode: "color",
+            // 100% igualava TUDO na mesma matiz — a referência ainda deixa o
+            // céu mais claro e a água ligeiramente mais fria por baixo do
+            // sépia. Com folga, essa variação sutil passa por baixo do tingimento.
+            opacity: 0.82,
+            pointerEvents: "none",
+          }}
+        />
+        {/**
          * Escurecimento por cima da cena.
          *
          * A pintura tem céu claro e areia, e texto claro sobre eles some. Um véu
@@ -137,7 +192,19 @@ export function LoginBackdrop({ children }: { children: ReactNode }) {
             pointerEvents: "none",
           }}
         />
-        <PalcoPx.Provider value={largura}>{children}</PalcoPx.Provider>
+        <PalcoPx.Provider value={largura}>
+          <PalcoAlturaPx.Provider value={altura}>{children}</PalcoAlturaPx.Provider>
+        </PalcoPx.Provider>
+        {/* o quadro "canva principal" (leia1.txt/ui-change.txt) — por CIMA de
+            tudo, e por isso fora do fluxo de `children`: nenhum conteúdo deve
+            recuar por causa dele além do necessário (ver `canvaTrilhos`/
+            `charSelectTrilhos`) */}
+        {largura > 0 &&
+          (quadro === "charSelect" ? (
+            <CharSelectFrame escala={escalaDoCanva(largura)} />
+          ) : (
+            <CanvaFrame escala={escalaDoCanva(largura)} />
+          ))}
       </div>
     </div>
   );
@@ -158,6 +225,38 @@ export function LoginBackdrop({ children }: { children: ReactNode }) {
  * presas a feições da PINTURA, não ao conteúdo.
  */
 export function LoginColuna({ children }: { children: ReactNode }) {
+  const palco = useLarguraDoPalco();
+  const alturaPalco = useAlturaDoPalco();
+  const t = canvaTrilhos(escalaDoCanva(palco));
+  const miolo = useRef<HTMLDivElement>(null);
+  const [escala, setEscala] = useState(1);
+
+  /**
+   * `u()` só conhece LARGURA — numa janela larga e BAIXA (ultrawide, ou
+   * qualquer proporção mais achatada que a pintura 3:2) o título e o painel
+   * saem altos demais para a altura disponível: o topo do nome cortava no
+   * teto da tela e "Criar conta" cortava no rodapé (relatado com uma janela
+   * 1920×925). `min-height:0` sozinho não resolve — flex encolhe CAIXA, não
+   * o `fontSize` fixo de dentro.
+   *
+   * Aqui mede-se a altura NATURAL (sem encolher) do conteúdo via
+   * `scrollHeight` — que `transform: scale()` não altera, só a pintura — e
+   * encolhe-se o necessário para caber na altura livre. Em qualquer tela
+   * onde já cabia (a maioria), a conta dá `escala >= 1` e nada muda.
+   */
+  useEffect(() => {
+    const el = miolo.current;
+    if (!el || alturaPalco <= 0) return;
+    const disponivel = alturaPalco - t.top - t.bottom;
+    const ro = new ResizeObserver(() => {
+      const natural = el.scrollHeight;
+      const novo = natural > 0 && disponivel > 0 ? Math.min(1, disponivel / natural) : 1;
+      setEscala((antes) => (Math.abs(antes - novo) > 0.004 ? novo : antes));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [alturaPalco, t.top, t.bottom]);
+
   return (
     <div
       style={{
@@ -165,34 +264,57 @@ export function LoginColuna({ children }: { children: ReactNode }) {
         left: 0,
         right: 0,
         top: 0,
-        // o rodapé (classificação, atalhos, epígrafe) ocupa ~14% embaixo
-        bottom: "14%",
+        // o rodapé (classificação, atalhos, epígrafe) vive na banda de baixo
+        // do quadro (`CanvaFrame`) — sem clarear até ali, eles ficavam
+        // escondidos atrás da madeira.
+        bottom: t.bottom,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        gap: u(1.6),
-        padding: `${u(2)} ${u(2)} 0`,
+        // encolhendo, o conteúdo ancora no TOPO (a única garantia de não
+        // cortar em NENHUMA borda é começar do zero) — centralizado ele
+        // continuaria estourando os dois lados por igual
+        justifyContent: escala < 0.999 ? "flex-start" : "center",
+        overflow: "hidden",
         minHeight: 0,
       }}
     >
-      {children}
+      <div
+        ref={miolo}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          // maior que antes: a fita "Entre em sua jornada" ficou maior
+          // (medida da referência) e sobe por cima do painel — sem folga
+          // extra aqui ela mordia o fim da tagline.
+          gap: u(3),
+          padding: `${u(2)} ${u(2)} 0`,
+          transform: `scale(${escala})`,
+          transformOrigin: "50% 0%",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
 
 /**
- * O painel ORNAMENTADO — a moldura com folhagem nos quatro cantos.
+ * O painel ORNAMENTADO — a moldura de vinha do painel de login.
  *
- * É a arte mais elaborada do pacote, e por isso vai no painel de LOGIN: ele é o
- * assunto da tela. As placas de região, a classificação e o rodapé ficam com a
- * curva simples (`LoginDecor.Caixa`) — se todas tivessem folhagem, nenhuma
- * chamaria atenção.
+ * É `hud/ChatFrame` reaproveitado como veio: os 4 cantos + 3 das 4 bordas
+ * retas do pacote `login-new` são byte a byte (md5 conferido) os do chat
+ * (`top-login-left-curve` = `top-left-curve.png`, etc. — só falta a lateral
+ * DIREITA, que o chat já tem e o login-new não precisava trazer de novo,
+ * porque aqui é o COMPONENTE que se reusa, não as peças remontadas uma a
+ * uma). Isso troca por CIMA a moldura antiga (`LoginFrame2 kind="login"`),
+ * que não tinha borda reta de topo de verdade e cobria o vão com um filete —
+ * a arte certa sempre teve essa peça, só não tinha sido usada aqui ainda.
  *
- * A moldura é a MESMA do chat (`hud/ChatFrame`): os quatro cantos do pacote de
- * login são byte a byte (md5 conferido) os dele. Ela é decoração absoluta e fica
- * por CIMA, então o conteúdo precisa de recuo próprio para não passar por baixo
- * das folhas — daí o `padding` generoso, que é medido pelo tamanho do canto.
+ * A moldura é decoração absoluta e fica por CIMA, então o conteúdo precisa de
+ * recuo próprio para não passar por baixo das folhas — daí o `padding`
+ * generoso, medido pelo tamanho do canto.
  */
 export function LoginPainelOrnado({
   largura,
@@ -206,44 +328,39 @@ export function LoginPainelOrnado({
 }) {
   const palco = useLarguraDoPalco();
   /**
-   * A escala da folhagem sai do PALCO, não do painel.
+   * A escala sai do PALCO, não do painel — presa a ele, a folhagem tem sempre
+   * a mesma presença na tela, e não vira fio numa janela estreita.
    *
-   * Pelo painel, uma tela estreita (onde o painel encolhe) teria cantos
-   * minúsculos e a moldura viraria um fio. Presa ao palco, a folhagem tem sempre
-   * a mesma presença na tela — que é o que o olho compara.
+   * Medida na `referencia.png` (recorte x:440..960,y:335..855): a folhagem do
+   * canto superior-esquerdo entra ~95 px num painel de ~470 px (palco 1402),
+   * contra 171 px nativos do canto do chat → escala(1402) ≈ 95/171 ≈ 0,56.
    */
-  const escala = Math.max(0.3, Math.min(0.5, palco * 0.00028));
-  const t = trilhos(escala);
+  const escala = Math.max(0.35, Math.min(0.75, palco * 0.0004));
+  const k = escala / FRAME_SCALE;
 
   return (
     <div style={{ position: "relative", width: largura, ...style }}>
       {/**
-       * O véu vai até ENCOSTAR nos trilhos da moldura.
-       *
-       * Antes ele era recuado por uma fração do CANTO, o que o deixava pequeno e
-       * fora de centro: os quatro cantos da arte têm tamanhos diferentes
-       * (171×132, 206×137, 171×121, 206×128), então um recuo uniforme sobra de um
-       * lado e falta do outro. Recuando por TRILHO — que é a espessura da borda
-       * em cada lado —, o escuro preenche exatamente o vão da moldura.
+       * O véu vai até ENCOSTAR nos trilhos da moldura, senão sobra escuro
+       * quadrado além do vão que a vinha desenha.
        */}
       <div
         style={{
           position: "absolute",
-          top: t.top,
-          bottom: t.bottom,
-          left: t.left,
-          right: t.right,
+          top: RAIL.top * k,
+          bottom: RAIL.bottom * k,
+          left: RAIL.left * k,
+          right: RAIL.right * k,
           background: LOGIN_COLORS.panel,
           boxShadow: "0 18px 60px rgba(0,0,0,0.6)",
         }}
       />
       <ChatFrame escala={escala} />
       {/**
-       * O recuo do CONTEÚDO é maior que o do véu: a folhagem dos cantos entra
-       * para dentro do painel (é o que a torna ornamentada), e texto por baixo
-       * dela fica ilegível. Medido na arte, ela avança ~50 px no canto
-       * superior-esquerdo — daí o recuo sair do tamanho do canto, e não do
-       * trilho.
+       * O recuo do CONTEÚDO é maior que o do véu: o canto entra para dentro do
+       * painel (é o que o torna ornamentado), e texto por baixo dele fica
+       * ilegível. `132`/`171` são o alto/largo do canto superior-esquerdo
+       * (`CHAT_ART_SIZE.cornerTopLeft`).
        */}
       <div
         style={{
@@ -258,19 +375,8 @@ export function LoginPainelOrnado({
 }
 
 /**
- * Espessura de cada trilho da moldura, na escala pedida.
- *
- * `RAIL` é medido na escala do chat (`FRAME_SCALE`); aqui a moldura é maior, e
- * quem desenha por dentro dela precisa dos mesmos números convertidos. Sem isto
- * cada consumidor recalcularia a conversão à mão e os dois divergiriam.
- */
-function trilhos(escala: number) {
-  const k = escala / FRAME_SCALE;
-  return { top: RAIL.top * k, bottom: RAIL.bottom * k, left: RAIL.left * k, right: RAIL.right * k };
-}
-
-/**
- * O painel do `/char-select` — a mesma moldura, em tamanho fixo.
+ * O painel do `/char-select` — a moldura "canva" do mesmo pacote, em tamanho
+ * fixo.
  *
  * Ele não escala com o palco porque o conteúdo dele (nove cartões de slot com
  * nome, classe e nível) tem um piso de legibilidade próprio: encolher com a
@@ -285,11 +391,10 @@ export function LoginPanel({
   children: ReactNode;
   style?: CSSProperties;
 }) {
-  const t = trilhos(LOGIN_FRAME_SCALE);
+  const escala = 1;
+  const t = loginFrame2Trilhos("canva", escala);
   return (
     <div style={{ position: "relative", width, ...style }}>
-      {/* mesma regra do painel de login: o véu encosta nos trilhos, senão sobra
-          de um lado e falta do outro (os quatro cantos têm tamanhos diferentes) */}
       <div
         style={{
           position: "absolute",
@@ -301,11 +406,21 @@ export function LoginPanel({
           boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
         }}
       />
-      <ChatFrame escala={LOGIN_FRAME_SCALE} />
+      <LoginFrame2 kind="canva" scale={escala} />
+      {/**
+       * O recuo de BAIXO precisa da altura CHEIA de `canvaBottom` (140), não
+       * de uma fração como o de cima: aquela peça é uma faixa OPACA (a base
+       * inteira, esticada), e não tem miolo vazado como o canto de vinha —
+       * conteúdo em fluxo que entrasse nela ficaria por BAIXO na pilha (a
+       * moldura tem `zIndex: 2`) e sumia atrás da madeira. Foi o que aconteceu
+       * com o formulário de criar personagem: ele nasce ABAIXO da grade de
+       * slots, e com um recuo fracionário o rótulo "Nome do personagem" caía
+       * bem em cima da faixa e ficava ilegível.
+       */}
       <div
         style={{
           position: "relative",
-          padding: `${132 * LOGIN_FRAME_SCALE * 0.62}px ${171 * LOGIN_FRAME_SCALE * 0.5}px`,
+          padding: `${LOGIN2_SIZE.canvaTop.h * 0.5}px ${LOGIN2_SIZE.canvaTop.w * 0.55}px ${LOGIN2_SIZE.canvaBottom.h}px`,
         }}
       >
         {children}
@@ -361,20 +476,28 @@ export function LoginTitle({ children, sub }: { children: ReactNode; sub?: React
  * Sem `<label>` visível: o rótulo é o `placeholder` e o ícone, como no mockup.
  * O `aria-label` continua lá — quem usa leitor de tela não vê ícone nenhum.
  */
+/**
+ * Campo de digitar — a moldura pílula de `ui/CurvedBox` (`input-curva-das-
+ * bordas-barra-` + `input-reta-barra` do pacote `login-new`, byte a byte os
+ * mesmos `bar-corner`/`bar-edge` que as barras de HP/SP já usam). Antes era
+ * `border` de CSS liso; a arte é a mesma moldura curva do resto da UI, só
+ * numa cor mais próxima do bronze do campo escuro.
+ */
 export function LoginCampo({
   icone,
   ...input
 }: { icone: "usuario" | "senha" } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const palco = useLarguraDoPalco();
+  const borda = Math.max(8, palco * 0.009);
   return (
-    <div
-      style={{
+    <CurvedBox
+      border={borda}
+      background={LOGIN_COLORS.field}
+      inner={{
         display: "flex",
         alignItems: "center",
-        gap: u(0.7),
-        padding: `${u(0.6)} ${u(0.9)}`,
-        background: LOGIN_COLORS.field,
-        border: `1px solid ${LOGIN_COLORS.goldSoft}`,
-        borderRadius: u(0.3),
+        gap: u(0.9),
+        padding: `${u(0.5)} ${u(1)}`,
       }}
     >
       <IconeDeCampo nome={icone} />
@@ -387,17 +510,17 @@ export function LoginCampo({
           border: "none",
           outline: "none",
           fontFamily: FRAME_FONT,
-          fontSize: u(0.88),
+          fontSize: u(1.7),
           color: LOGIN_COLORS.ink,
         }}
       />
-    </div>
+    </CurvedBox>
   );
 }
 
 function IconeDeCampo({ nome }: { nome: "usuario" | "senha" }) {
   const cor = LOGIN_COLORS.gold;
-  const comum = { width: u(1.05), height: u(1.05), display: "block", flex: "0 0 auto" } as const;
+  const comum = { width: u(1.6), height: u(1.6), display: "block", flex: "0 0 auto" } as const;
   if (nome === "usuario") {
     return (
       <svg viewBox="0 0 24 24" style={comum} aria-hidden fill={cor}>
@@ -435,7 +558,16 @@ export function LoginBotaoLargo({
   disabled?: boolean;
 }) {
   const base = tom === "entrar" ? LOGIN_COLORS.entrar : LOGIN_COLORS.criar;
-  const borda = tom === "entrar" ? LOGIN_COLORS.entrarBorda : LOGIN_COLORS.criarBorda;
+  const baseEscura = tom === "entrar" ? LOGIN_COLORS.entrarBorda : LOGIN_COLORS.criarBorda;
+  const palco = useLarguraDoPalco();
+  const borda = Math.max(10, palco * 0.011);
+  /**
+   * `ui/CardFrame` (`bordas-botoes-cards` + extensores) — leia1.txt: "botões
+   * de entrar/criar vao usar bordas-botoes-cards". Substitui a cápsula
+   * antiga (dois `<img>` de canto fixo + textura em `repeat-x`): a arte nova
+   * tem trecho reto de VERDADE nos dois eixos, então vira `border-image` puro
+   * e reflui sozinha em qualquer largura — nada de âncora manual.
+   */
   return (
     <button
       type={type}
@@ -443,22 +575,32 @@ export function LoginBotaoLargo({
       disabled={disabled}
       style={{
         appearance: "none",
+        border: "none",
+        background: "transparent",
+        padding: 0,
         width: "100%",
-        padding: `${u(0.72)} ${u(1)}`,
-        borderRadius: u(0.3),
-        border: `1px solid ${borda}`,
-        background: `linear-gradient(180deg, ${base} 0%, rgba(0,0,0,0.55) 160%)`,
-        color: LOGIN_COLORS.ink,
-        fontFamily: FRAME_FONT,
-        fontSize: u(0.95),
-        letterSpacing: u(0.1),
-        textTransform: "uppercase",
-        textShadow: `0 ${u(0.08)} ${u(0.16)} rgba(0,0,0,0.9)`,
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.55 : 1,
       }}
     >
-      {children}
+      <CardFrame
+        border={borda}
+        background={`linear-gradient(180deg, ${base} 0%, ${baseEscura} 100%)`}
+        inner={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: `${u(0.9)} ${u(1.3)}`,
+          color: LOGIN_COLORS.ink,
+          fontFamily: FRAME_FONT,
+          fontSize: u(1.6),
+          letterSpacing: u(0.08),
+          textTransform: "uppercase",
+          textShadow: `0 ${u(0.08)} ${u(0.16)} rgba(0,0,0,0.9)`,
+        }}
+      >
+        {children}
+      </CardFrame>
     </button>
   );
 }

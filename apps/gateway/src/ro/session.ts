@@ -873,6 +873,20 @@ export class RoSession extends EventEmitter {
 			});
 		}
 
+		// Usar consumível: o rAthena não manda inv:remove por conta própria, só
+		// este ACK — sem enganchá-lo, a barra de quantidade nunca descia (era o
+		// "usei poção e não diminui"). `count` aqui é o QUANTO SOBROU no slot, não
+		// um delta, então a conta é pelo que o snapshot já tinha guardado.
+		for (const name of ["USE_ITEM_ACK", "USE_ITEM_ACK2"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				if (!pkt.result) return; // 0 = recusado, item continua como estava
+				const item = this.inventory.find((i) => i.index === pkt.index);
+				const delta = item ? item.amount - pkt.count : 1;
+				if (delta > 0) this.forgetItem(pkt.index, delta);
+			});
+		}
+
 		// Árvore de habilidades: a lista chega inteira ao entrar; ADD_SKILL avisa
 		// quando uma nova é aprendida e SKILLINFO_UPDATE quando muda de nível.
 		for (const key of Object.keys(PACKET.ZC)) {
@@ -915,6 +929,10 @@ export class RoSession extends EventEmitter {
 					damage: pkt.damage ?? 0,
 					count: pkt.count ?? 1,
 					kind: "target",
+					// mesmo byte DMG_* do NOTIFY_ACT — sem repassar, o cliente não tinha
+					// como saber que a skill acertou (só o VFX aparecia, nunca o número
+					// de dano em cima do monstro)
+					action: pkt.action ?? 0,
 				});
 			});
 		}
@@ -932,6 +950,7 @@ export class RoSession extends EventEmitter {
 					damage: 0,
 					count: 0,
 					kind: "buff",
+					action: 0,
 				});
 			});
 		}

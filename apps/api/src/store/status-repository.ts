@@ -1,10 +1,12 @@
-import type { StatusEffectDef } from "@ragnarok/game-data";
+import type { StatusCategory, StatusEffectDef, StatusGroup } from "@ragnarok/game-data";
 
 export interface StatusListQuery {
   page: number;
   pageSize: number;
   /** id/name substring filter */
   search?: string | undefined;
+  category?: StatusCategory | undefined;
+  group?: StatusGroup | undefined;
 }
 
 export interface StatusListResult {

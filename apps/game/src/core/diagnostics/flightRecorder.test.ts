@@ -317,6 +317,35 @@ describe("despejo", () => {
     expect(d.eventos.map((e) => e.tipo)).toContain("precompilou");
   });
 
+  it("sem caso, o RESUMO das colunas é o que responde 'quanto custa'", () => {
+    /**
+     * Zero caso é o resultado NORMAL de medir um custo em regime, e era
+     * exatamente nele que a série de quadros sumia inteira. Aconteceu ao tentar
+     * ler `matrizMs` depois de desligar o `matrixAutoUpdate` dos props: o
+     * arquivo tinha eventos, censo e estado de gravação — e nenhuma das colunas.
+     */
+    let i = 0;
+    gravar(100, 0, () => {
+      quadro().matrizMs = i++; // 0..99
+    });
+
+    const r = despejo().resumo;
+    expect(r.matrizMs!.n).toBe(100);
+    expect(r.matrizMs!.p50).toBe(50);
+    expect(r.matrizMs!.p95).toBe(95);
+    expect(r.matrizMs!.max).toBe(99);
+  });
+
+  it("o que NÃO foi medido sai da conta, em vez de virar zero", () => {
+    // `gpuMs` sem a extensão, `memoriaGpuMb` sem a `GMAN_webgl_memory` e
+    // `heapMb` fora do Chrome são lacunas — tratá-las como zero puxaria a
+    // mediana para baixo mentindo um custo menor
+    gravar(10);
+    const r = despejo().resumo;
+    expect(r.gpuMs!.n).toBe(0);
+    expect(r.quadroMs!.n).toBe(10);
+  });
+
   it("gravador PARADO fica distinguível de 'nada aconteceu'", () => {
     forcarFlag(false);
     const d = despejo();

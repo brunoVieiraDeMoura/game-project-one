@@ -16,7 +16,8 @@ import { GlowChao } from "./GlowChao";
 import { GEO_CILINDRO, MATERIAL_INVISIVEL } from "./recursosCompartilhados";
 import { useSoftLockStore } from "../play/softLockStore";
 import { useAttackStore } from "./attackStore";
-import { atacar } from "./acoes";
+import { atacar, castarEmAlvo } from "./acoes";
+import { pulsoDe } from "./combatAnim";
 
 /** de quanto em quanto tempo o `__netEntities` do DEV é atualizado */
 const DBG_INTERVALO_MS = 500;
@@ -36,12 +37,17 @@ const HITBOX_ALTURA = 1.25;
 /**
  * Vermelho do realce de inimigo.
  *
- * É a mesma família do preenchimento de HP do alvo (`ENEMY_FILL`, o vermelho
- * medido da arte com a matiz girada para ~8°) — a paleta da UI não tem vermelho
- * próprio, e inventar um tom novo faria o realce destoar da placa que ele
- * acende.
+ * Mesma matiz (~8°) do preenchimento de HP do alvo (`ENEMY_FILL`) — a paleta
+ * da UI não tem vermelho próprio, e inventar um tom novo faria o realce
+ * destoar da placa que ele acende. Mas o STOP do gradiente que era usado
+ * antes (`#8a2f22`, o do meio) é escuro e pouco saturado — ele existe para
+ * SOMBREAR uma barra, não para brilhar sobre grama. Sobre o chão claro, com o
+ * `forca`/`aro` em opacidade parcial, o resultado saía acastanhado e sumia —
+ * "o círculo é vermelho mas pouco visível". Este tom sobe saturação e luz na
+ * MESMA matiz (mais perto do stop claro do gradiente, `#b05a45`, só que mais
+ * puro) para o vermelho realmente ler como vermelho de longe.
  */
-const GLOW_INIMIGO = "#8a2f22";
+const GLOW_INIMIGO = "#e0402a";
 
 /**
  * Uma entidade do servidor desenhada na cena.
@@ -94,11 +100,15 @@ export function NetEntityView({
    * quadro não nascer congelado.
    */
   const aVista = useRef(true);
-  const { scene, play } = useCharacter(CHARACTER_URLS[modelInfo.character], animationSpeed, aVista);
+  const { scene, play, playOnce } = useCharacter(CHARACTER_URLS[modelInfo.character], animationSpeed, aVista);
   const group = useRef<THREE.Group>(null);
   /** só o boneco gira; plaquinha e área de clique ficam paradas */
   const model = useRef<THREE.Group>(null);
   const wasMoving = useRef(false);
+  /** pulso de combate (`net/combatAnim`) — mesma gating do `NetPlayer` */
+  const ultimoPulsoVisto = useRef(0);
+  const ocupadoAte = useRef(0);
+  const emCombateAntes = useRef(false);
   /** última escrita no `__netEntities` (DEV) — ver o bloco no `useFrame` */
   const ultimoDbg = useRef(0);
   /** o ponteiro está sobre esta entidade? (para devolver o cursor ao desmontar) */
@@ -233,7 +243,27 @@ export function NetEntityView({
       };
     }
 
-    if (cell.moving !== wasMoving.current) {
+    /**
+     * ANIMAÇÃO DE COMBATE — mesma regra do `NetPlayer`: o pulso (`net/combatAnim`)
+     * é o mesmo dado que já faz o dano piscar, e enquanto ele toca a locomoção
+     * não interrompe.
+     */
+    const pulso = pulsoDe(gid);
+    if (pulso && pulso.em > ultimoPulsoVisto.current) {
+      ultimoPulsoVisto.current = pulso.em;
+      if (pulso.tipo === "attack") {
+        ocupadoAte.current = now + playOnce("attack") * 1000;
+      } else if (pulso.tipo === "castStart") {
+        play("cast");
+        ocupadoAte.current = now + Math.max(150, pulso.duracaoMs ?? 0);
+      } else {
+        ocupadoAte.current = now + playOnce("castRelease") * 1000;
+      }
+    }
+    const emCombate = now < ocupadoAte.current;
+    const saiuDoCombate = emCombateAntes.current && !emCombate;
+    emCombateAntes.current = emCombate;
+    if (!emCombate && (cell.moving !== wasMoving.current || saiuDoCombate)) {
       wasMoving.current = cell.moving;
       play(cell.moving ? "walk" : "idle");
     }
@@ -293,8 +323,10 @@ export function NetEntityView({
 
         // Mira de skill de ALVO pendente: este clique escolhe EM QUEM, e não
         // vira ataque normal — no RO o cursor de skill substitui o de ataque.
+        // `castarEmAlvo` decide sozinha se já dá para lançar ou se precisa
+        // andar até o alcance primeiro (mesma regra do ataque básico).
         if (aiming && aiming.mode === "entity") {
-          gateway().emit("skill:use", { skillId: aiming.id, level: aiming.level, targetGid: gid });
+          castarEmAlvo(aiming.id, aiming.level, aiming.name, gid);
           useAimStore.getState().cancel();
           return;
         }

@@ -14,7 +14,16 @@
 export interface RampCell {
   col: number;
   row: number;
-  /** altura interpolada, já arredondada para nível inteiro */
+  /**
+   * Altura interpolada, FRACIONÁRIA — como o resto do heightmap.
+   *
+   * Chegou a ser arredondada para nível inteiro aqui, e era o único pincel de
+   * relevo que fazia isso: todos os outros (Subir/Descer/Suavizar/Nivelar/
+   * Ruído/Puxar/Inflar/Raspar) preservam fração, porque é isso que
+   * `grid/heightField` (média nos cantos) precisa para desenhar encosta
+   * contínua em vez de degrau. Arredondar aqui produzia patamares — o oposto
+   * do que a Rampa promete ("encosta LISA").
+   */
   level: number;
   /** 0 na ponta de baixo, 1 na de cima — útil para depurar o traçado */
   t: number;
@@ -61,7 +70,7 @@ export function rampCells(
       const qy = a.row + dy * t;
       const dist = Math.hypot(col - qx, row - qy);
       if (dist > r + 0.5) continue;
-      out.push({ col, row, level: Math.round(h0 + (h1 - h0) * t), t });
+      out.push({ col, row, level: h0 + (h1 - h0) * t, t });
     }
   }
   return out;

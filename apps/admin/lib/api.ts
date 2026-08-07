@@ -1,14 +1,21 @@
 import type {
   Account,
   AdminAuditEntry,
+  Element,
   Item,
+  ItemSubType,
+  ItemType,
   JobClass,
   LoginHistoryEntry,
   Monster,
   Npc,
+  NpcKind,
+  NpcOrigin,
   ServerConfig,
   Skill,
+  StatusCategory,
   StatusEffectDef,
+  StatusGroup,
 } from "@ragnarok/game-data";
 import type { GameMap } from "@ragnarok/map-format";
 import { supabase } from "./supabase";
@@ -47,9 +54,19 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function listItems(page: number, pageSize: number, search: string): Promise<ItemListResponse> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (search.trim()) params.set("search", search.trim());
+export interface ItemListParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  type?: ItemType;
+  subType?: ItemSubType;
+}
+
+export function listItems(p: ItemListParams): Promise<ItemListResponse> {
+  const params = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) });
+  if (p.search?.trim()) params.set("search", p.search.trim());
+  if (p.type) params.set("type", p.type);
+  if (p.subType) params.set("subType", p.subType);
   return fetch(`${API_URL}/items?${params}`).then((r) => handle<ItemListResponse>(r));
 }
 
@@ -133,9 +150,18 @@ export interface SkillListResponse {
   pageSize: number;
 }
 
-export function listSkills(page: number, pageSize: number, search: string): Promise<SkillListResponse> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (search.trim()) params.set("search", search.trim());
+export interface SkillListParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  /** prefixos crus do aegisName (ex. ["SM","KN"]) — ver skillClassFilterOptions() */
+  classPrefix?: string[];
+}
+
+export function listSkills(p: SkillListParams): Promise<SkillListResponse> {
+  const params = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) });
+  if (p.search?.trim()) params.set("search", p.search.trim());
+  if (p.classPrefix && p.classPrefix.length > 0) params.set("classPrefix", p.classPrefix.join(","));
   return fetch(`${API_URL}/skills?${params}`).then((r) => handle<SkillListResponse>(r));
 }
 
@@ -176,9 +202,19 @@ export interface StatusListResponse {
   pageSize: number;
 }
 
-export function listStatuses(page: number, pageSize: number, search: string): Promise<StatusListResponse> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (search.trim()) params.set("search", search.trim());
+export interface StatusListParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  category?: StatusCategory;
+  group?: StatusGroup;
+}
+
+export function listStatuses(p: StatusListParams): Promise<StatusListResponse> {
+  const params = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) });
+  if (p.search?.trim()) params.set("search", p.search.trim());
+  if (p.category) params.set("category", p.category);
+  if (p.group) params.set("group", p.group);
   return fetch(`${API_URL}/statuses?${params}`).then((r) => handle<StatusListResponse>(r));
 }
 
@@ -224,15 +260,23 @@ export interface MonsterListResponse {
   pageSize: number;
 }
 
-export function listMonsters(
-  page: number,
-  pageSize: number,
-  search: string,
-  dropsItem?: number,
-): Promise<MonsterListResponse> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (search.trim()) params.set("search", search.trim());
-  if (dropsItem !== undefined) params.set("dropsItem", String(dropsItem));
+export interface MonsterListParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  dropsItem?: number;
+  levelMin?: number;
+  levelMax?: number;
+  element?: Element;
+}
+
+export function listMonsters(p: MonsterListParams): Promise<MonsterListResponse> {
+  const params = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) });
+  if (p.search?.trim()) params.set("search", p.search.trim());
+  if (p.dropsItem !== undefined) params.set("dropsItem", String(p.dropsItem));
+  if (p.levelMin !== undefined) params.set("levelMin", String(p.levelMin));
+  if (p.levelMax !== undefined) params.set("levelMax", String(p.levelMax));
+  if (p.element) params.set("element", p.element);
   return fetch(`${API_URL}/monsters?${params}`).then((r) => handle<MonsterListResponse>(r));
 }
 
@@ -273,19 +317,24 @@ export interface NpcListResponse {
   pageSize: number;
 }
 
-export type NpcKindFilter = "warp" | "shop" | "dialogue" | "duplicate" | "other";
+/** @deprecated use `NpcKind` de @ragnarok/game-data */
+export type NpcKindFilter = NpcKind;
 
-export function listNpcs(
-  page: number,
-  pageSize: number,
-  search: string,
-  kind?: NpcKindFilter,
-  mapId?: string,
-): Promise<NpcListResponse> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (search.trim()) params.set("search", search.trim());
-  if (kind) params.set("kind", kind);
-  if (mapId?.trim()) params.set("mapId", mapId.trim());
+export interface NpcListParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  kind?: NpcKind;
+  mapId?: string;
+  origin?: NpcOrigin;
+}
+
+export function listNpcs(p: NpcListParams): Promise<NpcListResponse> {
+  const params = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) });
+  if (p.search?.trim()) params.set("search", p.search.trim());
+  if (p.kind) params.set("kind", p.kind);
+  if (p.mapId?.trim()) params.set("mapId", p.mapId.trim());
+  if (p.origin) params.set("origin", p.origin);
   return fetch(`${API_URL}/npcs?${params}`).then((r) => handle<NpcListResponse>(r));
 }
 

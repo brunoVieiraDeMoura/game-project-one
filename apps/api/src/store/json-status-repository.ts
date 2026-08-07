@@ -35,8 +35,10 @@ export class JsonStatusRepository implements StatusRepository {
     await writeFile(this.dataPath, JSON.stringify([...this.statuses.values()], null, 1), "utf-8");
   }
 
-  async list({ page, pageSize, search }: StatusListQuery): Promise<StatusListResult> {
+  async list({ page, pageSize, search, category, group }: StatusListQuery): Promise<StatusListResult> {
     let all = [...this.statuses.values()];
+    if (category) all = all.filter((s) => s.category === category);
+    if (group) all = all.filter((s) => s.group === group);
     if (search) {
       const q = search.toLowerCase();
       all = all.filter((s) => s.id.includes(q) || s.name.toLowerCase().includes(q));

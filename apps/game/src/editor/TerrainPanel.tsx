@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { SurfaceType } from "@ragnarok/map-format";
-import { useEditorStore, MOUNTAIN_ROCK_LAYER, type TerrainFeatures } from "./editorStore";
+import { useEditorStore, procKey, MOUNTAIN_ROCK_LAYER, type TerrainFeatures } from "./editorStore";
+import { cellInScope } from "./editScope";
+import { PROP_BY_CATEGORY, propUrl, type PropCatalogEntry } from "../props/registry";
+import { useThumbnail } from "./thumbnailer";
 import { ink } from "../ui/rpg";
 
 /**
@@ -20,10 +23,16 @@ import { ink } from "../ui/rpg";
 const RELIEF: { key: keyof TerrainFeatures; label: string; color: string; hint: string }[] = [
   { key: "hill", label: "Colinas", color: "#a3e635", hint: "ondulação do chão por todo o mapa — o slider dá altura e quantidade" },
   {
-    key: "mountain",
-    label: "Montanhas",
+    key: "mountainQty",
+    label: "Montanhas — quantidade",
     color: "#a8a29e",
-    hint: "maciços de rocha espalhados — bloqueiam passagem; o slider dá altura e quantidade",
+    hint: "quantos maciços de rocha nascem — eles bloqueiam passagem",
+  },
+  {
+    key: "mountainSize",
+    label: "Montanhas — tamanho",
+    color: "#8a8580",
+    hint: "quão grande é cada maciço — altura e raio crescem juntos",
   },
 ];
 
@@ -62,7 +71,9 @@ function FeatureRow({ item }: { item: { key: keyof TerrainFeatures; label: strin
         <span style={{ font: "600 11px system-ui", color: ink.text }}>{item.label}</span>
         <span style={{ font: "10px system-ui", color: ink.faint }}>{amt}%</span>
         <button
+          type="button"
           title={`Re-randomizar ${item.label} em outro lugar`}
+          aria-label={`Re-randomizar ${item.label}`}
           onClick={() => { beginStroke(); reseedFeature(item.key); }}
           disabled={amt <= 0}
           style={{ marginLeft: "auto", ...btnBase, padding: "1px 7px", font: "12px system-ui", cursor: amt <= 0 ? "default" : "pointer", opacity: amt <= 0 ? 0.35 : 1 }}
@@ -93,24 +104,50 @@ function FeatureRow({ item }: { item: { key: keyof TerrainFeatures; label: strin
  */
 function MountainRocksRow() {
   const escopo = useEditorStore((s) => s.editScope);
-  const amt = useEditorStore((s) => s.procAmounts[`${s.editScope}:${MOUNTAIN_ROCK_LAYER}`] ?? 0);
+  const chave = procKey(escopo, MOUNTAIN_ROCK_LAYER);
+  const amt = useEditorStore((s) => s.procAmounts[chave] ?? 0);
   const set = useEditorStore((s) => s.setMountainRocks);
   const reseed = useEditorStore((s) => s.reseedMountainRocks);
   const beginStroke = useEditorStore((s) => s.beginStroke);
-  const temMontanha = useEditorStore((s) =>
-    (s.map?.collision ?? []).some((c, i) => c === "wall" && s.map!.surface[i] === "stone"),
-  );
+  // Só conta montanha DENTRO do escopo ativo — antes varria o mapa inteiro,
+  // então uma montanha na borda mantinha o slider "ligado" mesmo com o
+  // escopo "Dentro" escolhido, onde ele não gera rocha nenhuma (o gerador já
+  // filtra por escopo; só o `title`/estado do slider não acompanhava).
+  const temMontanha = useEditorStore((s) => {
+    const map = s.map;
+    if (!map) return false;
+    const { width: W, height: H } = map.size;
+    for (let row = 0; row < H; row++) {
+      for (let col = 0; col < W; col++) {
+        const i = row * W + col;
+        if (map.collision[i] !== "wall" || map.surface[i] !== "stone") continue;
+        if (cellInScope(map, s.editScope, col, row)) return true;
+      }
+    }
+    return false;
+  });
+  const [aberto, setAberto] = useState(false);
+  const especies = PROP_BY_CATEGORY.find((g) => g.cat === "rock")?.items ?? [];
   const dica = temMontanha
     ? "matacões no cume, pedra miúda descendo a encosta (ref3)"
-    : "pinte uma montanha com o pincel Montanha ⛰ para poder espalhar rochas nela";
+    : "pinte uma montanha com o pincel Montanha ⛰ para poder espalhar rochas nela (no escopo ativo)";
   return (
     <div style={{ marginBottom: 8, opacity: temMontanha ? 1 : 0.45 }} title={dica}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
         <span style={{ width: 9, height: 9, borderRadius: 2, background: "#8b8f98" }} />
-        <span style={{ font: "600 11px system-ui", color: ink.text }}>Rochas na montanha</span>
+        <button
+          type="button"
+          aria-expanded={aberto}
+          onClick={() => setAberto((v) => !v)}
+          style={{ background: "none", border: "none", color: ink.text, cursor: "pointer", font: "600 11px system-ui", padding: 0 }}
+        >
+          {aberto ? "▾" : "▸"} Rochas na montanha
+        </button>
         <span style={{ font: "10px system-ui", color: ink.faint }}>{amt}%</span>
         <button
+          type="button"
           title="Re-randomizar as rochas"
+          aria-label="Re-randomizar as rochas"
           onClick={() => { beginStroke(); reseed(); }}
           disabled={!temMontanha || amt <= 0}
           style={{ marginLeft: "auto", ...btnBase, padding: "1px 7px", font: "12px system-ui", cursor: amt <= 0 ? "default" : "pointer", opacity: amt <= 0 ? 0.35 : 1 }}
@@ -129,7 +166,45 @@ function MountainRocksRow() {
         style={{ width: "100%" }}
         key={escopo}
       />
+      {aberto && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, marginTop: 4, padding: 4, background: "rgba(0,0,0,0.2)", borderRadius: 6 }}>
+          {especies.map((it) => (
+            <RochaToggle key={it.id} item={it} chave={chave} />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+/** miniatura + toggle de 1 espécie de rocha, só na camada da montanha (não
+ * mexe no scatter comum de "rock" do campo aberto). */
+function RochaToggle({ item, chave }: { item: PropCatalogEntry; chave: string }) {
+  const disabled = useEditorStore((s) => (s.procDisabled[chave] ?? []).includes(item.id));
+  const toggle = useEditorStore((s) => s.toggleMountainRockSpecies);
+  const beginStroke = useEditorStore((s) => s.beginStroke);
+  const thumb = useThumbnail(propUrl(item.id));
+  return (
+    <button
+      type="button"
+      title={item.label}
+      aria-pressed={!disabled}
+      onClick={() => { beginStroke(); toggle(item.id); }}
+      style={{
+        position: "relative",
+        aspectRatio: "1",
+        borderRadius: 5,
+        border: `1px solid ${disabled ? ink.border : "#4f46e5"}`,
+        background: disabled ? "rgba(255,255,255,0.03)" : "rgba(79,70,229,0.18)",
+        cursor: "pointer",
+        opacity: disabled ? 0.45 : 1,
+        overflow: "hidden",
+        padding: 2,
+      }}
+    >
+      {thumb ? <img src={thumb} alt={item.label} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <span style={{ font: "8px system-ui", color: ink.faint }}>…</span>}
+      {!disabled && <span style={{ position: "absolute", top: 1, right: 2, font: "9px system-ui", color: "#a5f3c9" }}>✓</span>}
+    </button>
   );
 }
 
@@ -140,8 +215,8 @@ function MountainRocksRow() {
 function PathRow({ label, icon, onGenerate, onReroll, badge }: { label: string; icon: string; onGenerate: () => void; onReroll?: () => void; badge?: string }) {
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-      <button onClick={onGenerate} style={{ ...btnBase, flex: 1 }}>{icon} {label}{badge ? ` ${badge}` : ""}</button>
-      <button onClick={onReroll ?? onGenerate} title={`Sortear outra ${label.toLowerCase()}`} style={{ ...btnBase, padding: "6px 9px" }}>♻</button>
+      <button type="button" onClick={onGenerate} style={{ ...btnBase, flex: 1 }}>{icon} {label}{badge ? ` ${badge}` : ""}</button>
+      <button type="button" onClick={onReroll ?? onGenerate} title={`Sortear outra ${label.toLowerCase()}`} aria-label={`Sortear outra ${label.toLowerCase()}`} style={{ ...btnBase, padding: "6px 9px" }}>♻</button>
     </div>
   );
 }
@@ -154,7 +229,10 @@ export function TerrainPanel() {
   const generateRiver = useEditorStore((s) => s.generateRiver);
   const larguraRio = useEditorStore((s) => s.riverWidth);
   const setRiverWidth = useEditorStore((s) => s.setRiverWidth);
+  const larguraEstrada = useEditorStore((s) => s.roadWidth);
+  const setRoadWidth = useEditorStore((s) => s.setRoadWidth);
   const clearPaths = useEditorStore((s) => s.clearPaths);
+  const repairWaterBanks = useEditorStore((s) => s.repairWaterBanks);
   const roadNodes = useEditorStore((s) => s.map?.spawns.filter((sp) => sp.kind === "road_node").length ?? 0);
 
   return (
@@ -175,8 +253,23 @@ export function TerrainPanel() {
       {/* O LAGO saiu do gerador: ele espalhava bacias aleatórias e competia com
           o pincel de lago, que faz a mesma coisa onde o autor quer — e melhor,
           porque escava a bacia sobre o corpo inteiro em vez de discos soltos. */}
-      <Group title="Estrada" hint="O traçado sai dos NÓS de estrada (ferramenta Caminho). A textura vale para a rede inteira e pode ser trocada a qualquer momento — o traçado é redesenhado na hora.">
+      <Group title="Estrada" hint="O traçado sai dos NÓS de estrada (ferramenta Caminho). Textura e largura valem para a rede inteira e podem ser trocadas a qualquer momento — o traçado é redesenhado na hora.">
         <TexturaDaEstrada />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+          <span style={{ font: "10px system-ui", color: ink.dim }}>
+            Largura <b style={{ color: ink.text }}>{larguraEstrada === 0 ? "fio" : `${larguraEstrada * 2 + 1} células`}</b>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={6}
+            value={larguraEstrada}
+            title="0 = a estrada de sempre, 1 célula de fio. Acima disso a espinha (onde o corredor e a rampa acontecem) ganha um ombro plano em volta, na mesma altura e textura."
+            aria-label="Largura da estrada"
+            onChange={(e) => setRoadWidth(Number(e.target.value))}
+            style={{ marginLeft: "auto", width: 90 }}
+          />
+        </div>
       </Group>
       <Group title="Água" hint="Rio = canal que atravessa o mapa e escava um vale. Para lago, use o pincel de Lago no painel de pincéis.">
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -189,6 +282,7 @@ export function TerrainPanel() {
             max={6}
             value={larguraRio}
             title="0 = fio de água atravessável em qualquer ponto. De 1 em diante o miolo vira canal FUNDO (bloqueia) com margem rasa (anda)."
+            aria-label="Largura do rio"
             onChange={(e) => setRiverWidth(Number(e.target.value))}
             style={{ marginLeft: "auto", width: 90 }}
           />
@@ -199,6 +293,14 @@ export function TerrainPanel() {
             ? "Fio de água: atravessa a pé em qualquer ponto."
             : "O miolo do canal BLOQUEIA a passagem; a margem rasa continua andável."}
         </p>
+        <button
+          type="button"
+          onClick={repairWaterBanks}
+          title="Refaz a bacia do lago e o barranco da margem de TODA água já pintada, com o algoritmo de hoje — sem mudar onde a água está. Use se a beira do rio/lago aparecer em degrau ou serrilhada (mapa pintado antes da correção da margem)."
+          style={{ ...btnBase, width: "100%" }}
+        >
+          🩹 Reparar margem da água
+        </button>
       </Group>
 
       <Group title="Estradas" hint="Clicar já cria nós aleatórios e liga em rede. Ponha nós de estrada (Spawn) pra fixar pontos.">
@@ -216,10 +318,10 @@ export function TerrainPanel() {
         Ordem: <b>relevo e lagos primeiro</b>, depois rio e estradas. Em mapa importado do rAthena o
         relevo NÃO mexe em parede nem buraco — para esses use os pincéis Elevar/Afundar buraco.
       </p>
-      <button onClick={() => { beginStroke(); reseed(); }} style={{ ...btnBase, width: "100%", font: "600 12px system-ui", marginBottom: 6 }}>
+      <button type="button" onClick={() => { beginStroke(); reseed(); }} style={{ ...btnBase, width: "100%", font: "600 12px system-ui", marginBottom: 6 }}>
         ♻ Novo relevo (re-seed geral)
       </button>
-      <button onClick={clearPaths} style={{ ...btnBase, width: "100%" }}>Limpar rios/estradas</button>
+      <button type="button" onClick={clearPaths} style={{ ...btnBase, width: "100%" }}>Limpar rios/estradas</button>
     </>
   );
 }
@@ -251,7 +353,9 @@ function TexturaDaEstrada() {
         return (
           <button
             key={t.valor}
+            type="button"
             title={t.dica}
+            aria-pressed={ativo}
             onClick={() => setRoadSurface(t.valor)}
             style={{
               display: "flex",

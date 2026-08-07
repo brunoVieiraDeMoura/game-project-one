@@ -12,6 +12,8 @@ import { MysqlItemRepository } from "./store/mysql-item-repository.js";
 import { MysqlMonsterRepository } from "./store/mysql-monster-repository.js";
 import { MysqlUserRepository } from "./store/mysql-user-repository.js";
 import { YamlSkillRepository } from "./store/yaml-skill-repository.js";
+import { YamlJobClassRepository } from "./store/yaml-job-class-repository.js";
+import { JobDatabaseWriter } from "./store/job-database-writer.js";
 import { hasRoDatabase } from "./store/mysql.js";
 import { serverControlRoutes } from "./routes/server-control.js";
 import type { ItemRepository } from "./store/item-repository.js";
@@ -82,14 +84,31 @@ function defaultItemRepository(): ItemRepository {
   );
 }
 
-function defaultJobClassRepository(): JobClassRepository {
-  if (env.supabaseUrl && env.supabaseServiceRoleKey) {
-    return new SupabaseJobClassRepository(env.supabaseUrl, env.supabaseServiceRoleKey);
+function defaultJobClassRepository(skillRepository: SkillRepository): JobClassRepository {
+  const catalog: JobClassRepository =
+    env.supabaseUrl && env.supabaseServiceRoleKey
+      ? new SupabaseJobClassRepository(env.supabaseUrl, env.supabaseServiceRoleKey)
+      : new JsonJobClassRepository(
+          process.env.JOB_CLASSES_DATA_PATH ?? join(__dirname, "..", "data", "job-classes.json"),
+          join(REPO_ROOT, "tools", "legacy-migration", "output", "job-classes.json"),
+        );
+
+  // job_stats/job_basepoints/job_exp/job_aspd/skill_tree não têm tabela SQL
+  // no rAthena — mesma situação de Skills, resolvida do mesmo jeito: o
+  // catálogo acima continua sendo a lista completa, e salvar no painel
+  // também escreve os 5 arquivos de db/import/ (JobDatabaseWriter) e pede
+  // @reloadpcdb (scripts/wsl-setup.sh symlinka rathena-db-import/).
+  if (hasRoDatabase()) {
+    const writer = new JobDatabaseWriter({
+      jobStats: join(REPO_ROOT, "rathena-db-import", "job_stats.yml"),
+      jobBasepoints: join(REPO_ROOT, "rathena-db-import", "job_basepoints.yml"),
+      jobExp: join(REPO_ROOT, "rathena-db-import", "job_exp.yml"),
+      jobAspd: join(REPO_ROOT, "rathena-db-import", "job_aspd.yml"),
+      skillTree: join(REPO_ROOT, "rathena-db-import", "skill_tree.yml"),
+    });
+    return new YamlJobClassRepository(catalog, skillRepository, writer);
   }
-  return new JsonJobClassRepository(
-    process.env.JOB_CLASSES_DATA_PATH ?? join(__dirname, "..", "data", "job-classes.json"),
-    join(REPO_ROOT, "tools", "legacy-migration", "output", "job-classes.json"),
-  );
+  return catalog;
 }
 
 function defaultSkillRepository(): SkillRepository {
@@ -208,8 +227,8 @@ export async function buildServer(deps: ServerDeps = {}) {
     app.log.warn("auth desabilitada (sem SUPABASE_URL/SERVICE_ROLE_KEY) — modo dev");
   }
 
-  const jobClassRepository = deps.jobClassRepository ?? defaultJobClassRepository();
   const skillRepository = deps.skillRepository ?? defaultSkillRepository();
+  const jobClassRepository = deps.jobClassRepository ?? defaultJobClassRepository(skillRepository);
   const statusRepository = deps.statusRepository ?? defaultStatusRepository();
 
   app.get("/health", async () => ({ ok: true }));

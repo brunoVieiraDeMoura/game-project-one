@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { JobClass } from "@ragnarok/game-data";
 import { deleteJobClass, listJobClasses } from "@/lib/api";
-import { Button, Input, Select } from "@/components/ui";
+import { Button, Input, Pager, Select } from "@/components/ui";
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -147,25 +147,7 @@ export default function ClassesPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>
-            «
-          </Button>
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-            »
-          </Button>
-        </div>
-      </div>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </main>
   );
 }

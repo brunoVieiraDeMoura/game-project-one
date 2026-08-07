@@ -131,7 +131,7 @@ export interface ServerEvents {
   "inv:add": (p: InventoryItemPayload) => void;
   "inv:remove": (p: { index: number; amount: number }) => void;
   "skill:list": (p: SkillPayload[]) => void;
-  "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff" }) => void;
+  "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff"; action: number }) => void;
   "skill:casting": (p: { skillId: number; sourceGid: number; targetGid: number; x: number; y: number; durationMs: number }) => void;
   "skill:ground": (p: { gid: number; creatorGid: number; x: number; y: number; unitId: number; visible: boolean }) => void;
   "skill:ground-gone": (p: { gid: number }) => void;

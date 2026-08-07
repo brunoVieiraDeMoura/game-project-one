@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { StatusEffectDef } from "@ragnarok/game-data";
+import type { StatusCategory, StatusEffectDef, StatusGroup } from "@ragnarok/game-data";
+import { STATUS_CATEGORY_LABELS, STATUS_GROUP_LABELS, labelOf, selectOptions } from "@ragnarok/game-data";
 import { deleteStatus, listStatuses } from "@/lib/api";
-import { Button, Input, Select } from "@/components/ui";
+import { Badge, Button, FilterSelect, Input, Pager, Select } from "@/components/ui";
 
 const PAGE_SIZES = [10, 20, 50, 100];
+const CATEGORY_OPTIONS = selectOptions(STATUS_CATEGORY_LABELS, "Todas as categorias");
+const GROUP_OPTIONS = selectOptions(STATUS_GROUP_LABELS, "Todos os grupos");
 
-const CATEGORY_STYLE: Record<string, string> = {
-  buff: "bg-emerald-950 text-emerald-400",
-  debuff: "bg-red-950 text-red-400",
-  neutral: "bg-zinc-800 text-zinc-400",
+const CATEGORY_TONE: Record<StatusCategory, "emerald" | "red" | "zinc"> = {
+  buff: "emerald",
+  debuff: "red",
+  neutral: "zinc",
 };
 
 export default function StatusesPage() {
@@ -20,6 +23,8 @@ export default function StatusesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<"" | StatusCategory>("");
+  const [group, setGroup] = useState<"" | StatusGroup>("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +39,7 @@ export default function StatusesPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    listStatuses(page, pageSize, debouncedSearch)
+    listStatuses({ page, pageSize, search: debouncedSearch, category: category || undefined, group: group || undefined })
       .then((res) => {
         setStatuses(res.statuses);
         setTotal(res.total);
@@ -42,7 +47,7 @@ export default function StatusesPage() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, pageSize, debouncedSearch]);
+  }, [page, pageSize, debouncedSearch, category, group]);
 
   useEffect(load, [load]);
 
@@ -67,12 +72,28 @@ export default function StatusesPage() {
         </Link>
       </div>
 
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <Input
           placeholder="Buscar por ID ou nome..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
+        />
+        <FilterSelect
+          value={category}
+          onChange={(v) => {
+            setCategory(v);
+            setPage(1);
+          }}
+          options={CATEGORY_OPTIONS}
+        />
+        <FilterSelect
+          value={group}
+          onChange={(v) => {
+            setGroup(v);
+            setPage(1);
+          }}
+          options={GROUP_OPTIONS}
         />
         <Select
           value={pageSize}
@@ -100,8 +121,8 @@ export default function StatusesPage() {
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">Categoria</th>
-              <th className="px-3 py-2">Estados</th>
-              <th className="px-3 py-2">Flags</th>
+              <th className="px-3 py-2">Grupo</th>
+              <th className="px-3 py-2">O que faz</th>
               <th className="px-3 py-2">Script</th>
               <th className="px-3 py-2" />
             </tr>
@@ -125,13 +146,17 @@ export default function StatusesPage() {
                   <td className="px-3 py-2 font-mono text-xs text-zinc-400">{s.id}</td>
                   <td className="px-3 py-2">{s.name}</td>
                   <td className="px-3 py-2">
-                    <span className={`rounded px-1.5 py-0.5 text-xs ${CATEGORY_STYLE[s.category]}`}>{s.category}</span>
+                    <Badge tone={CATEGORY_TONE[s.category]}>{labelOf(STATUS_CATEGORY_LABELS, s.category)}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-xs text-zinc-400">{s.states.join(", ") || "—"}</td>
-                  <td className="px-3 py-2 text-xs text-zinc-500">{s.flags.length}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone="indigo">{labelOf(STATUS_GROUP_LABELS, s.group)}</Badge>
+                  </td>
+                  <td className="px-3 py-2 max-w-xs truncate text-xs text-zinc-400" title={s.description}>
+                    {s.description ?? "—"}
+                  </td>
                   <td className="px-3 py-2">
                     {s.effects && s.effects.unmappedEffects.length > 0 ? (
-                      <span className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-400">revisar</span>
+                      <Badge tone="amber">revisar</Badge>
                     ) : (
                       "—"
                     )}
@@ -151,25 +176,7 @@ export default function StatusesPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>
-            «
-          </Button>
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-            »
-          </Button>
-        </div>
-      </div>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </main>
   );
 }

@@ -2,35 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { Npc } from "@ragnarok/game-data";
-import { deleteNpc, listNpcs, type NpcKindFilter } from "@/lib/api";
-import { Button, Input, Select } from "@/components/ui";
+import type { Npc, NpcKind, NpcOrigin } from "@ragnarok/game-data";
+import { NPC_KIND_LABELS, NPC_ORIGIN_LABELS, labelOf, npcKind, selectOptions } from "@ragnarok/game-data";
+import { deleteNpc, listNpcs } from "@/lib/api";
+import { Badge, Button, FilterSelect, Input, Pager, Select } from "@/components/ui";
 
 const PAGE_SIZES = [10, 20, 50, 100];
-const KINDS: { value: "" | NpcKindFilter; label: string }[] = [
-  { value: "", label: "Todos os tipos" },
-  { value: "warp", label: "Warps" },
-  { value: "shop", label: "Shops" },
-  { value: "dialogue", label: "Diálogos" },
-  { value: "duplicate", label: "Duplicatas" },
-  { value: "other", label: "Outros" },
-];
+const KIND_OPTIONS = selectOptions(NPC_KIND_LABELS, "Todos os tipos");
+const ORIGIN_OPTIONS = selectOptions(NPC_ORIGIN_LABELS, "Todas as origens");
 
-const KIND_STYLE: Record<string, string> = {
-  warp: "bg-sky-950 text-sky-400",
-  shop: "bg-emerald-950 text-emerald-400",
-  dialogue: "bg-indigo-950 text-indigo-400",
-  duplicate: "bg-zinc-800 text-zinc-400",
-  other: "bg-zinc-800 text-zinc-500",
+const KIND_TONE: Record<NpcKind, "sky" | "emerald" | "indigo" | "zinc"> = {
+  warp: "sky",
+  shop: "emerald",
+  dialogue: "indigo",
+  duplicate: "zinc",
+  other: "zinc",
 };
-
-function kindOf(n: Npc): string {
-  if (n.warp) return "warp";
-  if (n.shop) return "shop";
-  if (n.duplicateOf) return "duplicate";
-  if (n.dialogue.length > 0) return "dialogue";
-  return "other";
-}
 
 export default function NpcsPage() {
   const [npcs, setNpcs] = useState<Npc[]>([]);
@@ -38,7 +25,8 @@ export default function NpcsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
-  const [kind, setKind] = useState<"" | NpcKindFilter>("");
+  const [kind, setKind] = useState<"" | NpcKind>("");
+  const [origin, setOrigin] = useState<"" | NpcOrigin>("");
   const [mapId, setMapId] = useState("");
   const [debounced, setDebounced] = useState({ search: "", mapId: "" });
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +42,14 @@ export default function NpcsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    listNpcs(page, pageSize, debounced.search, kind === "" ? undefined : kind, debounced.mapId || undefined)
+    listNpcs({
+      page,
+      pageSize,
+      search: debounced.search,
+      kind: kind || undefined,
+      mapId: debounced.mapId || undefined,
+      origin: origin || undefined,
+    })
       .then((res) => {
         setNpcs(res.npcs);
         setTotal(res.total);
@@ -62,7 +57,7 @@ export default function NpcsPage() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, pageSize, debounced, kind]);
+  }, [page, pageSize, debounced, kind, origin]);
 
   useEffect(load, [load]);
 
@@ -87,27 +82,29 @@ export default function NpcsPage() {
         </Link>
       </div>
 
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <Input
           placeholder="Buscar por nome ou ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select
+        <FilterSelect
           value={kind}
-          onChange={(e) => {
-            setKind(e.target.value as "" | NpcKindFilter);
+          onChange={(v) => {
+            setKind(v);
             setPage(1);
           }}
-          className="w-auto"
-        >
-          {KINDS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {k.label}
-            </option>
-          ))}
-        </Select>
+          options={KIND_OPTIONS}
+        />
+        <FilterSelect
+          value={origin}
+          onChange={(v) => {
+            setOrigin(v);
+            setPage(1);
+          }}
+          options={ORIGIN_OPTIONS}
+        />
         <Input placeholder="Mapa..." value={mapId} onChange={(e) => setMapId(e.target.value)} className="max-w-36" />
         <Select
           value={pageSize}
@@ -156,7 +153,7 @@ export default function NpcsPage() {
               </tr>
             ) : (
               npcs.map((n) => {
-                const k = kindOf(n);
+                const k = npcKind(n);
                 const flagged = n.dialogue.some((d) => d.kind === "action" && d.action?.kind === "legacyScript");
                 return (
                   <tr key={n.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
@@ -165,7 +162,7 @@ export default function NpcsPage() {
                       <span className="ml-2 font-mono text-xs text-zinc-500">{n.id}</span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`rounded px-1.5 py-0.5 text-xs ${KIND_STYLE[k]}`}>{k}</span>
+                      <Badge tone={KIND_TONE[k]}>{labelOf(NPC_KIND_LABELS, k)}</Badge>
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-zinc-400">{n.mapId}</td>
                     <td className="px-3 py-2 text-xs text-zinc-400">
@@ -183,9 +180,7 @@ export default function NpcsPage() {
                               : "—"}
                     </td>
                     <td className="px-3 py-2">
-                      {flagged && (
-                        <span className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-400">script</span>
-                      )}
+                      {flagged && <Badge tone="amber">script</Badge>}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <Link href={`/npcs/${encodeURIComponent(n.id)}`} className="mr-2 text-indigo-400 hover:underline">
@@ -203,25 +198,7 @@ export default function NpcsPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>
-            «
-          </Button>
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-            »
-          </Button>
-        </div>
-      </div>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </main>
   );
 }

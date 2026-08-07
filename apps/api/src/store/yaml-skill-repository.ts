@@ -1,179 +1,157 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { Skill } from "@ragnarok/game-data";
+import { parse as parseYamlText, stringify as stringifyYaml } from "yaml";
+import {
+  RawSkillYamlSchema,
+  parseSkillEntry,
+  reemitRawSkillYaml,
+  skillToParsedEntry,
+  validateSkillEntry,
+  type ParsedSkillEntry,
+  type RawSkillYaml,
+  type Skill,
+} from "@ragnarok/game-data";
 import type { SkillListQuery, SkillListResult, SkillRepository } from "./skill-repository.js";
 import { queueReload } from "./mysql-item-repository.js";
 
 /**
  * Skills editadas pelo painel, gravadas em `db/import/skill_db.yml`.
  *
- * O rAthena **não tem loader SQL para skill** (só item, mob e mob_skill), então
- * não dá para fazer como os outros módulos. O que ele tem é o `db/import/`:
- * um arquivo que SOBREPÕE entradas do db principal, casando por `Id`. É o
- * mecanismo oficial de customização — e o único jeito de editar skill sem
- * mexer nos arquivos do upstream (que a gente não toca por regra).
+ * O rAthena **não tem loader SQL para skill** (só item, mob e mob_skill),
+ * então não dá para fazer como os outros módulos. O que ele tem é o
+ * `db/import/`: um arquivo que SOBREPÕE entradas do db principal, casando
+ * por `Id` — mecanismo oficial de customização, e o único jeito de editar
+ * skill sem mexer nos arquivos do upstream (regra do projeto).
+ *
+ * Writer schema-first (gate aprovado 2026-08-07, ver
+ * `packages/game-data/src/rathena/skill-db-{yaml,mapper,validator}.ts`):
+ * Parser → Mapper → Validator → Writer, nenhuma regra de serialização
+ * duplicada aqui — este arquivo só ORQUESTRA as três camadas e faz I/O.
  *
  * Consequências assumidas:
- *  - a LISTA continua vindo do catálogo migrado (`delegate`), que tem as 1635
- *    skills; este repositório é a camada de escrita e o "por cima" da leitura;
- *  - só o que foi editado aqui vai para o YAML — o resto continua valendo do
- *    db principal;
- *  - o formato gravado é o mínimo que o rAthena aceita como override
- *    (Id/Name/Description/MaxLevel + os campos que o admin mexe). Campos que o
- *    nosso schema não representa fielmente NÃO são reescritos, para não
- *    apagar comportamento por omissão.
+ *  - a LISTA continua vindo do catálogo migrado (`delegate`, Supabase/JSON),
+ *    que é a fonte de verdade pro que o admin edita e o que a dashboard
+ *    mostra; este repositório é só a camada de exportação pro rAthena;
+ *  - todo campo que o Mapper sabe representar é reescrito por INTEIRO a
+ *    cada `update` (regra 1/2 do gate: bitset e perLevel são aditivos na
+ *    leitura do rAthena — sub-conjunto não desliga nada da base, então o
+ *    Writer sempre emite o conjunto completo pros campos que edita);
+ *  - campo que o Mapper não sabe representar (fórmula de dano, chance/
+ *    magnitude de status) NUNCA é escrito, e vira warning devolvido pra
+ *    rota poder avisar o admin — nunca descartado em silêncio.
  */
 
-interface SkillYamlEntry {
-	Id: number;
-	Name: string;
-	Description: string;
-	MaxLevel: number;
-	[key: string]: unknown;
-}
-
 export class YamlSkillRepository implements SkillRepository {
-	constructor(
-		/** de onde vem a lista/leitura (catálogo migrado — Supabase ou JSON) */
-		private readonly delegate: SkillRepository,
-		/** caminho do db/import/skill_db.yml (symlink → rathena-db-import/) */
-		private readonly importPath: string,
-	) {}
+  constructor(
+    /** de onde vem a lista/leitura (catálogo migrado — Supabase ou JSON) */
+    private readonly delegate: SkillRepository,
+    /** caminho do db/import/skill_db.yml (symlink → rathena-db-import/) */
+    private readonly importPath: string,
+  ) {}
 
-	async list(query: SkillListQuery): Promise<SkillListResult> {
-		const base = await this.delegate.list(query);
-		const overrides = await this.readOverrides();
-		if (overrides.size === 0) return base;
+  async list(query: SkillListQuery): Promise<SkillListResult> {
+    const base = await this.delegate.list(query);
+    const overrides = await this.readOverrides();
+    if (overrides.size === 0) return base;
 
-		return {
-			...base,
-			skills: base.skills.map((skill) => this.applyOverride(skill, overrides.get(skill.id))),
-		};
-	}
+    return {
+      ...base,
+      skills: base.skills.map((skill) => this.applyOverride(skill, overrides.get(skill.id))),
+    };
+  }
 
-	async get(id: number): Promise<Skill | undefined> {
-		const skill = await this.delegate.get(id);
-		if (!skill) return undefined;
-		const overrides = await this.readOverrides();
-		return this.applyOverride(skill, overrides.get(id));
-	}
+  async get(id: number): Promise<Skill | undefined> {
+    const skill = await this.delegate.get(id);
+    if (!skill) return undefined;
+    const overrides = await this.readOverrides();
+    return this.applyOverride(skill, overrides.get(id));
+  }
 
-	async create(skill: Skill): Promise<Skill> {
-		const created = await this.delegate.create(skill);
-		await this.writeOverride(created);
-		return created;
-	}
+  async create(skill: Skill): Promise<Skill> {
+    const created = await this.delegate.create(skill);
+    await this.writeOverride(created);
+    return created;
+  }
 
-	async update(id: number, skill: Skill): Promise<Skill | undefined> {
-		const updated = await this.delegate.update(id, skill);
-		if (!updated) return undefined;
-		await this.writeOverride(updated);
-		return updated;
-	}
+  async update(id: number, skill: Skill): Promise<Skill | undefined> {
+    const updated = await this.delegate.update(id, skill);
+    if (!updated) return undefined;
+    await this.writeOverride(updated);
+    return updated;
+  }
 
-	async remove(id: number): Promise<boolean> {
-		// Remover do catálogo NÃO remove do rAthena: apagar skill do jogo é
-		// operação destrutiva que quebra árvore de classe e personagem que já
-		// aprendeu. Só sai da lista do painel.
-		return this.delegate.remove(id);
-	}
+  async remove(id: number): Promise<boolean> {
+    // Remover do catálogo NÃO remove do rAthena: apagar skill do jogo é
+    // operação destrutiva que quebra árvore de classe e personagem que já
+    // aprendeu. Só sai da lista do painel.
+    return this.delegate.remove(id);
+  }
 
-	/** Skills já sobrepostas, por id. */
-	private async readOverrides(): Promise<Map<number, SkillYamlEntry>> {
-		try {
-			const raw = await readFile(this.importPath, "utf8");
-			const entries = parseSkillYaml(raw);
-			return new Map(entries.map((e) => [e.Id, e]));
-		} catch {
-			return new Map();
-		}
-	}
+  /** Overrides já gravados, por id — cada um validado contra o schema oficial (nunca lido "na confiança"). */
+  private async readOverrides(): Promise<Map<number, RawSkillYaml>> {
+    try {
+      const raw = await readFile(this.importPath, "utf8");
+      const doc = parseYamlText(raw) as { Body?: unknown[] } | null | undefined;
+      const map = new Map<number, RawSkillYaml>();
+      for (const candidate of doc?.Body ?? []) {
+        const parsed = RawSkillYamlSchema.safeParse(candidate);
+        if (parsed.success) map.set(parsed.data.Id, parsed.data);
+      }
+      return map;
+    } catch {
+      return new Map();
+    }
+  }
 
-	private applyOverride(skill: Skill, entry: SkillYamlEntry | undefined): Skill {
-		if (!entry) return skill;
-		return {
-			...skill,
-			name: typeof entry.Description === "string" ? entry.Description : skill.name,
-			maxLevel: typeof entry.MaxLevel === "number" ? entry.MaxLevel : skill.maxLevel,
-		};
-	}
+  /** só o que o `applyOverride` de sempre já expunha (nome/nível máx.) — o resto do override não volta pro `Skill` porque a fonte de verdade da dashboard é o catálogo (Supabase/JSON), não o YAML de exportação. */
+  private applyOverride(skill: Skill, entry: RawSkillYaml | undefined): Skill {
+    if (!entry) return skill;
+    return { ...skill, name: entry.Description, maxLevel: entry.MaxLevel };
+  }
 
-	private async writeOverride(skill: Skill): Promise<void> {
-		const overrides = await this.readOverrides();
-		overrides.set(skill.id, {
-			Id: skill.id,
-			Name: skill.aegisName,
-			Description: skill.name,
-			MaxLevel: skill.maxLevel,
-		});
+  /**
+   * `Skill` → override completo, validado, gravado. Lança com
+   * `statusCode: 400` se o Validator reprovar — o arquivo não é tocado.
+   */
+  async writeOverride(skill: Skill): Promise<{ warnings: string[] }> {
+    const overrides = await this.readOverrides();
+    const existingRaw = overrides.get(skill.id);
+    const base: ParsedSkillEntry | undefined = existingRaw ? parseSkillEntry(existingRaw) : undefined;
 
-		await mkdir(dirname(this.importPath), { recursive: true });
-		await writeFile(this.importPath, renderSkillYaml([...overrides.values()]), "utf8");
-		await queueReload("skilldb");
-	}
+    const { entry, warnings } = skillToParsedEntry(skill, base);
+
+    const issues = validateSkillEntry(entry);
+    if (issues.length > 0) {
+      throw Object.assign(new Error(`skill_db.yml: ${issues.join("; ")}`), { statusCode: 400 });
+    }
+
+    overrides.set(skill.id, reemitRawSkillYaml(entry));
+
+    await mkdir(dirname(this.importPath), { recursive: true });
+    await writeFile(this.importPath, renderSkillDbYaml([...overrides.values()]), "utf8");
+    await queueReload("skilldb");
+
+    return { warnings };
+  }
 }
 
 /**
- * Leitor mínimo do YAML de skill.
- *
- * Não é um parser de YAML: lê só o formato que ESTE arquivo escreve (uma
- * entrada por bloco, quatro campos escalares). Trazer uma dependência de YAML
- * para reler o que nós mesmos geramos seria peso sem ganho — e um parser
- * genérico ainda perderia os comentários do rAthena na hora de reescrever.
+ * Serializador de verdade (`yaml` — o mesmo pacote que já lê `skill_db.yml`
+ * em `tools/legacy-migration`), não mais concatenação de string: o formato
+ * anterior só sabia emitir 4 campos escalares e misturava entradas na
+ * releitura quando havia bloco aninhado. `Header` idêntico ao que o
+ * dispatcher (`db/skill_db.yml`) espera de um import (SKILL_DB v4).
  */
-export function parseSkillYaml(raw: string): SkillYamlEntry[] {
-	const entries: SkillYamlEntry[] = [];
-	let current: Partial<SkillYamlEntry> | null = null;
-
-	for (const line of raw.split(/\r?\n/)) {
-		const start = line.match(/^\s*-\s*Id:\s*(\d+)/);
-		if (start) {
-			if (current?.Id) entries.push(current as SkillYamlEntry);
-			current = { Id: Number(start[1]) };
-			continue;
-		}
-		if (!current) continue;
-
-		const field = line.match(/^\s+(Name|Description|MaxLevel):\s*(.+?)\s*$/);
-		if (!field) continue;
-		const [, key, value] = field;
-		if (key === "MaxLevel") {
-			current.MaxLevel = Number(value);
-		} else if (key === "Name") {
-			current.Name = unquote(value!);
-		} else {
-			current.Description = unquote(value!);
-		}
-	}
-	if (current?.Id) entries.push(current as SkillYamlEntry);
-	return entries;
-}
-
-function unquote(value: string): string {
-	return value.replace(/^"(.*)"$/, "$1");
-}
-
-function quote(value: string): string {
-	return `"${value.replace(/"/g, '\\"')}"`;
-}
-
-export function renderSkillYaml(entries: SkillYamlEntry[]): string {
-	const body = entries
-		.sort((a, b) => a.Id - b.Id)
-		.map(
-			(e) =>
-				`  - Id: ${e.Id}\n` +
-				`    Name: ${e.Name}\n` +
-				`    Description: ${quote(e.Description)}\n` +
-				`    MaxLevel: ${e.MaxLevel}\n`,
-		)
-		.join("");
-
-	return (
-		"# Gerado pelo painel admin (apps/api) — NÃO editar à mão.\n" +
-		"# Sobrepõe entradas de db/re/skill_db.yml por Id; o que não estiver aqui\n" +
-		"# continua valendo do arquivo original do rAthena.\n" +
-		"Header:\n  Type: SKILL_DB\n  Version: 4\n\nBody:\n" +
-		body
-	);
+export function renderSkillDbYaml(entries: RawSkillYaml[]): string {
+  const sorted = [...entries].sort((a, b) => a.Id - b.Id);
+  const doc = {
+    Header: { Type: "SKILL_DB", Version: 4 },
+    Body: sorted,
+  };
+  return (
+    "# Gerado pelo painel admin (apps/api) — NÃO editar à mão.\n" +
+    "# Sobrepõe entradas de db/re/skill_db.yml por Id; o que não estiver aqui\n" +
+    "# continua valendo do arquivo original do rAthena.\n" +
+    stringifyYaml(doc, { lineWidth: 0 })
+  );
 }

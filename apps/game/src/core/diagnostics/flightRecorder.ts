@@ -965,6 +965,21 @@ export interface Despejo {
   gatilhos: Record<string, Gatilho>;
   campos: string[];
   /**
+   * p50/p95/máximo de CADA coluna, sobre o anel inteiro.
+   *
+   * Sem isto, um despejo com zero casos perdia a série de quadros por completo —
+   * e zero caso é o resultado NORMAL de medir um custo em regime. Foi
+   * exatamente o que aconteceu ao tentar ler `matrizMs` depois de desligar o
+   * `matrixAutoUpdate` dos props: o arquivo tinha o anel de eventos, o censo e o
+   * estado de gravação, e nenhuma das 48 colunas.
+   *
+   * `p50` responde "quanto custa em regime" e `p95`/`max` respondem "e no pior
+   * quadro" — as duas perguntas que um gatilho responderia, sem precisar que ele
+   * dispare. `NaN` (o que não foi medido) fica de fora da conta em vez de virar
+   * zero.
+   */
+  resumo: Record<string, { p50: number; p95: number; max: number; n: number }>;
+  /**
    * O ANEL INTEIRO de eventos, e não só o que os casos levaram.
    *
    * Um despejo sem caso nenhum jogava fora os 512 eventos — justamente o que se
@@ -1013,6 +1028,41 @@ export function removerColetorDeMeta(nome: string): void {
   coletores.delete(nome);
 }
 
+/**
+ * p50/p95/máximo de cada coluna, sobre os quadros que estão no anel.
+ *
+ * Reusa a MEDIANA em vez da média pela mesma razão que o `perf/orcamento`: uma
+ * pausa do coletor envenena a média e não move a mediana. O `p95` e o `max`
+ * ficam ao lado justamente para o pior quadro não desaparecer nessa robustez.
+ *
+ * `NaN` sai da conta — `gpuMs` sem a extensão, `memoriaGpuMb` sem a
+ * `GMAN_webgl_memory` e `heapMb` fora do Chrome são lacunas, e tratá-las como
+ * zero puxaria a mediana para baixo mentindo um custo menor.
+ */
+function resumoDasColunas(): Despejo["resumo"] {
+  const n = quadrosGravados();
+  const fora: Despejo["resumo"] = {};
+  if (n === 0) return fora;
+  const buf = new Float64Array(n);
+  for (const campo of CAMPOS) {
+    const col = colunas.get(campo)!;
+    let m = 0;
+    for (let i = 0; i < n; i++) {
+      const v = col[i]!;
+      if (Number.isFinite(v)) buf[m++] = v;
+    }
+    if (m === 0) {
+      fora[campo] = { p50: 0, p95: 0, max: 0, n: 0 };
+      continue;
+    }
+    const fatia = buf.subarray(0, m);
+    fatia.sort();
+    const em = (p: number) => arredondar(fatia[Math.min(m - 1, Math.floor(m * p))]!);
+    fora[campo] = { p50: em(0.5), p95: em(0.95), max: arredondar(fatia[m - 1]!), n: m };
+  }
+  return fora;
+}
+
 export function despejo(): Despejo {
   /**
    * Exportar no meio de uma captura não pode devolver um arquivo SEM ela.
@@ -1040,6 +1090,7 @@ export function despejo(): Despejo {
     gravacao: estado(),
     gatilhos: estadoDosGatilhos(),
     campos: CAMPOS as string[],
+    resumo: resumoDasColunas(),
     eventos: eventosOrdenados(),
     casos: casos.map((c) => {
       const quadros: Record<string, number[]> = {};

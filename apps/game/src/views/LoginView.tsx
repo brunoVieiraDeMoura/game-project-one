@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { gateway } from "../net/gateway";
 import { useSessionStore } from "../net/sessionStore";
 import { FRAME_FONT } from "../ui/charFrame";
-import { LOGIN_COLORS, LOGIN_FORM, u } from "../ui/login";
+import { LOGIN_COLORS, LOGIN_FORM, LOGIN_TITLE_FONT, u } from "../ui/login";
+import { LOGIN_FRAME_ART, LOGIN_FRAME_SIZE, RIBBON_BAND } from "../ui/loginFrameArt";
+import { Ribbon } from "../ui/Ribbon";
 import {
   LoginBackdrop,
   LoginBotaoLargo,
@@ -11,6 +13,7 @@ import {
   LoginColuna,
   LoginError,
   LoginPainelOrnado,
+  useLarguraDoPalco,
 } from "../ui/LoginChrome";
 import {
   LoginEpigrafe,
@@ -93,19 +96,7 @@ export function LoginView() {
         <LoginTitulo />
 
       <LoginPainelOrnado largura={u(LOGIN_FORM.largura)} style={{ flex: "0 0 auto" }}>
-        <div
-          style={{
-            textAlign: "center",
-            fontFamily: FRAME_FONT,
-            fontSize: u(1.05),
-            letterSpacing: u(0.1),
-            textTransform: "uppercase",
-            color: "#e8d9ae",
-            marginBottom: u(1.1),
-          }}
-        >
-          {creating ? "Funde sua linhagem" : "Entre em sua jornada"}
-        </div>
+        <HeaderRibbon>{creating ? "Funde sua linhagem" : "Entre em sua jornada"}</HeaderRibbon>
 
         <form onSubmit={submit} style={{ display: "grid", gap: u(0.7) }}>
           <LoginCampo
@@ -134,7 +125,7 @@ export function LoginView() {
              * escolha definitiva, e o jogador tem de saber ANTES do botão.
              */
             <div style={{ display: "flex", alignItems: "center", gap: u(0.6), marginTop: u(0.2) }}>
-              <span style={{ fontFamily: FRAME_FONT, fontSize: u(0.8), color: LOGIN_COLORS.inkDim }}>
+              <span style={{ fontFamily: FRAME_FONT, fontSize: u(1.35), color: LOGIN_COLORS.inkDim }}>
                 Sexo
               </span>
               {(["M", "F"] as const).map((s) => (
@@ -150,7 +141,7 @@ export function LoginView() {
                     border: `1px solid ${sex === s ? LOGIN_COLORS.gold : LOGIN_COLORS.goldFaint}`,
                     background: sex === s ? "rgba(150,112,38,0.42)" : "rgba(8,6,4,0.6)",
                     fontFamily: FRAME_FONT,
-                    fontSize: u(0.8),
+                    fontSize: u(1.35),
                     color: LOGIN_COLORS.ink,
                     cursor: "pointer",
                   }}
@@ -175,7 +166,7 @@ export function LoginView() {
                   alignItems: "center",
                   gap: u(0.5),
                   fontFamily: FRAME_FONT,
-                  fontSize: u(0.8),
+                  fontSize: u(1.35),
                   color: LOGIN_COLORS.inkDim,
                   cursor: "pointer",
                 }}
@@ -184,7 +175,7 @@ export function LoginView() {
                   type="checkbox"
                   checked={lembrar}
                   onChange={(e) => setLembrar(e.target.checked)}
-                  style={{ width: u(0.95), height: u(0.95), accentColor: LOGIN_COLORS.gold, cursor: "pointer" }}
+                  style={{ width: u(1.3), height: u(1.3), accentColor: LOGIN_COLORS.gold, cursor: "pointer" }}
                 />
                 Lembrar de mim
               </label>
@@ -207,7 +198,7 @@ export function LoginView() {
                   background: "transparent",
                   padding: 0,
                   fontFamily: FRAME_FONT,
-                  fontSize: u(0.8),
+                  fontSize: u(1.35),
                   color: "#d8c48a",
                   textDecoration: "underline",
                   cursor: "pointer",
@@ -242,7 +233,7 @@ export function LoginView() {
             style={{
               margin: `${u(0.9)} 0 0`,
               fontFamily: FRAME_FONT,
-              fontSize: u(0.72),
+              fontSize: u(1.15),
               lineHeight: 1.5,
               color: LOGIN_COLORS.inkFaint,
               textAlign: "center",
@@ -257,7 +248,7 @@ export function LoginView() {
             style={{
               margin: `${u(0.9)} 0 0`,
               fontFamily: FRAME_FONT,
-              fontSize: u(0.75),
+              fontSize: u(1.2),
               lineHeight: 1.5,
               color: LOGIN_COLORS.inkDim,
               textAlign: "center",
@@ -277,6 +268,71 @@ export function LoginView() {
   );
 }
 
+/**
+ * A fita "Entre em sua jornada" — leia1.txt: "papel de cima centralizado no
+ * login com texto dentro". Sobrepõe o trilho de cima do painel (`ChatFrame`
+ * dentro de `LoginPainelOrnado`), por isso `position:absolute` com `top`
+ * negativo em vez de nascer em fluxo: o `marginBottom` que havia antes só
+ * empurrava o resto do formulário para baixo, nunca fazia a fita ENCOSTAR na
+ * moldura como a referência mostra.
+ *
+ * `escala` remedida pela ALTURA renderizada (a conta só pela largura do bico
+ * saía baixa demais, mesmo erro que a fita da era teve): na `referencia.png`
+ * a fita mede ~55 px de alto num palco de 1402, contra 68 nativos do bico →
+ * `escala(1402) ≈ 55/68 ≈ 0,81`.
+ */
+function HeaderRibbon({ children }: { children: React.ReactNode }) {
+  const palco = useLarguraDoPalco();
+  const escala = Math.max(0.45, Math.min(1.0, palco * 0.000578));
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: "50%",
+        // -58% deixava a fita flutuando quase toda ACIMA do painel, sobre a
+        // pintura crua — a moldura do painel (`ChatFrame`) tem uma margem
+        // transparente no próprio topo da arte, então o pouco que sobrava
+        // "dentro" (42%) ainda caía nessa margem e nenhuma vinha aparecia
+        // por trás da fita (referencia2.png, marcação 2: "o papel é dentro
+        // do canva de login"). Com -38% ela mergulha mais no painel, até
+        // onde a folhagem de verdade começa.
+        transform: "translate(-50%, -38%)",
+        zIndex: 3,
+        width: u(27),
+      }}
+    >
+      <Ribbon
+        cap={LOGIN_FRAME_ART.headerCap}
+        ext={LOGIN_FRAME_ART.headerExt}
+        tam={{ cap: LOGIN_FRAME_SIZE.headerCap, ext: LOGIN_FRAME_SIZE.headerExt }}
+        banda={RIBBON_BAND.header}
+        escala={escala}
+        largura="100%"
+      >
+        <span
+          style={{
+            fontFamily: LOGIN_TITLE_FONT,
+            fontSize: u(1.5),
+            letterSpacing: u(0.06),
+            // mesma correção da fita da era (`ui/LoginDecor.tsx: EraRibbon`):
+            // `letter-spacing` só some depois de cada letra, e a folga do
+            // último caractere puxava o texto pra esquerda dentro da caixa
+            // centralizada por flex.
+            marginLeft: u(0.06),
+            textTransform: "uppercase",
+            color: "#f0e2ae",
+            textShadow: `0 ${u(0.06)} ${u(0.12)} rgba(0,0,0,0.9)`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {children}
+        </span>
+      </Ribbon>
+    </div>
+  );
+}
+
 /** "ou" entre dois filetes, separando entrar de criar conta */
 function Separador({ children }: { children: React.ReactNode }) {
   const traco: React.CSSProperties = {
@@ -290,7 +346,7 @@ function Separador({ children }: { children: React.ReactNode }) {
       <span
         style={{
           fontFamily: FRAME_FONT,
-          fontSize: u(0.8),
+          fontSize: u(1.35),
           letterSpacing: u(0.1),
           textTransform: "uppercase",
           color: LOGIN_COLORS.inkFaint,

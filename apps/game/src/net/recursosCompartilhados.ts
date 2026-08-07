@@ -95,6 +95,12 @@ export function materialDeBrilho(
     // parecer luz e não um adesivo colado no terreno
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    // sempre por CIMA do chão: o disco é um quad PLANO num terreno que pode
+    // não ser — numa encosta ou montanha o relevo na frente ocluía o disco
+    // (`depthTest` padrão é `true`) e "o círculo embaixo do monstro fica para
+    // dentro da montanha". Ele é decoração de UI no mundo, não geometria que
+    // precisa perder para o que está na frente.
+    depthTest: false,
     side: THREE.DoubleSide,
   });
   brilhos.set(chave, mat);

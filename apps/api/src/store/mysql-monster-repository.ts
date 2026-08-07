@@ -1,7 +1,12 @@
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import type { Monster } from "@ragnarok/game-data";
 import type { MonsterListQuery, MonsterListResult, MonsterRepository } from "./monster-repository.js";
-import { monsterToMysqlRow, mysqlRowToMonster, type MysqlMonsterRow } from "./mysql-monster-row.js";
+import {
+	monsterElementToRathena,
+	monsterToMysqlRow,
+	mysqlRowToMonster,
+	type MysqlMonsterRow,
+} from "./mysql-monster-row.js";
 import { queueReload } from "./mysql-item-repository.js";
 import { roDatabase } from "./mysql.js";
 
@@ -59,7 +64,7 @@ export class MysqlMonsterRepository implements MonsterRepository {
 		return new Map(items.map((i) => [Number(i.id), String(i.name_aegis)]));
 	}
 
-	async list({ page, pageSize, search }: MonsterListQuery): Promise<MonsterListResult> {
+	async list({ page, pageSize, search, dropsItem, levelMin, levelMax, element }: MonsterListQuery): Promise<MonsterListResult> {
 		const db = roDatabase();
 		const where: string[] = [];
 		const params: unknown[] = [];
@@ -68,6 +73,35 @@ export class MysqlMonsterRepository implements MonsterRepository {
 			where.push("(name_english LIKE ? OR name_aegis LIKE ?" + (/^\d+$/.test(search) ? " OR id = ?" : "") + ")");
 			params.push(`%${search}%`, `%${search}%`);
 			if (/^\d+$/.test(search)) params.push(Number(search));
+		}
+		// "Quem dropa o item?" — bug antigo: este filtro chegava até aqui e era
+		// silenciosamente ignorado (list() só desestruturava page/pageSize/search).
+		// O rAthena guarda o drop pelo NOME AEGIS, não pelo id, então resolve
+		// primeiro; item inexistente = ninguém dropa, resultado vazio.
+		if (dropsItem !== undefined) {
+			const names = await this.itemNamesById([dropsItem]);
+			const aegis = names.get(dropsItem);
+			if (!aegis) return { monsters: [], total: 0, page, pageSize };
+			const dropColumns = [
+				...Array.from({ length: 10 }, (_, i) => `drop${i + 1}_item`),
+				...Array.from({ length: 3 }, (_, i) => `mvpdrop${i + 1}_item`),
+			];
+			where.push(`(${dropColumns.map((c) => `\`${c}\` = ?`).join(" OR ")})`);
+			params.push(...dropColumns.map(() => aegis));
+		}
+		if (levelMin !== undefined) {
+			// nível NULL lê como 1 (mysqlRowToMonster) — sem o OR, uma faixa que
+			// cobre o default perderia esses monstros.
+			where.push(levelMin <= 1 ? "(`level` >= ? OR `level` IS NULL)" : "`level` >= ?");
+			params.push(levelMin);
+		}
+		if (levelMax !== undefined) {
+			where.push(levelMax >= 1 ? "(`level` <= ? OR `level` IS NULL)" : "`level` <= ?");
+			params.push(levelMax);
+		}
+		if (element) {
+			where.push("`element` = ?");
+			params.push(monsterElementToRathena(element));
 		}
 
 		const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";

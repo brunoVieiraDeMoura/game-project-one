@@ -49,6 +49,11 @@ OnTimer2000:
 			atcommand "@reloadscript";
 		} else if (.@kind$[.@i] == "battleconf") {
 			atcommand "@reloadbattleconf";
+		} else if (.@kind$[.@i] == "pcdb") {
+			// job_stats/job_basepoints/job_exp/job_aspd/skill_tree são um domínio
+			// só pro rAthena: pc_readdb() releem os 5 juntos (pc.cpp:14612-14629),
+			// não existe "@reloadjobdb" separado.
+			atcommand "@reloadpcdb";
 		} else {
 			debugmes "[game-project] reload desconhecido: " + .@kind$[.@i];
 		}

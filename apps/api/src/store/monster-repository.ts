@@ -1,4 +1,4 @@
-import type { Monster } from "@ragnarok/game-data";
+import type { Element, Monster } from "@ragnarok/game-data";
 
 export interface MonsterListQuery {
   page: number;
@@ -7,6 +7,9 @@ export interface MonsterListQuery {
   search?: string | undefined;
   /** consulta reversa "quem dropa X": filtra monstros que dropam este item (drops ou mvpDrops) */
   dropsItem?: number | undefined;
+  levelMin?: number | undefined;
+  levelMax?: number | undefined;
+  element?: Element | undefined;
 }
 
 export interface MonsterListResult {

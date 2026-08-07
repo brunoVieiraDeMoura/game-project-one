@@ -5,6 +5,8 @@ export interface SkillListQuery {
   pageSize: number;
   /** name/aegisName substring or numeric id */
   search?: string | undefined;
+  /** filtro por classe: lista de prefixos crus do aegisName (ex. ["SM","KN"]) — nunca rótulo/tier */
+  classPrefix?: string[] | undefined;
 }
 
 export interface SkillListResult {

@@ -107,10 +107,14 @@ function Bust({
 }
 
 export function CharacterPortrait({
-  characterKey = "knight",
+  // mesmo modelo do NetPlayer/Player (Mago) — este é o retrato do PRÓPRIO
+  // jogador (`dono="jogador"`) quando quem chama não passa `characterKey`;
+  // "alvo" e "status" recebem a deles explicitamente.
+  characterKey = "mage",
   inteiro,
   fundo,
   giravel,
+  giroRef,
   dono = "?",
 }: {
   /**
@@ -128,8 +132,17 @@ export function CharacterPortrait({
   fundo?: false;
   /** arrastar com o mouse gira o personagem no PRÓPRIO eixo (só em Y) */
   giravel?: boolean;
+  /**
+   * Ângulo controlado de FORA (ui-change.txt: as duas setas do char-select
+   * giram o personagem sem arrastar). Quando passado, o componente muta ESTE
+   * ref em vez de um interno — quem chamou pode incrementar `giroRef.current`
+   * direto num `onClick`, e o `useFrame` do busto (que já lê `giro.current` a
+   * cada pulso) pega a mudança sozinho, sem precisar de `setState` nenhum.
+   */
+  giroRef?: React.MutableRefObject<number>;
 }) {
-  const giro = useRef(0);
+  const giroInterno = useRef(0);
+  const giro = giroRef ?? giroInterno;
   const arrasto = useRef<number | null>(null);
 
   // Só o eixo Y: girar em X deitaria o personagem, e o enquadramento (feito a
@@ -210,7 +223,7 @@ export function CharacterPortrait({
             também carrega um .glb, e os dois suspendendo juntos seriam
             indistinguíveis com um sinal anônimo */}
         <Suspense fallback={import.meta.env.DEV ? <SondaDeSuspense nome="retrato" /> : null}>
-          <Bust url={CHARACTER_URLS[characterKey]} inteiro={inteiro} giro={giravel ? giro : undefined} />
+          <Bust url={CHARACTER_URLS[characterKey]} inteiro={inteiro} giro={giravel || giroRef ? giro : undefined} />
         </Suspense>
       </Canvas>
     </div>

@@ -1,7 +1,60 @@
-1 o background do canva do lado direito, aonde vc pois opacidade para o texto/recompensa e missao, está um pouco pequeno ainda para todas as direções, eu queria que ele tapasse o fundo verde parece que falta 14px para todos os lados.
+refaça toda a ui de http://localhost:3001/char-select
+, entenda primeiro e substitua cada parte depois.
+tem uma referencia em 
+C:\Users\Bruno\Desktop\game-project\assets-new\ui_definitiva\character-create
+referencia.jpg
 
-2 a barra de vida em cima dos monstros e a de baixo do boneco (player) usa
-  essa barrinha C:\Users\Bruno\Desktop\game-project\assets-new\ui_definitiva\skill-cast
+No lugar do icone do wow, bota o nome IMPÉRIO ANTIGO
+Não bota o icone do wow na loja. 
 
-3 o tamanho visual da barrinha de vida dos monstros e do nome deles
+TODO O CANVA TEM UM ADORNO EM VOLTA
+É O QUE ENVOLVE TODO O CANVA É O PRINCIPAL [tudo tem que ser renderizado dentro desse canva 
 
+
+borda-top-principal (borda do canva principal, parte de cima da esquerda, rotacione para todos os lados)
+extensor-cima-barra-principal(canva principal extensor cima e baixo)
+extensor-lateral-barra-principal(canva principal extensor lateral)
+
+///////////////////
+
+botões 
+
+bordas-botoes-cards (borda dos botões)
+extensor-bordas-botoes-cards-top (extensor de botões  parte de cima)
+extensor-bordas-botoes-cards (extensor lateral dos botões )
+button-arrow-left(botão para rodar o personagem)
+
+
+obss: queros os botões tais como na imagem de referencia
+quero:
+lado esquerdo :loja | Menu |discord | site | Noticias | suporte
+central : Entrar  no Mundo | 2 botões para rotação rodar o personagem(esquerda e direita)
+direita cima : Mudar de Reino (trocar texto para "Mudar de Canal")
+direita baixo : Criar Novo Personagem | Excluir personagem | Voltar
+
+Não quero
+lado esquerdo : Addons
+direita baixo : O botão com icone de refresh
+
+///////////////////
+
+Canva da direita para lista de personagem [aonde vai ficar todos personagens/botoes de mudar reino,criar,excluir e voltar]
+
+login-left-botton-curve (parte de baixo da esquerda do Canva)
+right-login-botton-curve(parte de baixo da direita do Canva)
+top-login-left-curve(parte de cima da esquerda do Canva)
+top-login-right-curve(parte de cima da direita do Canva)
+mid-login-bar-extension-top (extensor de cima Canva)
+mid-bar-loginextension-botton( extensor de baixo do Canva)
+
+
+para cada Select char com nome de 1fr icon | Nome do personagem/classe/lvl/local
+input-curva-das-bordas-barra- (adorno para Select char
+input-reta-barra(extensor do Select char)
+
+
+papel-nome-do-char(papel do nome do char)
+extensor-papel-nome-do-char(extensor do papel do nome do char)
+
+
+obss: papel fica acima do botão de entrar no mundo (qual fica no meio da tela na parte inferior [o avatar personagem fica acima do nome]

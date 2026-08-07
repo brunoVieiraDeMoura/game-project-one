@@ -1,7 +1,10 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { CurvedBox } from "./CurvedBox";
+import { CardFrame } from "./CardFrame";
+import { Ribbon } from "./Ribbon";
 import { useLarguraDoPalco } from "./LoginChrome";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "./charFrame";
+import { LOGIN_FRAME_ART, LOGIN_FRAME_SIZE, RIBBON_BAND } from "./loginFrameArt";
+import { canvaTrilhos, escalaDoCanva } from "./CanvaFrame";
 import {
   LOGIN_COLORS,
   LOGIN_EPIGRAFE,
@@ -36,17 +39,16 @@ import {
  */
 
 /**
- * A moldura SIMPLES: a curva das barras de HP/SP (`ui/CurvedBox`).
+ * A moldura pequena de madeira (`ui/CardFrame`, `bordas-botoes-cards` do
+ * pacote `login-new`) — leia1.txt: "botões de cards (classificação | os 4
+ * cards laterais | site/discord/noticia/suporte | botões de entrar)".
  *
- * É arte de verdade, não `border` de CSS — as peças
- * `curva-das-bordas-barra-hp-sp` e `reta-barra-hp-sp` do pacote de login são
- * byte a byte (md5 conferido) as que o repo já usa nas barras, no chat e nos
- * slots. A ORNAMENTADA (folhagem nos quatro cantos) fica para o painel de
- * login, que é o assunto da tela; usá-la também nas placas competiria com ele.
- *
- * A espessura vem do PALCO, não de um px fixo: a caixa é montada em JS a partir
- * de um número, e sem escalar junto a moldura engrossaria em tela pequena e
- * viraria fio em tela grande.
+ * A espessura vem do PALCO, não de um px fixo: a caixa é montada com
+ * `border-image` a partir de um número, e sem escalar junto a moldura
+ * engrossaria em tela pequena e viraria fio em tela grande. `0.009` (contra o
+ * `0.0075` do `CurvedBox` que ela substituiu) é maior porque o canto desta
+ * arte é 29 px nativos contra 24 — na mesma proporção de tela, ele pede um
+ * `border` um pouco maior para a moldura ler com a mesma presença.
  */
 function Caixa({
   children,
@@ -59,17 +61,17 @@ function Caixa({
   padding?: string;
 } & Pick<React.HTMLAttributes<HTMLDivElement>, "onMouseEnter" | "onMouseLeave">) {
   const palco = useLarguraDoPalco();
-  const borda = Math.max(7, palco * 0.0075);
+  const borda = Math.max(10, palco * 0.012);
   return (
     <div {...eventos}>
-      <CurvedBox
+      <CardFrame
         border={borda}
         background={LOGIN_COLORS.panel}
         style={style}
         inner={{ padding: padding ?? `${borda * 0.7}px ${borda}px` }}
       >
         {children}
-      </CurvedBox>
+      </CardFrame>
     </div>
   );
 }
@@ -118,17 +120,21 @@ function useHover() {
  */
 export function LoginTitulo() {
   const [linha1, linha2] = LOGIN_TITULO.nome;
+  const palco = useLarguraDoPalco();
   return (
     <div
-      style={{ textAlign: "center", pointerEvents: "none", flex: "0 0 auto" }}
+      style={{ position: "relative", textAlign: "center", pointerEvents: "none", flex: "0 0 auto" }}
     >
-      {[linha1, linha2].map((palavra, i) => (
+      {[linha1, linha2].map((palavra) => (
         <div
           key={palavra}
           style={{
             fontFamily: LOGIN_TITLE_FONT,
             fontWeight: 700,
-            fontSize: u(i === 0 ? 4 : 3.5),
+            // medido em `referencia.png`: "IMPÉRIO" e "ANTIGO" têm a MESMA
+            // altura de capitular (~51 px num palco de 1402 → fonte ~5,2% do
+            // palco) — as duas linhas do mesmo tamanho, não a segunda menor
+            fontSize: u(5.2),
             lineHeight: 1.04,
             // capitular romana pede entreletra larga: é o que separa uma
             // inscrição de uma palavra em caixa alta
@@ -149,13 +155,15 @@ export function LoginTitulo() {
           {palavra}
         </div>
       ))}
-      <Era />
+      <EraRibbon palco={palco} />
+      {/* medido: "Quatro Continentes..." tem ~18 px de capitular no mesmo
+          palco → fonte ~1,85% — quase o DOBRO do que havia (0,92) */}
       <div
         style={{
-          marginTop: u(0.5),
+          marginTop: u(0.6),
           fontFamily: FRAME_FONT,
-          fontSize: u(0.92),
-          letterSpacing: u(0.1),
+          fontSize: u(1.85),
+          letterSpacing: u(0.06),
           color: "#e8d9ae",
           textShadow: `0 ${u(0.1)} ${u(0.2)} rgba(0,0,0,0.95)`,
         }}
@@ -167,42 +175,93 @@ export function LoginTitulo() {
 }
 
 /**
- * A linha da era, entre dois filetes — o par de traços da referência.
+ * A fita "A ERA DE ASTERION" (`ui/Ribbon`), com um RAMO espelhado de cada
+ * lado saindo de trás dela — leia1.txt: "atrás desse papel os 2 ramos, 1 para
+ * cada lado invertidos". Substitui o par de filetes CSS que havia antes.
  *
- * Ela deixou de ser uma DATA ("2500+ AC") e passou a ser o nome da era do jogo,
- * o mesmo que a epígrafe do canto já cita. Como não é mais número, sai da fonte
- * de algarismos e vai na de título: é um nome próprio.
+ * `escala` sai do PALCO — remedida na `referencia.png` pela ALTURA renderizada
+ * da fita (a primeira conta, só pela largura do bico, saía baixa demais): a
+ * fita mede ~40 px de alto num palco de 1402, contra 52 nativos do bico →
+ * `escala(1402) = 40/52 ≈ 0,77`, `k ≈ 0,00055` por px de palco. A largura
+ * TOTAL mede ~348 px no mesmo palco (24,8%) — ela entra em `u()`, à parte da
+ * `escala` (a arte do bico contra a largura do miolo+bicos são medidas
+ * diferentes, mesmo as duas saindo do palco).
  */
-function Era() {
-  const traco: CSSProperties = {
-    height: 1,
-    width: u(5.5),
-    background: `linear-gradient(90deg, transparent, ${LOGIN_COLORS.gold})`,
-  };
+function EraRibbon({ palco }: { palco: number }) {
+  // dobrado sobre a primeira calibração (0,4..0,95 × 0,00055): medida contra a
+  // referência de novo, a fita ficava um fio apertado no texto — o desenho é
+  // um PLACA generosa atrás das letras, não uma tarja rente a elas.
+  const escala = Math.max(0.65, Math.min(1.35, palco * 0.00105));
+  const ramoW = LOGIN_FRAME_SIZE.ramo.w * escala;
+  const ramoH = LOGIN_FRAME_SIZE.ramo.h * escala;
+  const larguraFita = u(29); // total (bicos + miolo) — crescida junto da escala
   return (
     <div
       style={{
+        position: "relative",
         marginTop: u(0.5),
         display: "flex",
-        alignItems: "center",
         justifyContent: "center",
-        gap: u(0.9),
       }}
     >
-      <div style={traco} />
-      <span
+      <img
+        src={LOGIN_FRAME_ART.ramo}
+        alt=""
+        draggable={false}
         style={{
-          fontFamily: LOGIN_TITLE_FONT,
-          fontSize: u(1),
-          letterSpacing: u(0.2),
-          textTransform: "uppercase",
-          color: "#e8cf8e",
-          textShadow: `0 ${u(0.1)} ${u(0.2)} rgba(0,0,0,0.95)`,
+          position: "absolute",
+          right: `calc(50% + ${u(12.4)})`,
+          bottom: 2,
+          width: ramoW,
+          height: ramoH,
+          transform: "scaleX(-1)",
+          zIndex: 0,
         }}
-      >
-        {LOGIN_TITULO.era}
-      </span>
-      <div style={{ ...traco, transform: "scaleX(-1)" }} />
+      />
+      <img
+        src={LOGIN_FRAME_ART.ramo}
+        alt=""
+        draggable={false}
+        style={{
+          position: "absolute",
+          left: `calc(50% + ${u(12.4)})`,
+          bottom: 2,
+          width: ramoW,
+          height: ramoH,
+          zIndex: 0,
+        }}
+      />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <Ribbon
+          cap={LOGIN_FRAME_ART.eraCap}
+          ext={LOGIN_FRAME_ART.eraExt}
+          tam={{ cap: LOGIN_FRAME_SIZE.eraCap, ext: LOGIN_FRAME_SIZE.eraExt }}
+          banda={RIBBON_BAND.era}
+          escala={escala}
+          largura={larguraFita}
+        >
+          <span
+            style={{
+              fontFamily: LOGIN_TITLE_FONT,
+              fontSize: u(2.5),
+              letterSpacing: u(0.15),
+              // `letter-spacing` só entra DEPOIS de cada letra (inclusive a
+              // última) — centralizado por flex, o texto lia puxado para a
+              // ESQUERDA porque a caixa é mais larga que a tinta (a folga do
+              // último caractere sobra do lado direito). `marginLeft` do
+              // mesmo tamanho empurra a tinta de volta ao centro real, igual
+              // o `textIndent` já faz no título (`LoginTitulo`).
+              marginLeft: u(0.15),
+              textTransform: "uppercase",
+              color: "#e8cf8e",
+              textShadow: `0 ${u(0.1)} ${u(0.2)} rgba(0,0,0,0.95)`,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {LOGIN_TITULO.era}
+          </span>
+        </Ribbon>
+      </div>
     </div>
   );
 }
@@ -240,7 +299,7 @@ function PlacaDeRegiao({ regiao }: { regiao: LoginRegiao }) {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: u(0.8),
+          gap: u(1),
           // o nome cresce para dentro da tela nos dois lados: ancorada pela
           // borda de fora, a coluna de placas fica alinhada mesmo com nomes de
           // larguras diferentes — é o que a referência mostra
@@ -250,11 +309,13 @@ function PlacaDeRegiao({ regiao }: { regiao: LoginRegiao }) {
       >
         <SimboloDeRegiao nome={regiao.simbolo} />
         <div>
+          {/* medido em `referencia.png`: "VALTHERA" tem ~17 px de capitular
+              num palco de 1402 (fonte ~1,7%) — quase 2× o que havia (1,05) */}
           <div
             style={{
               fontFamily: LOGIN_TITLE_FONT,
-              fontSize: u(1.05),
-              letterSpacing: u(0.11),
+              fontSize: u(1.7),
+              letterSpacing: u(0.09),
               textTransform: "uppercase",
               color: "#f0dda6",
               textShadow: `0 ${u(0.08)} ${u(0.16)} rgba(0,0,0,0.9)`,
@@ -266,9 +327,9 @@ function PlacaDeRegiao({ regiao }: { regiao: LoginRegiao }) {
           <div
             style={{
               fontFamily: FRAME_FONT,
-              fontSize: u(0.58),
+              fontSize: u(0.85),
               color: LOGIN_COLORS.inkDim,
-              lineHeight: 1.2,
+              lineHeight: 1.25,
             }}
           >
             {regiao.lenda}
@@ -280,7 +341,7 @@ function PlacaDeRegiao({ regiao }: { regiao: LoginRegiao }) {
 }
 
 function SimboloDeRegiao({ nome }: { nome: string }) {
-  const comum = { width: u(1.5), height: u(1.5), display: "block", flex: "0 0 auto" } as const;
+  const comum = { width: u(2.1), height: u(2.1), display: "block", flex: "0 0 auto" } as const;
   const cor = LOGIN_COLORS.gold;
   if (nome === "sol") {
     return (
@@ -338,13 +399,28 @@ function SimboloDeRegiao({ nome }: { nome: string }) {
  * nela. Os descritores vão ao lado, como manda o formato.
  */
 export function LoginRating() {
+  const palco = useLarguraDoPalco();
+  const t = canvaTrilhos(escalaDoCanva(palco));
   return (
-    <Caixa style={{ position: "absolute", left: u(2.2), bottom: "4.5%", pointerEvents: "none" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: u(0.7) }}>
+    <Caixa
+      style={{
+        position: "absolute",
+        left: `calc(${t.left}px + ${u(1)})`,
+        // ACIMA da banda de baixo do quadro (`CanvaFrame`), não em cima
+        // dela — na referência a placa fica na CENA, só o rodapé de atalhos
+        // é que mora na madeira. Mas ENCOSTADA na banda, quase tocando: com
+        // `u(0.8)` sobrava um vão de pintura crua entre a placa e a madeira
+        // (referencia2.png, marcação 1) — a referência mostra a placa quase
+        // soldada na borda de cima da banda.
+        bottom: `calc(${t.bottom}px + ${u(0.15)})`,
+        pointerEvents: "none",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: u(1) }}>
         <div
           style={{
-            width: u(1.9),
-            height: u(1.9),
+            width: u(2.7),
+            height: u(2.7),
             display: "grid",
             placeItems: "center",
             background: LOGIN_RATING.cor,
@@ -352,14 +428,14 @@ export function LoginRating() {
             fontFamily: FRAME_NUM_FONT,
             fontVariantNumeric: FRAME_NUM_VARIANT,
             fontWeight: 700,
-            fontSize: u(1.2),
+            fontSize: u(1.7),
             lineHeight: 1,
             flex: "0 0 auto",
           }}
         >
           {LOGIN_RATING.idade}
         </div>
-        <div style={{ fontFamily: FRAME_FONT, fontSize: u(0.6), color: LOGIN_COLORS.ink, lineHeight: 1.4 }}>
+        <div style={{ fontFamily: FRAME_FONT, fontSize: u(0.85), color: LOGIN_COLORS.ink, lineHeight: 1.4 }}>
           {LOGIN_RATING.descritores.map((d) => (
             <div key={d}>{d}</div>
           ))}
@@ -367,12 +443,12 @@ export function LoginRating() {
       </div>
       <div
         style={{
-          marginTop: u(0.45),
-          padding: `${u(0.18)} ${u(0.4)}`,
+          marginTop: u(0.55),
+          padding: `${u(0.22)} ${u(0.5)}`,
           background: "rgba(0,0,0,0.75)",
           fontFamily: FRAME_FONT,
-          fontSize: u(0.56),
-          letterSpacing: u(0.06),
+          fontSize: u(0.78),
+          letterSpacing: u(0.05),
           textTransform: "uppercase",
           color: LOGIN_COLORS.ink,
           textAlign: "center",
@@ -385,7 +461,9 @@ export function LoginRating() {
 }
 
 /**
- * Atalhos do rodapé.
+ * Atalhos do rodapé — QUATRO cartões separados, sentados na banda de baixo do
+ * quadro (`CanvaFrame`), como a referência mostra (cada botão com a própria
+ * moldura, não um painel só envolvendo os quatro).
  *
  * Quem tem `href` vira `<a>`; quem não tem fica como texto apagado e NÃO
  * clicável. Um link para lugar nenhum promete uma página que ainda não existe —
@@ -393,29 +471,28 @@ export function LoginRating() {
  * entram quando existirem, sem tocar neste componente.
  */
 export function LoginLinks() {
+  const palco = useLarguraDoPalco();
+  const t = canvaTrilhos(escalaDoCanva(palco));
   return (
-    <Caixa
+    <div
       style={{
         position: "absolute",
         left: "50%",
         transform: "translateX(-50%)",
-        bottom: "3%",
+        bottom: 0,
+        height: t.bottom,
+        display: "flex",
+        alignItems: "center",
+        gap: u(1.2),
+        // acima de tudo, inclusive do quadro (zIndex 3): é o único conteúdo
+        // que o próprio leia1.txt manda morar NA banda, não atrás dela
+        zIndex: 4,
       }}
-      padding="1px"
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: u(2.6),
-          padding: `${u(0.5)} ${u(2.4)}`,
-        }}
-      >
-        {LOGIN_LINKS.map((l) => (
-          <AtalhoDoRodape key={l.chave} link={l} />
-        ))}
-      </div>
-    </Caixa>
+      {LOGIN_LINKS.map((l) => (
+        <AtalhoDoRodape key={l.chave} link={l} />
+      ))}
+    </div>
   );
 }
 
@@ -429,14 +506,16 @@ export function LoginLinks() {
  */
 function AtalhoDoRodape({ link }: { link: (typeof LOGIN_LINKS)[number] }) {
   const hover = useHover();
+  const palco = useLarguraDoPalco();
+  const borda = Math.max(10, palco * 0.012);
   const conteudo = (
     <>
       <IconeDeLink nome={link.icone} ativo={Boolean(link.href)} />
       <span
         style={{
           fontFamily: FRAME_FONT,
-          fontSize: u(0.6),
-          letterSpacing: u(0.07),
+          fontSize: u(0.85),
+          letterSpacing: u(0.05),
           textTransform: "uppercase",
           color: link.href ? LOGIN_COLORS.ink : LOGIN_COLORS.inkFaint,
         }}
@@ -445,28 +524,39 @@ function AtalhoDoRodape({ link }: { link: (typeof LOGIN_LINKS)[number] }) {
       </span>
     </>
   );
-  const caixa: CSSProperties = {
-    display: "grid",
-    justifyItems: "center",
-    gap: u(0.3),
+  const frameStyle: CSSProperties = {
+    // largura FIXA — a referência mostra os quatro do mesmo tamanho; sem
+    // isso cada botão media pelo próprio rótulo ("SITE OFICIAL" bem mais
+    // largo que "DISCORD") e a fileira saía desalinhada (obs. 5)
+    width: u(9.2),
     textDecoration: "none",
     cursor: link.href ? "pointer" : "default",
     ...hover.estilo,
   };
+  const inner: CSSProperties = {
+    display: "grid",
+    justifyItems: "center",
+    gap: u(0.3),
+    padding: `${u(0.5)} ${u(0.4)}`,
+  };
   return link.href ? (
-    <a href={link.href} target="_blank" rel="noreferrer" style={caixa} {...hover.props}>
-      {conteudo}
+    <a href={link.href} target="_blank" rel="noreferrer" style={{ display: "block" }} {...hover.props}>
+      <CardFrame border={borda} background={LOGIN_COLORS.panel} style={frameStyle} inner={inner} title={link.rotulo}>
+        {conteudo}
+      </CardFrame>
     </a>
   ) : (
-    <div style={caixa} title="em breve" {...hover.props}>
-      {conteudo}
+    <div {...hover.props}>
+      <CardFrame border={borda} background={LOGIN_COLORS.panel} style={frameStyle} inner={inner} title="em breve">
+        {conteudo}
+      </CardFrame>
     </div>
   );
 }
 
 function IconeDeLink({ nome, ativo }: { nome: string; ativo: boolean }) {
   const cor = ativo ? LOGIN_COLORS.gold : LOGIN_COLORS.inkFaint;
-  const comum = { width: u(1.5), height: u(1.5), display: "block" } as const;
+  const comum = { width: u(2.1), height: u(2.1), display: "block" } as const;
   if (nome === "globo") {
     return (
       <svg viewBox="0 0 24 24" style={comum} aria-hidden fill="none" stroke={cor} strokeWidth="1.5">
@@ -504,32 +594,43 @@ function IconeDeLink({ nome, ativo }: { nome: string; ativo: boolean }) {
 
 /** epígrafe do canto inferior-direito */
 export function LoginEpigrafe() {
+  const palco = useLarguraDoPalco();
+  const t = canvaTrilhos(escalaDoCanva(palco));
   return (
-    <Caixa
+    <div
       style={{
         position: "absolute",
-        right: u(2.2),
-        bottom: "4.5%",
-        maxWidth: u(18),
+        right: `calc(${t.right}px + ${u(1)})`,
+        // mesmo ajuste da placa de classificação (marcação 1) — encostada na
+        // banda, não flutuando sobre a pintura crua
+        bottom: `calc(${t.bottom}px + ${u(0.15)})`,
+        // `u(28)` (a correção anterior) tinha overcorrigido: o papel ficava
+        // MAIOR que o da referência (marcação 4). `u(22.5)` bate com a
+        // proporção medida em `referencia.png` (~21% do palco); a fonte
+        // acompanha o tamanho do papel em vez de forçá-lo a crescer.
+        width: u(22.5),
+        aspectRatio: `${LOGIN_FRAME_SIZE.epigrafe.w} / ${LOGIN_FRAME_SIZE.epigrafe.h}`,
+        backgroundImage: `url(${LOGIN_FRAME_ART.epigrafe})`,
+        backgroundSize: "100% 100%",
         pointerEvents: "none",
       }}
     >
-      <div style={{ textAlign: "right" }}>
+      <div style={{ textAlign: "right", padding: `${u(1)} ${u(1.4)}` }}>
         <div
           style={{
             fontFamily: FRAME_FONT,
             fontStyle: "italic",
-            fontSize: u(0.74),
-            lineHeight: 1.5,
-            color: "#e8d9ae",
+            fontSize: u(1.15),
+            lineHeight: 1.4,
+            color: "#3a2c18",
           }}
         >
           “{LOGIN_EPIGRAFE.texto}”
         </div>
-        <div style={{ marginTop: u(0.25), fontFamily: FRAME_FONT, fontSize: u(0.64), color: LOGIN_COLORS.inkFaint }}>
+        <div style={{ marginTop: u(0.35), fontFamily: FRAME_FONT, fontSize: u(0.95), color: "#5c4a30" }}>
           — {LOGIN_EPIGRAFE.fonte}
         </div>
       </div>
-    </Caixa>
+    </div>
   );
 }

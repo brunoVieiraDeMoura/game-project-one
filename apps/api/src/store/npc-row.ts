@@ -1,13 +1,15 @@
-import { NpcSchema, type Npc } from "@ragnarok/game-data";
-import { npcKind } from "./npc-repository";
+import { npcKind, npcOrigin, NpcSchema, type Npc } from "@ragnarok/game-data";
 
-/** NpcSchema ↔ `npcs` row (20260721000001_npcs.sql). `kind` é derivado no
- * write (warp/shop/dialogue/duplicate/other) pra filtro indexado. */
+/** NpcSchema ↔ `npcs` row (20260721000001_npcs.sql). `kind` e `origin` são
+ * derivados no write (funcional / pasta de origem no rAthena) pra filtro
+ * indexado — nenhum dos dois é campo do schema, os dois somem no round-trip
+ * de leitura (ver `rowToNpc`). */
 
 export interface NpcRow {
   id: string;
   name: string;
   kind: string;
+  origin: string;
   sprite: string;
   map_id: string;
   position: unknown;
@@ -28,6 +30,7 @@ export function npcToRow(n: Npc): NpcRow {
     id: n.id,
     name: n.name,
     kind: npcKind(n),
+    origin: npcOrigin(n),
     sprite: n.sprite,
     map_id: n.mapId,
     position: n.position,

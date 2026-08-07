@@ -24,9 +24,11 @@ export class SupabaseItemRepository implements ItemRepository {
     });
   }
 
-  async list({ page, pageSize, search }: ItemListQuery): Promise<ItemListResult> {
+  async list({ page, pageSize, search, type, subType }: ItemListQuery): Promise<ItemListResult> {
     let query = this.client.from("items").select("*", { count: "exact" });
 
+    if (type) query = query.eq("type", type);
+    if (subType) query = query.eq("sub_type", subType);
     if (search) {
       const q = sanitizeSearch(search);
       if (q) {

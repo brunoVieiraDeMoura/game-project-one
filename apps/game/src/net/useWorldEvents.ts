@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { gateway, type EntitySnapshot, type InventoryItemPayload, type SkillPayload } from "./gateway";
 import { useWorldStore } from "./worldStore";
 import { useAttackStore } from "./attackStore";
+import { useSkillTargetStore } from "./skillTargetStore";
 import { useSessionStore } from "./sessionStore";
 import { usePlayerStore } from "./playerStore";
 import { damageKind, useDamageFeed } from "./damageFeed";
@@ -12,6 +13,7 @@ import { useGroundItems } from "./GroundItems";
 import { useFriendStore } from "./friendStore";
 import { useLootStore } from "../hud/lootStore";
 import { limparAmeacas, marcarAmeaca } from "./ameacas";
+import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
 
 /**
@@ -85,6 +87,9 @@ export function useWorldEvents(): void {
       // e o contrário: quem bate em VOCÊ vira prioridade da assistência de mira
       // (ver `net/ameacas`) — o mesmo pacote, sem custo nenhum a mais
       else if (p.targetGid === selfGid) marcarAmeaca(p.gid, performance.now());
+      // e o golpe é a deixa da animação de ataque de QUEM bateu — próprio
+      // personagem ou qualquer outra entidade (ver `net/combatAnim`)
+      marcarAtaque(p.gid, performance.now());
       useDamageFeed.getState().push({
         gid: p.targetGid,
         value: p.damage,
@@ -126,9 +131,10 @@ export function useWorldEvents(): void {
     const onAtaqueLonge = (p: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) =>
       useAttackStore.getState().perseguir(p);
 
-    // o alvo morreu ou saiu de vista: não há mais quem perseguir
+    // o alvo morreu ou saiu de vista: não há mais quem perseguir nem em quem castar
     const onVanishAlvo = (p: { gid: number }) => {
       if (useAttackStore.getState().alvo?.gid === p.gid) useAttackStore.getState().parar();
+      if (useSkillTargetStore.getState().pendente?.gid === p.gid) useSkillTargetStore.getState().parar();
     };
 
     const onStat = (p: { name: string; value: number; bonus?: number }) => {
@@ -155,15 +161,42 @@ export function useWorldEvents(): void {
     // VFX: 600ms é a duração dos efeitos pontuais (impacto/buff); área vive
     // até o servidor mandar sumir.
     const EFFECT_MS = 600;
-    const onSkillCast = (p: { skillId: number; sourceGid: number; targetGid: number; kind: string }) => {
+    const onSkillCast = (p: {
+      skillId: number;
+      sourceGid: number;
+      targetGid: number;
+      kind: string;
+      damage: number;
+      action: number;
+    }) => {
       // a skill SAIU: a barra de conjuração do HUD não tem mais o que contar
       if (p.sourceGid === useWorldStore.getState().selfGid) useCastStore.getState().parar();
+      // e é a deixa da animação de LIBERAÇÃO — o tiro/gesto final da magia
+      marcarCastRelease(p.sourceGid, performance.now());
       useVfxStore.getState().spawn({
         kind: p.kind === "buff" ? "buff" : "impact",
         skillId: p.skillId,
         gid: p.kind === "buff" ? p.sourceGid : p.targetGid,
         expiresAt: performance.now() + EFFECT_MS,
       });
+      /**
+       * O número de dano da skill, MESMA fonte que o ataque básico
+       * (`onAction` acima) — sem isto só o flash de impacto aparecia e o
+       * jogador não via QUANTO a magia bateu. `kind === "target"` é a mesma
+       * distinção que o `USESKILL_ACK` já fazia lá no gateway: "buff" nunca
+       * tem dano de verdade (é sempre 0), e mostrar "Miss" para uma cura seria
+       * mentir.
+       */
+      if (p.kind === "target") {
+        const selfGid = useWorldStore.getState().selfGid;
+        useDamageFeed.getState().push({
+          gid: p.targetGid,
+          value: p.damage,
+          crit: damageKind(p.action).crit,
+          miss: p.damage === 0,
+          onSelf: p.targetGid === selfGid,
+        });
+      }
     };
 
     const onSkillCasting = (p: { skillId: number; sourceGid: number; x: number; y: number; durationMs: number }) => {
@@ -172,6 +205,9 @@ export function useWorldEvents(): void {
       if (p.sourceGid === useWorldStore.getState().selfGid) {
         useCastStore.getState().comecar(p.skillId, p.durationMs || 0);
       }
+      // a animação de conjuração vale para QUALQUER caster, não só o próprio
+      // personagem — é ela que faz o gesto de "carregando a magia" na cena
+      marcarCastStart(p.sourceGid, performance.now(), p.durationMs || 0);
       useVfxStore.getState().spawn({
         kind: "cast",
         skillId: p.skillId,
@@ -294,6 +330,7 @@ export function useWorldEvents(): void {
       // o gid é RECICLADO pelo servidor: guardar "quem me bateu" entre mapas
       // faria um gid velho apontar para outra criatura
       limparAmeacas();
+      limparPulsosDeCombate();
     };
   }, []);
 }

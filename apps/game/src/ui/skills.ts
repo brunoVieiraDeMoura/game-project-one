@@ -13,7 +13,15 @@
  * dentro dela.
  */
 
+import { SK_CLASS_BY_PREFIX, classeDaSkill, SKILL_ELEMENT_LABELS, SKILL_TYPE_LABELS } from "@ragnarok/game-data";
 import { CHROME, windowWidth } from "./windowChrome";
+
+export { SK_CLASS_BY_PREFIX, classeDaSkill };
+// Chaves alargadas pra `Record<string,string>`: os pontos de uso indexam por
+// um `type`/`element` que já chegou como string solta do pacote de rede
+// (net/skillCatalog), não pelo literal do enum.
+export const SK_ELEMENT_NAMES: Record<string, string> = SKILL_ELEMENT_LABELS;
+export const SK_TYPE_NAMES: Record<string, string> = SKILL_TYPE_LABELS;
 
 const BASE = "/assets/ui/skills";
 
@@ -301,139 +309,6 @@ export const SK_WIDTH = windowWidth(SK_PLATE.w);
  * janela travou entre uma página de habilidades e a outra.
  */
 export const SK_FLIP_MS = 70;
-
-/**
- * Prefixo do nome aegis → classe que ensina a habilidade.
- *
- * De onde vem: o ZC.SKILLINFO_LIST manda a CONSTANTE do rAthena ("MG_FIREBOLT",
- * "WZ_STORMGUST"), e nela o prefixo é o código da classe. É o que dá as abas da
- * referência ("Noviço | Mago | Wizard | High Wizard") sem precisar de uma
- * árvore de classes que o cliente não tem: as abas são as classes que
- * APARECEM nas habilidades que o personagem realmente possui.
- *
- * A ORDEM aqui é a ordem das abas — progressão de classe, como na referência.
- * Prefixo fora da tabela não é adivinhado: vira o próprio prefixo e vai para o
- * fim (ver `classeDaSkill`). Preferi a lacuna a um nome errado, que é a regra
- * que já valeu para `character/jobNames`.
- */
-export const SK_CLASS_BY_PREFIX: { prefix: string; label: string; grupo?: string }[] = [
-  // Noviço (NV_) e as comuns a todas as classes (ALL_) dividem UMA fita: são as
-  // habilidades que todo personagem tem, e duas fitas quase vazias no topo da
-  // pilha só gastavam espaço. `grupo` é o que junta prefixos diferentes na
-  // mesma fita — o resto da tabela não usa.
-  { prefix: "NV", label: "Iniciate", grupo: "INICIATE" },
-  { prefix: "ALL", label: "Iniciate", grupo: "INICIATE" },
-  // primeira classe
-  { prefix: "SM", label: "Espadachim" },
-  { prefix: "MG", label: "Mago" },
-  { prefix: "AC", label: "Arqueiro" },
-  { prefix: "AL", label: "Noviço Acólito" },
-  { prefix: "MC", label: "Mercador" },
-  { prefix: "TF", label: "Gatuno" },
-  { prefix: "TK", label: "Taekwon" },
-  { prefix: "NJ", label: "Ninja" },
-  { prefix: "GS", label: "Justiceiro" },
-  { prefix: "SU", label: "Doram" },
-  // segunda classe
-  { prefix: "KN", label: "Cavaleiro" },
-  { prefix: "PR", label: "Sacerdote" },
-  { prefix: "WZ", label: "Bruxo" },
-  { prefix: "BS", label: "Ferreiro" },
-  { prefix: "HT", label: "Caçador" },
-  { prefix: "AS", label: "Mercenário" },
-  { prefix: "CR", label: "Templário" },
-  { prefix: "MO", label: "Monge" },
-  { prefix: "SA", label: "Sábio" },
-  { prefix: "RG", label: "Arruaceiro" },
-  { prefix: "AM", label: "Alquimista" },
-  { prefix: "BA", label: "Bardo" },
-  { prefix: "DC", label: "Odalisca" },
-  { prefix: "BD", label: "Dueto" },
-  { prefix: "SG", label: "Astro" },
-  { prefix: "SL", label: "Espiritualista" },
-  // transcendentes
-  { prefix: "LK", label: "Lorde" },
-  { prefix: "HP", label: "Sumo Sacerdote" },
-  { prefix: "HW", label: "Arquimago" },
-  { prefix: "WS", label: "Mestre Ferreiro" },
-  { prefix: "SN", label: "Atirador de Elite" },
-  { prefix: "ASC", label: "Algoz" },
-  { prefix: "PA", label: "Paladino" },
-  { prefix: "CH", label: "Mestre" },
-  { prefix: "PF", label: "Professor" },
-  { prefix: "ST", label: "Estalajadeiro" },
-  { prefix: "CG", label: "Menestrel" },
-  // terceira classe
-  { prefix: "RK", label: "Cavaleiro Rúnico" },
-  { prefix: "GC", label: "Sicário" },
-  { prefix: "AB", label: "Arcebispo" },
-  { prefix: "WL", label: "Arcano" },
-  { prefix: "RA", label: "Ranger" },
-  { prefix: "NC", label: "Mecânico" },
-  { prefix: "LG", label: "Guardião Real" },
-  { prefix: "SR", label: "Shura" },
-  { prefix: "SC", label: "Renegado" },
-  { prefix: "WM", label: "Trovador" },
-  { prefix: "SO", label: "Feiticeiro" },
-  { prefix: "GN", label: "Geneticista" },
-  { prefix: "KO", label: "Kagerou" },
-  { prefix: "RL", label: "Rebelde" },
-  { prefix: "SJ", label: "Imperador Estelar" },
-  { prefix: "SP", label: "Ceifador de Almas" },
-  // casamento, montaria e afins
-  { prefix: "WE", label: "Casamento" },
-  { prefix: "MER", label: "Mercenário (unidade)" },
-  { prefix: "GD", label: "Guilda" },
-];
-
-/**
- * Classe de uma habilidade a partir da constante do servidor.
- *
- * O prefixo é o que vem antes do PRIMEIRO "_", e a busca tem que ser por
- * igualdade e não por "começa com": `AL_HEAL` é do Acólito e `ALL_RESURRECTION`
- * é comum a todos — casar por prefixo solto trocaria uma pela outra.
- */
-export function classeDaSkill(aegisName: string): { key: string; label: string; ordem: number } {
-  const corte = aegisName.indexOf("_");
-  const prefix = corte > 0 ? aegisName.slice(0, corte) : aegisName;
-  const i = SK_CLASS_BY_PREFIX.findIndex((c) => c.prefix === prefix);
-  const achado = i < 0 ? undefined : SK_CLASS_BY_PREFIX[i];
-  if (!achado) return { key: prefix, label: prefix, ordem: SK_CLASS_BY_PREFIX.length };
-  // `grupo` junta prefixos numa fita só (NV_ + ALL_ = Iniciate); sem ele, cada
-  // prefixo é a própria fita. A ORDEM é a da primeira ocorrência do grupo, para
-  // a fita não pular de lugar conforme a skill que o personagem tiver.
-  const key = achado.grupo ?? prefix;
-  const ordem = achado.grupo
-    ? SK_CLASS_BY_PREFIX.findIndex((c) => c.grupo === achado.grupo)
-    : i;
-  return { key, label: achado.label, ordem };
-}
-
-/** nome de elemento em português (o schema usa o enum do rAthena em inglês) */
-export const SK_ELEMENT_NAMES: Record<string, string> = {
-  neutral: "Neutro",
-  water: "Água",
-  earth: "Terra",
-  fire: "Fogo",
-  wind: "Vento",
-  poison: "Veneno",
-  holy: "Sagrado",
-  shadow: "Sombrio",
-  ghost: "Fantasma",
-  undead: "Morto-vivo",
-  weapon: "Da arma",
-  endowed: "Do encantamento",
-  random: "Aleatório",
-};
-
-/** tipo da skill (enum do schema) em português */
-export const SK_TYPE_NAMES: Record<string, string> = {
-  damage: "Ativa",
-  support: "Suporte",
-  area: "Área",
-  self_buff: "Fortalecimento",
-  passive: "Passiva",
-};
 
 /**
  * Cores medidas no `skillbook.png` e na referência.

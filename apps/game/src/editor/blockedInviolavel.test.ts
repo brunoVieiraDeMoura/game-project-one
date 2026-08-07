@@ -178,6 +178,35 @@ describe("nenhum caminho abre passagem", () => {
     expect(mapa().collision[idx(7, 7)]).toBe("walkable");
   });
 
+  /**
+   * Módulo 7: `clearSmallBlocked` passou a usar `cellInScope` (a mesma fonte
+   * de verdade do resto do editor) em vez de `cluster.onBorder`
+   * (`blockedClusters.ts`, que só olha se a mancha toca a última linha/coluna
+   * do ARRAY — bem mais estreito que "borda" em qualquer outro lugar). Um
+   * efeito direto: escopo "Buraco" deixa de se comportar como "Tudo".
+   */
+  it('escopo "Buraco" NUNCA limpa uma mancha comum de parede (antes se comportava como "Tudo")', () => {
+    const m = mapaImportado();
+    (m.collision as string[])[idx(5, 5)] = "wall";
+    (m.collision as string[])[idx(6, 5)] = "wall"; // mancha "medium", bem longe da moldura e da ravina
+    st().init(m);
+    st().setEditScope("hole");
+    st().clearSmallBlocked();
+    expect(mapa().collision[idx(5, 5)]).toBe("wall");
+    expect(mapa().collision[idx(6, 5)]).toBe("wall");
+  });
+
+  it('a mesma mancha É limpa em escopo "Tudo"', () => {
+    const m = mapaImportado();
+    (m.collision as string[])[idx(5, 5)] = "wall";
+    (m.collision as string[])[idx(6, 5)] = "wall";
+    st().init(m);
+    st().setEditScope("all");
+    st().clearSmallBlocked();
+    expect(mapa().collision[idx(5, 5)]).toBe("walkable");
+    expect(mapa().collision[idx(6, 5)]).toBe("walkable");
+  });
+
   it("rio não corta a moldura nem a ravina", () => {
     st().setEditScope("all");
     st().generateRiver();
@@ -195,8 +224,45 @@ describe("nenhum caminho abre passagem", () => {
       st().init(mapaImportado());
       st().setEditScope(escopo);
       st().setTerrainFeature("hill", 90);
-      st().setTerrainFeature("mountain", 90);
+      st().setTerrainFeature("mountainQty", 90);
+      st().setTerrainFeature("mountainSize", 90);
       expect(bloqueiosIntactos(), `escopo ${escopo}`).toEqual([]);
+    }
+  });
+
+  /**
+   * Achado ao dividir "Montanhas" num slider de quantidade e outro de
+   * tamanho: ajustar os dois em SEQUÊNCIA gera a montanha duas vezes na
+   * mesma sessão (regenera → desfaz a anterior → regenera de novo). Fora do
+   * escopo "Dentro", montanha pode nascer em cima de um `cliff` — e desfazer
+   * "para walkable/grass" (em vez de restaurar o que estava lá) abria a
+   * ravina de verdade. `mountainAnterior` agora guarda o estado ORIGINAL de
+   * cada célula (não só o índice) para restaurar de fato, não chutar chão.
+   */
+  it("ajustar quantidade e DEPOIS tamanho não transforma buraco em chão andável", () => {
+    for (const escopo of ["all", "border", "hole"] as const) {
+      st().init(mapaImportado());
+      st().setEditScope(escopo);
+      st().setTerrainFeature("mountainQty", 90); // gera com tamanho ainda em 0 (piso mínimo)
+      st().setTerrainFeature("mountainSize", 90); // regenera — desfaz a passada anterior primeiro
+      expect(bloqueiosIntactos(), `escopo ${escopo}`).toEqual([]);
+    }
+  });
+
+  it("baixar quantidade a ZERO restaura o buraco original, não chão andável", () => {
+    // escopo "all": sem restrição, então a montanha PODE nascer em cima do
+    // cliff (o que "border"/"hole" sozinhos não garantem tocar)
+    st().setEditScope("all");
+    st().setTerrainFeature("mountainQty", 80);
+    st().setTerrainFeature("mountainSize", 80);
+    st().setTerrainFeature("mountainQty", 0); // desfaz tudo
+    expect(bloqueiosIntactos()).toEqual([]);
+    // e a ravina original continua cliff, não "wall" novo nem "walkable" —
+    // exatamente como o mapa importado trazia
+    const original = mapaImportado();
+    const atual = mapa();
+    for (let i = 0; i < original.collision.length; i++) {
+      if (original.collision[i] === "cliff") expect(atual.collision[i]).toBe("cliff");
     }
   });
 });

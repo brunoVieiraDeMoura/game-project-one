@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { useEditorStore, SPAWN_MONSTERS, SPAWN_NPCS } from "./editorStore";
 import { propLabel } from "../props/registry";
 import { Panel, ink } from "../ui/rpg";
@@ -51,6 +51,8 @@ export function Hierarchy({ embedded }: { embedded?: boolean } = {}) {
   ) => (
     <button
       key={key}
+      type="button"
+      aria-pressed={active || marcado}
       onClick={onClick}
       style={{
         width: "100%",
@@ -78,6 +80,10 @@ export function Hierarchy({ embedded }: { embedded?: boolean } = {}) {
   const body = (
     <>
       {row("🗺 Terreno", selected == null && selectedSpawn == null, () => select(null), "terrain")}
+
+      <div style={{ font: "9px system-ui", color: ink.faint, margin: "2px 0 6px" }}>
+        Shift+clique marca a faixa · Ctrl+clique marca um a um · Delete apaga o marcado
+      </div>
 
       <Section
         title="Objetos"
@@ -131,10 +137,6 @@ export function Hierarchy({ embedded }: { embedded?: boolean } = {}) {
           row(`⬛ ${t.kind} ${t.area.w}×${t.area.h}`, false, () => useEditorStore.getState().selectTrigger(i), t.id),
         )}
       </Section>
-
-      <div style={{ font: "9px system-ui", color: ink.faint, marginTop: 8 }}>
-        Shift+clique marca a faixa · Ctrl+clique marca um a um · Delete apaga o marcado
-      </div>
     </>
   );
 
@@ -146,6 +148,9 @@ export function Hierarchy({ embedded }: { embedded?: boolean } = {}) {
     </Panel>
   );
 }
+
+/** itens por página, quando a seção precisa paginar (ver `Section`) */
+const PAGINA = 200;
 
 /** seção: >3 itens vira dropdown recolhido (esconde o resto até expandir) */
 function Section({
@@ -170,12 +175,27 @@ function Section({
   onDeleteMarcados?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * Quantos itens mostrar de uma vez, quando a seção tem MUITOS.
+   *
+   * Um mapa com geração procedural densa passa fácil de mil props, e sem
+   * limite abrir "Objetos" criava um `<button>` de DOM por item de uma vez
+   * só — trava perceptível, e reconciliação cara a cada seleção. Paginar em
+   * vez de virtualizar: mais simples, sem dependência nova, e o caso comum
+   * (dezenas a poucas centenas de itens) nunca precisa do botão.
+   */
+  const [visiveis, setVisiveis] = useState(PAGINA);
   const collapsible = count > 3;
   const alvo = SCOPE_LABEL[escopo ?? "all"] ?? "todo o mapa";
+  const lista = Children.toArray(children);
+  const cortada = lista.length > visiveis;
+  const mostrar = cortada ? lista.slice(0, visiveis) : lista;
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, margin: "6px 0 2px" }}>
         <button
+          type="button"
+          aria-expanded={collapsible ? open : undefined}
           onClick={() => collapsible && setOpen(!open)}
           disabled={!collapsible}
           style={{ flex: 1, textAlign: "left", background: "none", border: "none", color: ink.faint, font: "600 10px system-ui", cursor: collapsible ? "pointer" : "default", padding: 0 }}
@@ -185,6 +205,7 @@ function Section({
         </button>
         {marcados > 1 && onDeleteMarcados && (
           <button
+            type="button"
             title={`Apagar os ${marcados} marcados`}
             onClick={onDeleteMarcados}
             style={{ background: "rgba(239,68,68,0.18)", border: `1px solid ${ink.border}`, borderRadius: 5, color: "#fca5a5", cursor: "pointer", font: "9px system-ui", padding: "1px 5px" }}
@@ -194,7 +215,9 @@ function Section({
         )}
         {count > 0 && onDeleteAll && (
           <button
+            type="button"
             title={`Apagar TODOS os ${count} de "${title}" em ${alvo}`}
+            aria-label={`Apagar todos os ${count} de ${title} em ${alvo}`}
             onClick={() => {
               if (confirm(`Apagar ${title.toLowerCase()} em ${alvo}?`)) onDeleteAll();
             }}
@@ -207,7 +230,18 @@ function Section({
       {count === 0 ? (
         <div style={{ font: "11px system-ui", color: ink.faint, padding: "2px 8px" }}>{empty}</div>
       ) : !collapsible || open ? (
-        <div style={collapsible ? { maxHeight: "24vh", overflow: "auto" } : undefined}>{children}</div>
+        <div style={collapsible ? { maxHeight: "24vh", overflow: "auto" } : undefined}>
+          {mostrar}
+          {cortada && (
+            <button
+              type="button"
+              onClick={() => setVisiveis((v) => v + PAGINA)}
+              style={{ width: "100%", textAlign: "center", background: "rgba(255,255,255,0.04)", border: `1px solid ${ink.border}`, borderRadius: 5, color: ink.faint, cursor: "pointer", font: "10px system-ui", padding: "4px", marginTop: 2 }}
+            >
+              carregar mais ({lista.length - visiveis} restantes)
+            </button>
+          )}
+        </div>
       ) : (
         <div style={{ font: "10px system-ui", color: ink.faint, padding: "2px 8px" }}>… {count} itens (clique pra ver)</div>
       )}

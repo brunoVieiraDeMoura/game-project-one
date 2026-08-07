@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEditorStore, type EditScope } from "./editorStore";
 import { scopeCounts } from "./editScope";
 import { IconBtn, TextBtn, VSep } from "./EditorUi";
@@ -25,7 +25,15 @@ export function TopBar({ onSave, saving, status }: { onSave: () => void; saving:
   const triggerCount = useEditorStore((s) => s.map?.triggers?.length ?? 0);
   const dirty = useEditorStore((s) => s.dirty);
   const mapName = useEditorStore((s) => s.map?.name ?? "—");
+  const setMapName = useEditorStore((s) => s.setMapName);
   const clearAll = useEditorStore((s) => s.clearAll);
+  // rascunho local: commitar a cada tecla empilharia um undo por caractere digitado
+  const [nomeRascunho, setNomeRascunho] = useState(mapName);
+  useEffect(() => setNomeRascunho(mapName), [mapName]);
+  // realce de foco em ESTADO, não mutando `style` no DOM — a versão anterior
+  // marcava a borda no onFocus e nunca desfazia (não existe onBlur pra isso),
+  // então o campo ficava com o contorno "focado" para sempre depois do 1º clique
+  const [nomeFocado, setNomeFocado] = useState(false);
 
   /**
    * Zera o mapa aberto — campo plano andável, sem nada em cima.
@@ -86,9 +94,24 @@ export function TopBar({ onSave, saving, status }: { onSave: () => void; saving:
         boxSizing: "border-box",
       }}
     >
-      <span style={{ font: "700 13px system-ui", color: ink.text, marginRight: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>
-        {mapName}
-      </span>
+      <input
+        title="Renomear mapa"
+        aria-label="Nome do mapa"
+        value={nomeRascunho}
+        disabled={mapName === "—"}
+        onChange={(e) => setNomeRascunho(e.target.value)}
+        onFocus={() => setNomeFocado(true)}
+        onBlur={() => {
+          setNomeFocado(false);
+          if (nomeRascunho.trim()) setMapName(nomeRascunho);
+          else setNomeRascunho(mapName);
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        style={{
+          font: "700 13px system-ui", color: ink.text, marginRight: 4, width: 160,
+          background: "transparent", border: `1px solid ${nomeFocado ? ink.border : "transparent"}`, borderRadius: 4, padding: "2px 4px",
+        }}
+      />
       {dirty && <span title="não salvo" style={{ width: 7, height: 7, borderRadius: 999, background: "#fbbf24", flex: "0 0 auto" }} />}
 
       <VSep />
@@ -116,11 +139,14 @@ export function TopBar({ onSave, saving, status }: { onSave: () => void; saving:
       </span>
 
       <button
+        type="button"
+        disabled={saving}
         onClick={onSave}
         style={{
           display: "flex", alignItems: "center", gap: 6,
           border: "1px solid #4f46e5", borderRadius: 8, background: "#4f46e5", color: "#fff",
-          font: "700 12px system-ui", cursor: "pointer", padding: "7px 14px", whiteSpace: "nowrap",
+          font: "700 12px system-ui", cursor: saving ? "default" : "pointer", padding: "7px 14px", whiteSpace: "nowrap",
+          opacity: saving ? 0.75 : 1,
         }}
       >
         <IcSave size={16} /> {saving ? "Salvando…" : "Salvar"}

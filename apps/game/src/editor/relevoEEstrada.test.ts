@@ -82,31 +82,68 @@ describe("colinas", () => {
 });
 
 describe("montanhas", () => {
+  // dois sliders agora (quantidade/tamanho); a maioria dos testes aqui mexe
+  // nos dois juntos pra preservar o comportamento "um número só" que eles
+  // tinham antes de virar dois controles independentes.
   it("o slider cria maciço, e ele BLOQUEIA", () => {
-    st().setTerrainFeature("mountain", 70);
+    st().setTerrainFeature("mountainQty", 70);
+    st().setTerrainFeature("mountainSize", 70);
     expect(conta((i) => mapa().collision[i] === "wall")).toBeGreaterThan(0);
     expect(conta((i) => mapa().surface[i] === "stone")).toBeGreaterThan(0);
   });
 
   it("mais slider, mais montanha", () => {
-    st().setTerrainFeature("mountain", 20);
+    st().setTerrainFeature("mountainQty", 20);
+    st().setTerrainFeature("mountainSize", 20);
     const pouco = conta((i) => mapa().collision[i] === "wall");
-    st().setTerrainFeature("mountain", 95);
+    st().setTerrainFeature("mountainQty", 95);
+    st().setTerrainFeature("mountainSize", 95);
     expect(conta((i) => mapa().collision[i] === "wall")).toBeGreaterThan(pouco);
   });
 
   it("no zero não sobra rocha nenhuma", () => {
-    st().setTerrainFeature("mountain", 80);
+    st().setTerrainFeature("mountainQty", 80);
+    st().setTerrainFeature("mountainSize", 80);
     expect(conta((i) => mapa().collision[i] === "wall")).toBeGreaterThan(0);
-    st().setTerrainFeature("mountain", 0);
+    st().setTerrainFeature("mountainQty", 0);
     expect(conta((i) => mapa().collision[i] === "wall")).toBe(0);
   });
 
   it("montanha e colina convivem — sliders independentes", () => {
     st().setTerrainFeature("hill", 50);
-    st().setTerrainFeature("mountain", 50);
+    st().setTerrainFeature("mountainQty", 50);
+    st().setTerrainFeature("mountainSize", 50);
     expect(conta((i) => mapa().collision[i] === "wall")).toBeGreaterThan(0);
     expect(conta((i) => (mapa().heightmap[i] ?? 0) > 0.3 && mapa().collision[i] === "walkable")).toBeGreaterThan(0);
+  });
+
+  it("QUANTIDADE e TAMANHO são sliders de fato independentes", () => {
+    // poucas montanhas GRANDES: quantidade baixa, tamanho alto
+    st().setTerrainFeature("mountainQty", 10);
+    st().setTerrainFeature("mountainSize", 100);
+    const poucasGrandes = conta((i) => mapa().collision[i] === "wall");
+    // muitas montanhas PEQUENAS: quantidade alta, tamanho baixo — recomeça o mapa
+    st().init(campo());
+    st().setEditScope("all");
+    st().setTerrainFeature("mountainQty", 100);
+    st().setTerrainFeature("mountainSize", 10);
+    const muitasPequenas = conta((i) => mapa().collision[i] === "wall");
+    // as duas combinações geram bloqueio, mas não precisam dar o mesmo total —
+    // o que importa é que os dois sliders realmente mudam o resultado, cada
+    // um a seu jeito (não é mais um número só controlando os dois)
+    expect(poucasGrandes).toBeGreaterThan(0);
+    expect(muitasPequenas).toBeGreaterThan(0);
+  });
+
+  it("reseed de QUALQUER um dos dois sliders muda o traçado (mesmo gerador compartilhado)", () => {
+    st().setTerrainFeature("mountainQty", 60);
+    st().setTerrainFeature("mountainSize", 60);
+    const antes = [...mapa().collision];
+    st().reseedFeature("mountainSize");
+    const depois = mapa().collision;
+    let diferente = false;
+    for (let i = 0; i < antes.length; i++) if (antes[i] !== depois[i]) { diferente = true; break; }
+    expect(diferente).toBe(true);
   });
 });
 
@@ -166,6 +203,83 @@ describe("a estrada e a textura dela", () => {
   });
 });
 
+describe("largura da estrada", () => {
+  /**
+   * `setRoadWidth` só redesenha quando já há `roadCells` (mesmo padrão de
+   * `setRoadSurface`) — chamado ANTES de existir traçado, ele é inofensivo
+   * (não há o que redesenhar). Mas `roadCells`/`roadWidth` são campos do
+   * STORE, não do `map`, e o `beforeEach` do arquivo só reinicializa o mapa —
+   * então este bloco garante o próprio estado limpo, sem depender da ordem
+   * dos testes vizinhos (que também mexem em estrada).
+   */
+  beforeEach(() => {
+    // `roadSurface`/`roadSurfaceAplicada` também vazam do describe anterior
+    // (que termina um teste com "sand") — sem resetar, a asserção de
+    // "dirt" deste bloco dependeria da ORDEM dos testes no arquivo.
+    useEditorStore.setState({ roadWidth: 0, roadCells: [], roadSurface: "dirt", roadSurfaceAplicada: "dirt" });
+  });
+
+  function traçar() {
+    st().setSpawnKind("road");
+    st().setTool("spawn");
+    st().addSpawn(5, 30);
+    st().addSpawn(50, 30);
+    st().generateRoads();
+  }
+
+  it("no padrão (0) continua o fio de 1 célula de sempre", () => {
+    traçar();
+    expect(st().roadCells.length).toBeGreaterThan(0);
+  });
+
+  it("aumentar a largura engorda o traçado (mais células)", () => {
+    traçar(); // width 0, nós manuais fixados
+    const fino = st().roadCells.length;
+    st().setRoadWidth(2); // redesenha na hora, com os MESMOS nós
+    expect(st().roadCells.length).toBeGreaterThan(fino);
+  });
+
+  it("a largura inteira continua ANDÁVEL, na mesma textura da espinha", () => {
+    traçar();
+    st().setRoadWidth(2);
+    expect(st().roadCells.length).toBeGreaterThan(0);
+    for (const i of st().roadCells) {
+      expect(mapa().collision[i]).toBe("walkable");
+      expect(mapa().surface[i]).toBe("dirt");
+    }
+  });
+
+  it("largura nunca atravessa água nem abre bloqueio", () => {
+    // parede bem no meio do trajeto, perto o bastante da espinha pra cair
+    // dentro do raio de alargamento se a trava não existisse
+    const m = campo();
+    const W = m.size.width;
+    for (let c = 24; c < 32; c++) (m.collision as string[])[30 * W + c] = "wall";
+    st().init(m);
+    st().setEditScope("all");
+    traçar();
+    st().setRoadWidth(3);
+    for (let c = 24; c < 32; c++) expect(mapa().collision[30 * W + c]).toBe("wall");
+  });
+
+  it("voltar a largura pra 0 desengorda o traçado", () => {
+    traçar();
+    st().setRoadWidth(3);
+    const largo = st().roadCells.length;
+    st().setRoadWidth(0);
+    expect(st().roadCells.length).toBeLessThan(largo);
+  });
+
+  it("largura respeita o botão Limpar rios/estradas — nada sobra", () => {
+    traçar();
+    st().setRoadWidth(2);
+    expect(st().roadCells.length).toBeGreaterThan(0);
+    st().clearPaths();
+    expect(st().roadCells).toHaveLength(0);
+    expect(conta((i) => mapa().surface[i] === "dirt")).toBe(0);
+  });
+});
+
 describe("o rio pelos NÓS", () => {
   /** dois nós de rio no mapa */
   function comNos(a: [number, number], b: [number, number]) {
@@ -179,6 +293,20 @@ describe("o rio pelos NÓS", () => {
     // o atalho de "quero um rio, não importa onde" continua valendo
     st().generateRiver();
     expect(st().riverCells.length).toBeGreaterThan(0);
+  });
+
+  it("com UM nó só, o rio passa PERTO dele (não é mais ignorado)", () => {
+    // achado do Módulo 3: generateRoads já completava a rede com < 2 nós
+    // manuais; generateRiver, com exatamente 1 nó, caía direto no atalho de
+    // borda-a-borda e o nó plantado pelo usuário era descartado em silêncio.
+    st().setSpawnKind("river");
+    st().setTool("spawn");
+    st().addSpawn(15, 15);
+    st().generateRiver();
+    const perto = (col: number, row: number) =>
+      st().riverCells.some((i) => Math.hypot((i % W) - col, Math.floor(i / W) - row) < 4);
+    expect(st().riverCells.length).toBeGreaterThan(0);
+    expect(perto(15, 15)).toBe(true);
   });
 
   it("com dois nós, o rio passa PERTO deles", () => {

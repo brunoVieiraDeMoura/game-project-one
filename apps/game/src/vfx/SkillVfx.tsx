@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
 import { cellToWorld, type LegacyMapping } from "../net/legacyCells";
 import { interpolatedCell, useWorldStore } from "../net/worldStore";
+import { useSkillCatalog } from "../net/skillCatalog";
 import { useVfxStore, type VfxInstance } from "./vfxStore";
 
 /**
@@ -59,6 +60,16 @@ function VfxNode({
   const group = useRef<THREE.Group>(null);
   const born = useRef(performance.now());
 
+  // O tamanho do disco de conjuração tem que ser o da ÁREA DE VERDADE da
+  // skill, não um chute — sem o catálogo, o disco saía sempre do mesmo
+  // tamanho (2 células) para qualquer magia, do Bash à Storm Gust. O nível de
+  // quem conjura raramente se sabe (mob, ou outro jogador) — `ensure` sem
+  // `niveis` cai no nível 1, a mesma lacuna honesta do resto do catálogo.
+  const areaInfo = useSkillCatalog((s) => (effect.kind === "cast" ? s.byId[effect.skillId] : undefined));
+  useEffect(() => {
+    if (effect.kind === "cast" && effect.skillId) useSkillCatalog.getState().ensure([effect.skillId]);
+  }, [effect.kind, effect.skillId]);
+
   // Posição JÁ no primeiro render: só posicionar no useFrame deixa o efeito
   // aparecer um frame na origem do mundo — um anel gigante no canto do mapa,
   // que é exatamente o que se via.
@@ -95,7 +106,7 @@ function VfxNode({
       {effect.kind === "area" ? (
         <AreaCell />
       ) : effect.kind === "cast" ? (
-        <AreaDisc kind="cast" />
+        <AreaDisc kind="cast" raioArea={areaInfo?.areaRadius ?? 0} />
       ) : effect.kind === "buff" ? (
         <BuffRing />
       ) : (
@@ -125,6 +136,11 @@ function AreaCell() {
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
+        // sempre por CIMA do chão: numa encosta/montanha, o terreno na frente
+        // ocluía o quad plano (ele não veste o relevo como o `moldarMarcador`
+        // do cursor de clique) e a área "afundava" na pedra em vez de ficar
+        // pintada por cima ("os círculos ficam distorcidos em morros").
+        depthTest: false,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         uniforms: { uColor: { value: new THREE.Color("#c084fc") }, uTime: { value: 0 } },
@@ -172,12 +188,31 @@ function AreaCell() {
 }
 
 /** disco no chão com gradiente radial (shader — sem textura no projeto) */
-function AreaDisc({ kind }: { kind: "area" | "cast" }) {
+function AreaDisc({
+  kind,
+  raioArea = 0,
+}: {
+  kind: "area" | "cast";
+  /**
+   * Raio da área em CÉLULAS, do catálogo (`skillCatalog.areaRadius`) —
+   * mesma fonte que o `play/AimPreview` usa para o disco de mira. Antes este
+   * disco tinha um raio CRAVADO (2 células, "o tamanho médio do RO"), então
+   * toda skill conjurada mostrava o mesmo tamanho de área, batesse ou não com
+   * a de verdade. `+0,5`: a área do RO conta em células INTEIRAS ("5x5"), e o
+   * raio 2 cobre do centro da célula até a borda da segunda — a MESMA conta
+   * da mira, para o disco de conjuração não ficar maior nem menor que a
+   * prévia que o jogador já viu antes de clicar.
+   */
+  raioArea?: number;
+}) {
+  const raio = Math.max(0.5, raioArea + 0.5);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
+        // idem `AreaCell`: nunca some dentro do relevo.
+        depthTest: false,
         side: THREE.DoubleSide,
         uniforms: {
           uColor: { value: new THREE.Color(kind === "cast" ? "#7dd3fc" : "#c084fc") },
@@ -216,9 +251,8 @@ function AreaDisc({ kind }: { kind: "area" | "cast" }) {
   useEffect(() => () => material.dispose(), [material]);
 
   return (
-    // 2 células de raio: o tamanho médio de área do RO (5x5 células)
     <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <circleGeometry args={[2, 40]} />
+      <circleGeometry args={[raio, 40]} />
       <primitive object={material} attach="material" />
     </mesh>
   );

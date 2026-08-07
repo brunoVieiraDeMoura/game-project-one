@@ -56,12 +56,22 @@ export function RpgButton({
   onClick,
   color = "grey",
   active = false,
+  disabled = false,
+  title,
   style,
 }: {
   children: ReactNode;
   onClick?: () => void;
   color?: BtnColor;
   active?: boolean;
+  /** opcional — sem isso, um botão "sem seleção"/"sem alvo" ficava com a
+   * mesma cara de sempre e o clique só falhava calado (ver PrefabPanel
+   * "Salvar" com `selCount === 0`: o campo ao lado já desabilitava, o botão
+   * não, e a diferença lia como inconsistência, não como estado) */
+  disabled?: boolean;
+  /** tooltip — também vira `aria-label` quando o filho é só um emoji/ícone
+   * ("🗑", "✕"), que sozinho não diz nada a leitor de tela */
+  title?: string;
   style?: CSSProperties;
 }) {
   const [hover, setHover] = useState(false);
@@ -70,7 +80,12 @@ export function RpgButton({
 
   return (
     <button
-      onClick={onClick}
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => {
         setHover(false);
@@ -84,7 +99,8 @@ export function RpgButton({
         color: active ? ACCENT[color] : BOOK.parchmentLight,
         font: "700 12px system-ui",
         textShadow: `1px 1px 0 ${BOOK.wood}`,
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.45 : 1,
         padding: "6px 12px",
         lineHeight: 1.1,
         ...style,

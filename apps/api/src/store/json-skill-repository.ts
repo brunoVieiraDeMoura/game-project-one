@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { SkillSchema, type Skill } from "@ragnarok/game-data";
+import { SkillSchema, prefixOf, type Skill } from "@ragnarok/game-data";
 import type { SkillListQuery, SkillListResult, SkillRepository } from "./skill-repository";
 
 /** Dev-mode store — same shape as JsonItemRepository. */
@@ -35,8 +35,12 @@ export class JsonSkillRepository implements SkillRepository {
     await writeFile(this.dataPath, JSON.stringify([...this.skills.values()], null, 1), "utf-8");
   }
 
-  async list({ page, pageSize, search }: SkillListQuery): Promise<SkillListResult> {
+  async list({ page, pageSize, search, classPrefix }: SkillListQuery): Promise<SkillListResult> {
     let all = [...this.skills.values()];
+    if (classPrefix && classPrefix.length > 0) {
+      const set = new Set(classPrefix);
+      all = all.filter((s) => set.has(prefixOf(s.aegisName)));
+    }
     if (search) {
       const q = search.toLowerCase();
       all = all.filter(

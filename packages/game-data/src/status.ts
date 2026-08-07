@@ -16,6 +16,34 @@ import { EffectListSchema } from "./effects";
  */
 
 export const StatusCategorySchema = z.enum(["buff", "debuff", "neutral"]);
+export type StatusCategory = z.infer<typeof StatusCategorySchema>;
+
+/**
+ * Grupo FUNCIONAL — o que o status FAZ, eixo ortogonal à categoria
+ * (buff/debuff/neutro). Cobre a reorganização pedida pra tela de statuses:
+ * Controle, Estados especiais, Velocidade, Defesa, Ataque, Elemento,
+ * Visibilidade, Transformação. Regra de derivação determinística documentada
+ * em tools/legacy-migration/src/migrate-statuses.ts — "outro" é o resultado
+ * HONESTO pra maioria dos registros (a maior parte dos status do rAthena não
+ * mexe em calcFlags/states/opt1/options; o efeito real só existe em C++,
+ * `status.cpp`), não um bug de classificação. `buff`/`debuff` aqui nunca são
+ * derivados automaticamente — existem só pra um admin poder usar este MESMO
+ * campo como atalho de categorização manual, se quiser.
+ */
+export const StatusGroupSchema = z.enum([
+  "buff",
+  "debuff",
+  "transformacao",
+  "estado_especial",
+  "controle",
+  "velocidade",
+  "defesa",
+  "ataque",
+  "elemento",
+  "visibilidade",
+  "outro",
+]);
+export type StatusGroup = z.infer<typeof StatusGroupSchema>;
 
 export const StatusEffectDefSchema = z.object({
   id: z.string().min(1),
@@ -59,5 +87,9 @@ export const StatusEffectDefSchema = z.object({
 
   icon: z.string().optional(),
   description: z.string().optional(),
+  /** grupo funcional pro filtro/painel de detalhe da dashboard */
+  group: StatusGroupSchema.default("outro"),
+  /** val1..val4 do rathena/doc/status_change.txt, ex. "1: Skill Level" — índice no texto, val ausente não desloca os outros */
+  params: z.array(z.string()).default([]),
 });
 export type StatusEffectDef = z.infer<typeof StatusEffectDefSchema>;

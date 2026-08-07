@@ -124,8 +124,17 @@ const aoRenderizar: ProfilerOnRenderCallback = (id, fase, atual, base) => {
  * (o contexto WebGL de 8 ms, os cinco suspeitos de 28 ms). O `Profiler` mede a
  * subárvore INTEIRA de uma vez e diz qual delas, sem palpite sobre a função.
  *
- * Custo: só em DEV, e o React já paga o `Profiler` no build de
- * desenvolvimento. O callback sai cedo abaixo do limiar.
+ * ## Hoje ela está DESMONTADA, e isso é intencional
+ *
+ * Ela cumpriu o papel: mediu 39 ms de render para a cena inteira e **eliminou**
+ * a fase de render do React da lista de suspeitos dos 600 ms — que acabaram
+ * sendo instrumentação do próprio React 19 em DEV (`console.createTask` +
+ * `performance.measure`, 2,2 s de um perfil de 2,8 s, e ausentes no build de
+ * produção).
+ *
+ * Manter o `<Profiler>` montado seria somar mais `performance.measure` ao
+ * caminho quente EXATAMENTE onde o problema era esse tipo de sobrecarga.
+ * Desmontada, ela custa zero; remontá-la é envolver uma subárvore.
  */
 export function SondaDeRender({ id, children }: { id: string; children: ReactNode }) {
   if (!import.meta.env.DEV) return <>{children}</>;

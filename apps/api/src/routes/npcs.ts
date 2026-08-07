@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { NpcSchema } from "@ragnarok/game-data";
+import { NpcKindSchema, NpcOriginSchema, NpcSchema } from "@ragnarok/game-data";
 import type { NpcRepository } from "../store/npc-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
@@ -9,8 +9,9 @@ const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
   search: z.string().trim().min(1).optional(),
-  kind: z.enum(["warp", "shop", "dialogue", "duplicate", "other"]).optional(),
+  kind: NpcKindSchema.optional(),
   mapId: z.string().trim().min(1).optional(),
+  origin: NpcOriginSchema.optional(),
 });
 
 const IdParamSchema = z.object({ id: z.string().trim().min(1).max(128) });

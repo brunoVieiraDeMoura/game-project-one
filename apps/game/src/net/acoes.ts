@@ -1,8 +1,10 @@
 import { gateway } from "./gateway";
 import { useAttackStore } from "./attackStore";
 import { usePickupStore } from "./pickupStore";
-import { useWorldStore } from "./worldStore";
-import { useSkillWalkStore } from "./skillWalkStore";
+import { interpolatedCell, useWorldStore } from "./worldStore";
+import { dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
+import { useSkillTargetStore } from "./skillTargetStore";
+import { alcanceDaSkill } from "./skillCatalog";
 
 /**
  * O que um clique MANDA fazer — num lugar só.
@@ -44,4 +46,36 @@ export function atacar(gid: number, x: number, y: number): void {
 export function pegar(gid: number, x: number, y: number): void {
   useSkillWalkStore.getState().parar();
   usePickupStore.getState().buscar({ gid, x, y });
+}
+
+/**
+ * Lança uma skill de ALVO (Bash, Firebolt, Cold Bolt…) num monstro — e anda
+ * até o alcance primeiro, se precisar.
+ *
+ * `CZ.USE_SKILL` sofre a MESMA recusa silenciosa que `action:attack`
+ * (`battle_check_range`, battle.cpp:8226): mandar o pedido de longe não fazia
+ * nada, porque o rAthena não se aproxima por você. Já dentro do alcance, o
+ * pedido sai na hora — a caminhada só entra quando falta.
+ */
+export function castarEmAlvo(skillId: number, level: number, name: string, gid: number): void {
+  const alvo = useWorldStore.getState().entities[gid];
+  if (!alvo) return;
+
+  // ordem nova mata as outras três: quem manda castar num alvo desistiu de
+  // bater, de pegar item e de lançar noutra célula
+  useAttackStore.getState().parar();
+  usePickupStore.getState().parar();
+  useSkillWalkStore.getState().parar();
+  useWorldStore.getState().setTarget(gid);
+
+  const raio = alcanceDaSkill(skillId);
+  const cel = interpolatedCell(alvo, performance.now());
+  const eu = interpolatedCell(useWorldStore.getState().self, performance.now());
+
+  if (dentroDoAlcance({ x: Math.round(eu.x), y: Math.round(eu.y) }, { x: Math.round(cel.x), y: Math.round(cel.y) }, raio)) {
+    gateway().emit("skill:use", { skillId, level, targetGid: gid });
+    return;
+  }
+
+  useSkillTargetStore.getState().irLancar({ skillId, level, name, gid, raio });
 }

@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { StatusEffectDefSchema, type StatusEffectDef } from "@ragnarok/game-data";
+import {
+  STATUS_CATEGORY_LABELS,
+  STATUS_GROUP_LABELS,
+  StatusEffectDefSchema,
+  StatusGroupSchema,
+  classeDaSkill,
+  labelOf,
+  type StatusEffectDef,
+} from "@ragnarok/game-data";
 import { createStatus, updateStatus } from "@/lib/api";
-import { Button, Field, Input, Section, Select } from "./ui";
+import { Badge, Button, Field, Input, Section, Select } from "./ui";
 
 /** Form do catálogo de statuses (soul.txt §5.3). */
 
@@ -19,14 +27,16 @@ function TokenListField({
   label,
   values,
   onChange,
+  className,
 }: {
   label: string;
   values: string[];
   onChange: (v: string[]) => void;
+  className?: string;
 }) {
   const [text, setText] = useState(values.join(", "));
   return (
-    <Field label={label}>
+    <Field label={label} className={className}>
       <Input
         className="font-mono text-xs"
         value={text}
@@ -41,6 +51,68 @@ function TokenListField({
         }}
       />
     </Field>
+  );
+}
+
+/**
+ * Painel de detalhe (pedido do usuário: Descrição/Tipo/Duração/Afeta/
+ * Removido por/Origem/Ícone/Stack/Código) — todo campo já existe no schema,
+ * isto só compõe leitura a partir deles. "Stack" é DERIVADO, não campo
+ * nativo: `status.yml` documenta `Opt1` como "non-stackable special effect",
+ * então status com `opt1` preenchido não empilha; sem sinal contrário, os
+ * demais são tratados como empilháveis.
+ */
+function DetailPanel({ st }: { st: StatusEffectDef }) {
+  const removidoPor = [...st.failOn, ...st.endOnStart, ...st.endReturn, ...st.endOnEnd];
+  const afeta = [...st.calcFlags, ...st.states];
+  const origem = st.durationLookupSkill
+    ? `Skill ${st.durationLookupSkill} (${classeDaSkill(st.durationLookupSkill).label})`
+    : "—";
+  const duracao = st.defaultDurationMs
+    ? `${st.defaultDurationMs} ms`
+    : st.durationLookupSkill
+      ? `Variável — segue o nível da skill ${st.durationLookupSkill}`
+      : "—";
+
+  const row = (label: string, value: ReactNode) => (
+    <div>
+      <p className="text-xs font-medium text-zinc-500">{label}</p>
+      <p className="text-sm text-zinc-200">{value}</p>
+    </div>
+  );
+
+  return (
+    <Section title="Painel de detalhe">
+      <div className="grid gap-3 md:grid-cols-3">
+        {row("Descrição", st.description || "—")}
+        {row(
+          "Tipo",
+          <>
+            <Badge tone={st.category === "buff" ? "emerald" : st.category === "debuff" ? "red" : "zinc"}>
+              {labelOf(STATUS_CATEGORY_LABELS, st.category)}
+            </Badge>{" "}
+            <Badge tone="indigo">{labelOf(STATUS_GROUP_LABELS, st.group)}</Badge>
+          </>,
+        )}
+        {row("Duração", duracao)}
+        {row("Afeta", afeta.length > 0 ? afeta.join(", ") : "—")}
+        {row("Pode ser removido por", removidoPor.length > 0 ? removidoPor.join(", ") : "—")}
+        {row("Origem (concedido por)", origem)}
+        {row("Ícone", st.icon || "—")}
+        {row("Stack", st.opt1 ? "Não" : "Sim")}
+        {row("Código", `SC_${st.id.toUpperCase()}`)}
+      </div>
+      {st.params.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-zinc-500">Parâmetros (val1..val4, rathena/doc/status_change.txt)</p>
+          <ul className="list-disc pl-5 text-sm text-zinc-300">
+            {st.params.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -88,6 +160,8 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
         </div>
       )}
 
+      <DetailPanel st={st} />
+
       <Section title="Identificação">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Field label="ID (slug)">
@@ -99,7 +173,14 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
           <Field label="Categoria">
             <Select value={st.category} onChange={(e) => set("category", e.target.value as StatusEffectDef["category"])}>
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>{labelOf(STATUS_CATEGORY_LABELS, c)}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Grupo (o que faz)">
+            <Select value={st.group} onChange={(e) => set("group", e.target.value as StatusEffectDef["group"])}>
+              {StatusGroupSchema.options.map((g) => (
+                <option key={g} value={g}>{labelOf(STATUS_GROUP_LABELS, g)}</option>
               ))}
             </Select>
           </Field>
@@ -110,11 +191,20 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
             />
           </Field>
           <Field label="Descrição" className="col-span-2 md:col-span-4">
-            <Input
+            <textarea
               value={st.description ?? ""}
               onChange={(e) => set("description", e.target.value === "" ? undefined : e.target.value)}
+              rows={2}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+              placeholder="Vem de rathena/doc/status_change.txt na migração — pode ser editada aqui"
             />
           </Field>
+          <TokenListField
+            label="Parâmetros (val1..val4)"
+            values={st.params}
+            onChange={(v) => set("params", v)}
+            className="col-span-2 md:col-span-4"
+          />
         </div>
       </Section>
 

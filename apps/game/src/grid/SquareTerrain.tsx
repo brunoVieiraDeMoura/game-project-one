@@ -18,7 +18,6 @@ import { SQUARE_SIZE } from "./squareGrid";
 import { registrarBuild } from "../scene/perfProbe";
 import { quadro, registrarEvento, somarChunk } from "../core/diagnostics/flightRecorder";
 import { marcarChunk } from "../core/diagnostics/cenaProbe";
-import { medir } from "../core/diagnostics/medir";
 import { useWorldStore } from "../net/worldStore";
 import {
   TERRAIN_LAYERS,
@@ -271,29 +270,12 @@ export function SquareTerrain({
   useEffect(() => {
     const chao = cache.current;
     const agua = aguaCache.current;
-    return () =>
-      /**
-       * CRONOMETRADO porque roda na fase de COMMIT do React, que é o ponto cego
-       * de tudo que já se mediu.
-       *
-       * Quatro dumps eliminaram GPU, render, contexto, clone de modelo,
-       * construção de chunk, zod, `JSON.parse` e a fase de RENDER do React (o
-       * `<Profiler>` deu 39 ms para a cena inteira). O que restou foi um gap de
-       * ~650 ms sem NENHUM evento dentro, entre o zod terminar e o React montar
-       * a cena nova — e o `<Profiler>` mede `actualDuration` da fase de render,
-       * nunca a de commit, que é onde o desmonte acontece.
-       *
-       * Aqui são ~169 geometrias de chão mais outras tantas de água; cada
-       * `dispose()` dispara a exclusão dos buffers de GPU (posição, normal,
-       * cor, uv, índice). É o único trabalho conhecido desse tamanho no
-       * caminho, e trocar de mapa desmonta este componente.
-       */
-      medir("terreno→descarte", () => {
-        for (const geo of chao.values()) geo.dispose();
-        for (const geo of agua.values()) geo?.dispose();
-        chao.clear();
-        agua.clear();
-      });
+    return () => {
+      for (const geo of chao.values()) geo.dispose();
+      for (const geo of agua.values()) geo?.dispose();
+      chao.clear();
+      agua.clear();
+    };
   }, []);
 
   const visible = useMemo(() => {
@@ -350,6 +332,26 @@ export function SquareTerrain({
        * um chunk por vez, e pode demorar vários quadros para chegar em todos.
        */
       if (sujos.length > 0) registrarEvento("chunks", "invalidou", { quantos: sujos.length, chunks: sujos.join(" ") });
+      /**
+       * Poda os chunks que ficaram FORA da grade, se o mapa encolheu.
+       *
+       * `resizeMap` reduzindo width/height muda `chunkCounts(map)`, e o laço
+       * de desenho abaixo só percorre `cx,cz` dentro do intervalo novo — mas
+       * sem isto, `cache`/`aguaCache` nunca perdiam as entradas de fora: cada
+       * experimento de encolher o mapa (painel Vegetação, no editor) deixava
+       * geometria presa na GPU até o componente desmontar. Idempotente e
+       * barata (só percorre as chaves que já existem no cache, não o mapa).
+       */
+      const { cols: colsNovo, rows: rowsNovo } = chunkCounts(map);
+      for (const key of [...cache.current.keys()]) {
+        const [cx, cz] = key.split(",").map(Number) as [number, number];
+        if (cx < colsNovo && cz < rowsNovo) continue;
+        cache.current.get(key)?.dispose();
+        cache.current.delete(key);
+        aguaCache.current.get(key)?.dispose();
+        aguaCache.current.delete(key);
+        precisaRefazer.current.delete(key);
+      }
     }
     fonte.current = atual;
 

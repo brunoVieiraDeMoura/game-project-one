@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SkillSchema, type Skill, type StatusEffectDef } from "@ragnarok/game-data";
+import {
+  SKILL_DAMAGE_NATURE_LABELS,
+  SKILL_HIT_TYPE_LABELS,
+  SKILL_TARGET_LABELS,
+  SKILL_TYPE_LABELS,
+  SkillSchema,
+  labelOf,
+  type Skill,
+  type StatusEffectDef,
+} from "@ragnarok/game-data";
 import { createSkill, updateSkill, listAllStatuses } from "@/lib/api";
 import { Button, Checkbox, Field, Input, Section, Select } from "./ui";
 
@@ -220,28 +229,28 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
           <Field label="Tipo">
             <Select value={sk.type} onChange={(e) => set("type", e.target.value as Skill["type"])}>
               {TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{labelOf(SKILL_TYPE_LABELS, t)}</option>
               ))}
             </Select>
           </Field>
           <Field label="Natureza do dano">
             <Select value={sk.damageNature} onChange={(e) => set("damageNature", e.target.value as Skill["damageNature"])}>
               {NATURES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{labelOf(SKILL_DAMAGE_NATURE_LABELS, t)}</option>
               ))}
             </Select>
           </Field>
           <Field label="Tipo de acerto">
             <Select value={sk.hitType} onChange={(e) => set("hitType", e.target.value as Skill["hitType"])}>
               {HIT_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{labelOf(SKILL_HIT_TYPE_LABELS, t)}</option>
               ))}
             </Select>
           </Field>
           <Field label="Alvo">
             <Select value={sk.target} onChange={(e) => set("target", e.target.value as Skill["target"])}>
               {TARGETS.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{labelOf(SKILL_TARGET_LABELS, t)}</option>
               ))}
             </Select>
           </Field>

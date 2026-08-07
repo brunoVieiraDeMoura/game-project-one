@@ -234,6 +234,10 @@ export interface SkillCast {
 	count: number;
 	/** target = acertou alguém; buff = efeito sem dano */
 	kind: "target" | "buff";
+	/** DMG_* do rAthena (clif.hpp) — o mesmo código de `entity:action`, usado
+	 * para distinguir crítico do dano normal (10 = crítico, 13 = multi-hit
+	 * crítico). Só faz sentido em `kind: "target"`. */
+	action: number;
 }
 
 /** Conjuração em andamento (barra de cast). */

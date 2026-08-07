@@ -60,8 +60,8 @@ describe("relevo autorado atravessando bloqueio", () => {
     let piorDiferenca = 0;
     for (let row = 2; row < H - 2; row++) {
       for (let col = 2; col < W - 2; col++) {
-        const chao = cornerLevel(map, col, row, false);
-        const bloqueio = cornerLevel(map, col, row, true);
+        const chao = cornerLevel(map, col, row, "land");
+        const bloqueio = cornerLevel(map, col, row, "blocked");
         piorDiferenca = Math.max(piorDiferenca, Math.abs(chao - bloqueio));
       }
     }

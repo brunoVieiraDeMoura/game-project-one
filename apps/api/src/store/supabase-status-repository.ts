@@ -19,8 +19,10 @@ export class SupabaseStatusRepository implements StatusRepository {
     });
   }
 
-  async list({ page, pageSize, search }: StatusListQuery): Promise<StatusListResult> {
+  async list({ page, pageSize, search, category, group }: StatusListQuery): Promise<StatusListResult> {
     let query = this.client.from("statuses").select("*", { count: "exact" });
+    if (category) query = query.eq("category", category);
+    if (group) query = query.eq("status_group", group);
     if (search) {
       const q = sanitizeSearch(search);
       if (q) {

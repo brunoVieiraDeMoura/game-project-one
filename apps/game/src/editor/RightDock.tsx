@@ -10,7 +10,7 @@ import { BlockedPanel } from "./BlockedPanel";
 import { DockSection } from "./EditorUi";
 import { useEditorStore } from "./editorStore";
 import { ink } from "../ui/rpg";
-import { IcInfo, IcTree, IcLayers, IcSparkles, IcPrefab, IcList, IcTerrain } from "../ui/icons";
+import { IcInfo, IcTree, IcLayers, IcSparkles, IcPrefab, IcList, IcTerrain, IcBrush, IcTrash } from "../ui/icons";
 
 /**
  * Dock direito (estilo editor gráfico): coluna única, rolável, com seções
@@ -50,7 +50,7 @@ export function RightDock() {
       <DockSection icon={<IcTerrain size={15} />} title="Relevo, água & estradas" defaultOpen={false}>
         <TerrainPanel />
       </DockSection>
-      <DockSection icon={<IcLayers size={15} />} title="Texturas do terreno" defaultOpen={false}>
+      <DockSection icon={<IcBrush size={15} />} title="Texturas do terreno" defaultOpen={false}>
         <TexturePanel />
       </DockSection>
       <DockSection icon={<IcSparkles size={15} />} title="Vegetação & construções" defaultOpen={false}>
@@ -59,7 +59,7 @@ export function RightDock() {
       {/* só faz sentido em mapa importado do rAthena: é lá que existem os
           bloqueios avulsos herdados do mapa original */}
       {importado && (
-        <DockSection icon={<IcTerrain size={15} />} title="Limpar terreno bloqueado" defaultOpen={false}>
+        <DockSection icon={<IcTrash size={15} />} title="Limpar terreno bloqueado" defaultOpen={false}>
           <BlockedPanel />
         </DockSection>
       )}

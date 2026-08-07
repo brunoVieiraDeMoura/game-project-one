@@ -144,7 +144,9 @@ function SurfaceBtn({
 }) {
   return (
     <button
+      type="button"
       title={item.title}
+      aria-pressed={active}
       onClick={onPick}
       style={{
         display: "flex",
@@ -224,7 +226,7 @@ export function ToolOptions() {
         )}
         <VSep />
         <span style={lbl}>Tamanho {s.brushSize}</span>
-        <input type="range" min={0} max={12} value={s.brushSize} onChange={(e) => s.setBrushSize(Number(e.target.value))} style={{ width: 90 }} />
+        <input type="range" aria-label="Tamanho do pincel" min={0} max={12} value={s.brushSize} onChange={(e) => s.setBrushSize(Number(e.target.value))} style={{ width: 90 }} />
         {/* força só faz sentido nos pincéis de relevo — grama/água é tudo-ou-nada */}
         {s.brush === "mountain" && (
           <span
@@ -238,6 +240,7 @@ export function ToolOptions() {
               max={1}
               step={0.05}
               value={s.mountainRough}
+              aria-label="Aspereza da montanha"
               onChange={(e) => s.setMountainRough(Number(e.target.value))}
               style={{ width: 90 }}
             />
@@ -266,6 +269,7 @@ export function ToolOptions() {
               max={1.5}
               step={0.05}
               value={s.brushStrength}
+              aria-label="Força do pincel"
               onChange={(e) => s.setBrushStrength(Number(e.target.value))}
               style={{ width: 90 }}
             />
@@ -283,9 +287,9 @@ export function ToolOptions() {
         {s.propPaint && (
           <>
             <span style={lbl}>Densidade {s.propDensity}</span>
-            <input type="range" min={1} max={10} value={s.propDensity} onChange={(e) => s.setPropDensity(Number(e.target.value))} style={{ width: 80 }} />
-            <span style={lbl}>Raio {s.brushSize}</span>
-            <input type="range" min={0} max={5} value={s.brushSize} onChange={(e) => s.setBrushSize(Number(e.target.value))} style={{ width: 80 }} />
+            <input type="range" aria-label="Densidade do pincel de props" min={1} max={10} value={s.propDensity} onChange={(e) => s.setPropDensity(Number(e.target.value))} style={{ width: 80 }} />
+            <span style={lbl}>Raio {s.propBrushRadius}</span>
+            <input type="range" aria-label="Raio do pincel de props" min={0} max={5} value={s.propBrushRadius} onChange={(e) => s.setPropBrushRadius(Number(e.target.value))} style={{ width: 80 }} />
           </>
         )}
       </>
@@ -305,19 +309,19 @@ export function ToolOptions() {
         {s.spawnKind === "mob" && (
           <>
             <VSep />
-            <select value={s.monsterKey} onChange={(e) => s.setMonsterKey(e.target.value)} style={inputStyle}>
+            <select value={s.monsterKey} aria-label="Monstro" onChange={(e) => s.setMonsterKey(e.target.value)} style={inputStyle}>
               {SPAWN_MONSTERS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
             </select>
             <span style={lbl}>Qtd {s.spawnCount}</span>
-            <input type="range" min={1} max={20} value={s.spawnCount} onChange={(e) => s.setSpawnCount(Number(e.target.value))} style={{ width: 70 }} />
+            <input type="range" aria-label="Quantidade de spawn" min={1} max={20} value={s.spawnCount} onChange={(e) => s.setSpawnCount(Number(e.target.value))} style={{ width: 70 }} />
             <span style={lbl}>Raio {s.spawnRadius}</span>
-            <input type="range" min={0} max={30} value={s.spawnRadius} onChange={(e) => s.setSpawnRadius(Number(e.target.value))} style={{ width: 70 }} />
+            <input type="range" aria-label="Raio de spawn" min={0} max={30} value={s.spawnRadius} onChange={(e) => s.setSpawnRadius(Number(e.target.value))} style={{ width: 70 }} />
           </>
         )}
         {s.spawnKind === "npc" && (
           <>
             <VSep />
-            <select value={s.monsterKey} onChange={(e) => s.setMonsterKey(e.target.value)} style={inputStyle}>
+            <select value={s.monsterKey} aria-label="NPC" onChange={(e) => s.setMonsterKey(e.target.value)} style={inputStyle}>
               {SPAWN_NPCS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
             </select>
           </>
@@ -328,7 +332,7 @@ export function ToolOptions() {
     content = (
       <>
         <span style={lbl}>Tipo de gatilho</span>
-        <select value={s.triggerKind} onChange={(e) => s.setTriggerKind(e.target.value as TriggerKind)} style={inputStyle}>
+        <select value={s.triggerKind} aria-label="Tipo de gatilho" onChange={(e) => s.setTriggerKind(e.target.value as TriggerKind)} style={inputStyle}>
           {TRIGGER_KINDS.map((t) => <option key={t.kind} value={t.kind}>{t.label}</option>)}
         </select>
         <span style={{ font: "11px system-ui", color: ink.faint }}>Arraste na grade pra desenhar a área.</span>

@@ -40,8 +40,12 @@ export class SupabaseMonsterRepository implements MonsterRepository {
     return result;
   }
 
-  async list({ page, pageSize, search, dropsItem }: MonsterListQuery): Promise<MonsterListResult> {
+  async list({ page, pageSize, search, dropsItem, levelMin, levelMax, element }: MonsterListQuery): Promise<MonsterListResult> {
     let query = this.client.from("monsters").select("*", { count: "exact" });
+
+    if (levelMin !== undefined) query = query.gte("level", levelMin);
+    if (levelMax !== undefined) query = query.lte("level", levelMax);
+    if (element) query = query.eq("element->>type", element);
 
     if (dropsItem !== undefined) {
       // consulta reversa: ids de monstros que dropam o item (tabela filha indexada)

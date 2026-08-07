@@ -78,17 +78,42 @@ export function baseDoProp(
 }
 
 /**
- * Molda o marcador de destino na superfície: cada vértice recebe a altura do
- * terreno naquele ponto.
+ * Molda uma malha plana (marcador, prévia de skill) na superfície: cada
+ * vértice recebe a altura do terreno naquele ponto.
  *
  * Um quad plano só encosta no chão onde a altura bate com a do centro; numa rampa
- * ou no lombo de um morro ele afunda de um lado e espeta do outro, e o jogador vê
- * metade do quadrado. A geometria é reescrita em coordenada de MUNDO (o mesh fica
- * na origem), o que evita desfazer a transformação do objeto a cada frame.
+ * ou no lombo de um morro ele afunda de um lado e espeta do outro — e como o
+ * resto da malha continua no plano velho, o quadrado (ou disco) parece sumir pela
+ * metade. A geometria é reescrita em coordenada de MUNDO (o mesh fica na
+ * origem), o que evita desfazer a transformação do objeto a cada frame.
  *
- * `terrain` é o mesmo `TerrainQuery` que o movimento consulta — o marcador não
- * pode discordar do chão em que o personagem pisa.
+ * `terrain` é o mesmo `TerrainQuery` que o movimento consulta — a malha não pode
+ * discordar do chão em que o personagem pisa.
  */
+export function moldarMalhaTerreno(
+  geo: THREE.BufferGeometry,
+  cx: number,
+  cz: number,
+  raio: number,
+  segs: number,
+  altura: number,
+  terrain: TerrainQuery,
+): void {
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  const passo = (raio * 2) / segs;
+  let v = 0;
+  for (let r = 0; r <= segs; r++) {
+    for (let c = 0; c <= segs; c++) {
+      const x = cx - raio + c * passo;
+      const z = cz - raio + r * passo;
+      pos.setXYZ(v++, x, terrain.getHeight(x, z) + altura, z);
+    }
+  }
+  pos.needsUpdate = true;
+  geo.computeBoundingSphere();
+}
+
+/** o marcador de destino, na subdivisão e altura dele (ver `moldarMalhaTerreno`) */
 export function moldarMarcador(
   geo: THREE.BufferGeometry,
   cx: number,
@@ -96,18 +121,7 @@ export function moldarMarcador(
   raio: number,
   terrain: TerrainQuery,
 ): void {
-  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-  const passo = (raio * 2) / MARKER_SEGS;
-  let v = 0;
-  for (let r = 0; r <= MARKER_SEGS; r++) {
-    for (let c = 0; c <= MARKER_SEGS; c++) {
-      const x = cx - raio + c * passo;
-      const z = cz - raio + r * passo;
-      pos.setXYZ(v++, x, terrain.getHeight(x, z) + LIFT, z);
-    }
-  }
-  pos.needsUpdate = true;
-  geo.computeBoundingSphere();
+  moldarMalhaTerreno(geo, cx, cz, raio, MARKER_SEGS, LIFT, terrain);
 }
 
 export interface Hit {

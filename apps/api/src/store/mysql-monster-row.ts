@@ -1,4 +1,4 @@
-import { MonsterSchema, type Monster, type MonsterDrop } from "@ragnarok/game-data";
+import { MonsterSchema, type Element, type Monster, type MonsterDrop } from "@ragnarok/game-data";
 
 /**
  * `Monster` ↔ linha de `mob_db_re` (tabela do rAthena).
@@ -279,4 +279,9 @@ export function monsterToMysqlRow(monster: Monster, resolveItemName: ItemNameRes
 
 function upperFirst(value: string): string {
 	return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/** schema (minúsculo) → grafia do rAthena ("fire" → "Fire"), pro filtro de elemento. */
+export function monsterElementToRathena(element: Element): string {
+	return upperFirst(element);
 }

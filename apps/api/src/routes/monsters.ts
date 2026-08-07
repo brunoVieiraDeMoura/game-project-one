@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { MonsterSchema } from "@ragnarok/game-data";
+import { ElementSchema, MonsterSchema } from "@ragnarok/game-data";
 import type { MonsterRepository } from "../store/monster-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
@@ -11,6 +11,9 @@ const ListQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   /** consulta reversa "quem dropa X" (id do item) */
   dropsItem: z.coerce.number().int().positive().optional(),
+  levelMin: z.coerce.number().int().min(0).max(999).optional(),
+  levelMax: z.coerce.number().int().min(0).max(999).optional(),
+  element: ElementSchema.optional(),
 });
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });

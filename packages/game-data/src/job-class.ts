@@ -58,18 +58,46 @@ export const JobClassSchema = z.object({
    * kept here as an explicit allowlist for the new engine's admin editing. */
   allowedArmorTags: z.array(z.string()).default([]),
 
+  /**
+   * Esta classe's PRÓPRIA `Tree` de `skill_tree.yml` — não a lista
+   * resolvida/herdada (achado da auditoria de Classes, leia1.txt
+   * 2026-08-07: skill_tree-yaml.ts documenta que `Inherit` NÃO é resolvido
+   * transitivamente pelo motor rAthena; quem lista os ancestrais inteiros é
+   * o PRÓPRIO dado). Guardar aqui a lista já achatada (como o migrador
+   * antigo fazia) tornaria o Writer incapaz de reconstruir o `Tree:` original
+   * — perderia a distinção entre "esta classe ensina" e "esta classe herda
+   * de X". `skillTreeInherit` é a contraparte (`Inherit:` do YAML) que falta
+   * pra fechar o par. A view "efetiva" (com herdados) é um cálculo derivado
+   * (helper do Mapper), nunca armazenado.
+   */
   skills: z
     .array(
       z.object({
         skillId: z.number().int().positive(),
-        maxLevel: z.number().int().positive(),
+        /** 0 é um valor REAL no formato oficial (`Tree[].MaxLevel: 0`) — não
+         * "aprendível no nível 0", e sim "esta classe REMOVE este skill que
+         * herdaria de um ancestral" (achado ao rodar o round-trip: `Baby_Summoner`
+         * usa isso de verdade). `.positive()` descartava a entrada inteira. */
+        maxLevel: z.number().int().nonnegative(),
         /** prerequisite skills within the tree */
         requires: z
           .array(z.object({ skillId: z.number().int(), level: z.number().int() }))
           .default([]),
+        /** `Tree[].BaseLevel`/`JobLevel` — achado da auditoria: existiam no
+         * formato oficial e eram descartados em silêncio pelo schema antigo. */
+        baseLevel: z.number().int().min(0).max(275).optional(),
+        jobLevel: z.number().int().min(0).max(275).optional(),
+        /** `Tree[].Exclude` — skill listado mas NÃO passado a subclasses via Inherit. */
+        exclude: z.boolean().optional(),
       }),
     )
     .default([]),
+
+  /** `Inherit:` de `skill_tree.yml` — ids de job de quem esta classe herda a
+   * árvore (não-transitivo no motor; os dados de estoque já vêm achatados).
+   * Separado de `parentClassId` (progressão de UI, um pai só) porque
+   * `Inherit` aceita múltiplos (ex.: Rune_Knight herda Novice+Swordman+Knight). */
+  skillTreeInherit: z.array(z.number().int().nonnegative()).default([]),
 
   aspdModifiers: z.array(AspdModifierSchema).default([]),
 });

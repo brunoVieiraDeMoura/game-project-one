@@ -2,21 +2,10 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { GameMap, MapTrigger } from "@ragnarok/map-format";
-import { hexToWorld, HEX_W, HEX_V } from "../hex/hexGrid";
+import { gridFor, type WorldGrid } from "../grid";
 import { useCombatStore } from "../combat/combatStore";
 import { usePlayStore } from "./playStore";
-
-/** AABB de mundo (x/z) de uma área de células, amostrando os 4 cantos + padding
- * meio-hex (cobre o offset da grade pointy-top). */
-function areaAABB(a: { col: number; row: number; w: number; h: number }) {
-  const c1 = a.col, r1 = a.row, c2 = a.col + a.w - 1, r2 = a.row + a.h - 1;
-  const pts = [hexToWorld(c1, r1), hexToWorld(c2, r1), hexToWorld(c1, r2), hexToWorld(c2, r2)];
-  const xs = pts.map((p) => p.x), zs = pts.map((p) => p.z);
-  return {
-    minX: Math.min(...xs) - HEX_W() / 2, maxX: Math.max(...xs) + HEX_W() / 2,
-    minZ: Math.min(...zs) - HEX_V() / 2, maxZ: Math.max(...zs) + HEX_V() / 2,
-  };
-}
+import { areaAABB } from "./triggerGeometry";
 
 const TICK_MS = 1000; // dano/cura por segundo enquanto dentro da área
 
@@ -30,9 +19,10 @@ const TICK_MS = 1000; // dano/cura por segundo enquanto dentro da área
  * Sem setState por frame: só dispara em transições/ticks.
  */
 export function TriggerRuntime({ map, playerPos }: { map: GameMap; playerPos: React.MutableRefObject<THREE.Vector3> }) {
+  const grid = useMemo(() => gridFor(map), [map]);
   const boxes = useMemo(
-    () => (map.triggers ?? []).map((t) => ({ t, box: areaAABB(t.area) })),
-    [map],
+    () => (map.triggers ?? []).map((t) => ({ t, box: areaAABB(grid, t.area) })),
+    [map, grid],
   );
   const inside = useRef<Set<string>>(new Set()); // ids em que o player está agora
   const tickAcc = useRef<Record<string, number>>({}); // acumulador de tempo por id
@@ -48,7 +38,7 @@ export function TriggerRuntime({ map, playerPos }: { map: GameMap; playerPos: Re
     for (const { t, box } of boxes) {
       const within = p.x >= box.minX && p.x <= box.maxX && p.z >= box.minZ && p.z <= box.maxZ;
       const was = inside.current.has(t.id);
-      if (within && !was) onEnter(t, p, combat, play);
+      if (within && !was) onEnter(grid, t, p, combat, play);
       if (within) {
         inside.current.add(t.id);
         if (t.kind === "damage" || t.kind === "heal") {
@@ -73,6 +63,7 @@ export function TriggerRuntime({ map, playerPos }: { map: GameMap; playerPos: Re
 }
 
 function onEnter(
+  grid: WorldGrid,
   t: MapTrigger,
   p: THREE.Vector3,
   _combat: ReturnType<typeof useCombatStore.getState>,
@@ -88,7 +79,7 @@ function onEnter(
       return;
     }
     // mesmo mapa: teleporta pro alvo
-    const w = hexToWorld(t.target.col, t.target.row);
+    const w = grid.cellToWorld(t.target.col, t.target.row);
     play.requestWarp(w.x, w.z);
   } else if (t.kind === "save") {
     play.setSavePoint({ x: p.x, z: p.z });

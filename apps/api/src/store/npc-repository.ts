@@ -1,15 +1,7 @@
-import type { Npc } from "@ragnarok/game-data";
+import { npcKind, type Npc, type NpcKind, type NpcOrigin } from "@ragnarok/game-data";
 
-/** classificação derivada pro filtro do admin */
-export type NpcKind = "warp" | "shop" | "dialogue" | "duplicate" | "other";
-
-export function npcKind(npc: Npc): NpcKind {
-  if (npc.warp) return "warp";
-  if (npc.shop) return "shop";
-  if (npc.duplicateOf) return "duplicate";
-  if (npc.dialogue.length > 0) return "dialogue";
-  return "other";
-}
+export { npcKind };
+export type { NpcKind };
 
 export interface NpcListQuery {
   page: number;
@@ -18,6 +10,7 @@ export interface NpcListQuery {
   search?: string | undefined;
   kind?: NpcKind | undefined;
   mapId?: string | undefined;
+  origin?: NpcOrigin | undefined;
 }
 
 export interface NpcListResult {

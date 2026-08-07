@@ -15,6 +15,18 @@ import { quadro, registrarEvento } from "./flightRecorder";
  * a hipótese do contexto WebGL (que custa 8 ms) sobreviveu duas rodadas. Este
  * módulo existe para NOMEAR, com um dump.
  *
+ * ## Hoje ele está DESLIGADO, e isso é intencional
+ *
+ * Nenhum `medir()` está embrulhando nada. Os cinco que existiram
+ * (`zod→mapa`, `props→colisão`, `terrainQuery`, `legacyMapping`,
+ * `minimapa→bitmap`) somaram **28 ms no caso inteiro** e cumpriram o papel
+ * deles: ELIMINAR cinco suspeitos. O sexto (`terreno→descarte`) nunca disparou.
+ * Deixá-los depois disso seria pagar ruído por informação que já se tem.
+ *
+ * A ferramenta fica: embrulhar uma chamada é um import e uma linha, e a coluna
+ * `trocaMs` continua ligada ao gravador esperando por ela. Desembrulhado, o
+ * custo é zero.
+ *
  * ## Duas regras
  *
  * Só o que passa de `LIMIAR_MS` vira evento: envolver uma chamada barata num

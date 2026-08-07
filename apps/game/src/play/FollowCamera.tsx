@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import type { TerrainQuery } from "@ragnarok/engine-core";
 import { useAimStore } from "../net/aimStore";
+import { raioLivre } from "./cameraCollision";
 import { CLICK_SLOP_PX, DOUBLE_CLICK_MS, NORTH_AZIMUTH, SNAP_EASE, shortestTurn } from "./cameraNorth";
 
 /**
@@ -27,6 +29,7 @@ export function FollowCamera({
   maxZoom = 7,
   rotateSpeed = 0.006,
   targetHeight = 0,
+  terrain,
 }: {
   targetRef: React.MutableRefObject<THREE.Vector3>;
   azimuthRef: React.MutableRefObject<number>;
@@ -40,6 +43,16 @@ export function FollowCamera({
    * fica colado na borda de baixo da tela quando a câmera afasta (mundo com
    * hexScale alto), que é a sensação de "descentralizada". */
   targetHeight?: number;
+  /**
+   * Para EVITAR mostrar o interior de morro/montanha ao girar do lado deles.
+   *
+   * Sem isto a câmera orbitava por dentro do relevo: o chão é sólido só do
+   * lado de fora (a face de baixo/dentro nem sempre existe ou aparece
+   * invertida), então virar a câmera para o lado de uma montanha mostrava o
+   * miolo dela — "fica transparente por dentro". Opcional: sem `terrain`
+   * (preview do editor sem sessão) a câmera segue como sempre.
+   */
+  terrain?: TerrainQuery;
 }) {
   const { camera, gl } = useThree();
   const dist = useRef(1);
@@ -165,10 +178,30 @@ export function FollowCamera({
     const ty = t.y + targetHeight * 0.5; // meio do corpo
     const r = distance * dist.current;
     const cosP = Math.cos(pitch.current);
+    const sinP = Math.sin(pitch.current);
+
+    /**
+     * Aproxima a câmera até um raio LIVRE de relevo (`play/cameraCollision`),
+     * sem tocar em pitch/az. Como isto roda TODO quadro a partir do azimute
+     * ATUAL, continuar girando para longe do morro volta o raio ao normal
+     * sozinho, sem estado extra pra "lembrar" que puxou a câmera.
+     */
+    const rSeguro = terrain
+      ? raioLivre(
+          { x: t.x, y: ty, z: t.z },
+          az,
+          pitch.current,
+          r,
+          Math.max(1.5, distance * 0.4), // mesmo piso do zoom manual
+          1.1, // folga acima do relevo, pra não raspar o topo
+          (x, z) => terrain.getHeight(x, z),
+        )
+      : r;
+
     desired.current.set(
-      t.x + r * cosP * Math.sin(az),
-      ty + r * Math.sin(pitch.current),
-      t.z + r * cosP * Math.cos(az),
+      t.x + rSeguro * cosP * Math.sin(az),
+      ty + rSeguro * sinP,
+      t.z + rSeguro * cosP * Math.cos(az),
     );
     camera.position.lerp(desired.current, 0.15);
     aim.current.set(t.x, ty, t.z);

@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { NpcSchema, type Npc } from "@ragnarok/game-data";
-import { npcKind, type NpcListQuery, type NpcListResult, type NpcRepository } from "./npc-repository";
+import { NpcSchema, npcKind, npcOrigin, type Npc } from "@ragnarok/game-data";
+import type { NpcListQuery, NpcListResult, NpcRepository } from "./npc-repository";
 
 /** Dev-mode store — same shape as JsonItemRepository. */
 export class JsonNpcRepository implements NpcRepository {
@@ -35,7 +35,7 @@ export class JsonNpcRepository implements NpcRepository {
     await writeFile(this.dataPath, JSON.stringify([...this.npcs.values()], null, 1), "utf-8");
   }
 
-  async list({ page, pageSize, search, kind, mapId }: NpcListQuery): Promise<NpcListResult> {
+  async list({ page, pageSize, search, kind, mapId, origin }: NpcListQuery): Promise<NpcListResult> {
     let all = [...this.npcs.values()];
     if (search) {
       const q = search.toLowerCase();
@@ -43,6 +43,7 @@ export class JsonNpcRepository implements NpcRepository {
     }
     if (kind) all = all.filter((n) => npcKind(n) === kind);
     if (mapId) all = all.filter((n) => n.mapId === mapId);
+    if (origin) all = all.filter((n) => npcOrigin(n) === origin);
     all.sort((a, b) => a.id.localeCompare(b.id));
     const total = all.length;
     const start = (page - 1) * pageSize;

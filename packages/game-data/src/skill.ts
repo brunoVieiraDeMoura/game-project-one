@@ -14,10 +14,14 @@ import { ItemSubTypeSchema } from "./item";
 
 /** derived from rAthena TargetType: Attack→damage, Support→support, Ground/Trap→area, Self→self_buff, Passive→passive */
 export const SkillTypeSchema = z.enum(["damage", "support", "area", "self_buff", "passive"]);
+export type SkillType = z.infer<typeof SkillTypeSchema>;
 /** damage nature (rAthena Type): weapon/magic/misc; none = no damage component */
 export const SkillDamageNatureSchema = z.enum(["none", "weapon", "magic", "misc"]);
+export type SkillDamageNature = z.infer<typeof SkillDamageNatureSchema>;
 export const SkillHitTypeSchema = z.enum(["normal", "single", "multi_hit", "critical"]);
+export type SkillHitType = z.infer<typeof SkillHitTypeSchema>;
 export const SkillTargetSchema = z.enum(["enemy", "ally", "ground", "self", "party", "trap"]);
+export type SkillTarget = z.infer<typeof SkillTargetSchema>;
 
 /** skill element: fixed element, "weapon" = weapon's element, "endowed" = current endow, "random" */
 export const SkillElementSchema = ElementSchema.or(z.enum(["weapon", "endowed", "random"]));

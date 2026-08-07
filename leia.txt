@@ -1,56 +1,26 @@
-Escolha a opção **2 (Personagem + monstros)**, porém com um ajuste importante.
+Não implemente imediatamente.
 
-O objetivo não é adicionar movimentação sub-célula aos monstros. O objetivo é impedir qualquer snap desnecessário para o centro da célula quando uma entidade apenas muda de estado (parar, castar, atacar, trocar animação etc.).
+Primeiro execute uma fase de arquitetura e auditoria para cada um dos quatro módulos (Skills, Classes, Status e NPCs).
 
-Regras desejadas:
+Para cada módulo:
 
-* O jogo continua visualmente igual.
-* Continua sendo movimentação por clique em grid.
-* Pathfinding continua baseado em tiles.
-* Alcance continua baseado em tiles.
-* Servidor continua autoritativo.
+Estude a especificação oficial da versão do rAthena utilizada pelo projeto.
+Identifique todos os campos, tipos, enums, estruturas e regras do formato oficial.
+Crie um schema TypeScript/Zod que represente fielmente esse formato.
+Compare o schema oficial com o modelo atual da dashboard/Supabase.
+Gere uma tabela indicando:
+Campos compatíveis;
+Campos que exigem conversão;
+Campos sem equivalente;
+Informações que podem ser perdidas;
+Riscos de compatibilidade.
+Proponha a arquitetura do Parser, Mapper, Validator e Writer para esse formato.
+Aguarde minha aprovação.
 
-Porém:
+Somente após essa auditoria e aprovação implemente o Writer correspondente.
 
-* Nenhuma entidade deve ser reposicionada apenas porque mudou de estado.
-* Se um personagem ou monstro estava entre duas células quando recebeu STOPMOVE, CAST ou equivalente, a posição visual deve permanecer exatamente onde estava.
-* Só deve existir reposicionamento imediato quando realmente houver uma divergência grande entre cliente e servidor (warp, knockback, teleporte, correção de vários tiles etc.).
+Não quero writers construídos por tentativa e erro. Quero uma implementação orientada pela especificação oficial do rAthena (schema-first), garantindo que o formato gerado seja compatível com a versão utilizada pelo projeto.
 
-Não quero introduzir sub-célula para a IA dos monstros agora.
+Após concluir um módulo e seus testes, passe para o próximo. Não implemente todos em paralelo.
 
-Quero apenas remover os snaps artificiais causados pela mudança de estado.
-
-Se isso exigir separar posição lógica (grid) de posição física (renderização), descreva essa arquitetura antes de implementá-la.
-
-
-O ajuste é este:
-
-Não quero que a regra seja baseada em "1 célula".
-
-O problema não é a distância em células, e sim o snap para o centro do tile.
-
-Quero que você revise essa lógica.
-
-Hoje você propôs:
-
-* gap > 3 células → teleporte
-* gap < 1 célula → NÃO MOVE
-* restante → desliza 120 ms
-
-Minha preocupação é que "gap < 1 célula → NÃO MOVE" possa deixar cliente e servidor permanentemente divergentes.
-
-Prefiro esta regra:
-
-* divergência muito pequena (alguns pixels ou uma tolerância bem definida): não fazer snap para o centro da célula;
-* divergência média: corrigir suavemente (interpolação);
-* divergência grande (warp, teleporte, knockback, correção do servidor): teleporte imediato.
-
-O objetivo não é ignorar diferenças menores que uma célula.
-
-O objetivo é impedir que STOPMOVE, CAST, ATTACK ou mudança de estado forcem a entidade para o centro do tile.
-
-Quero que a posição visual permaneça exatamente onde estava quando a caminhada foi interrompida.
-
-Se o servidor precisar corrigir a posição, essa correção deve acontecer apenas quando realmente existir uma divergência relevante entre o estado do cliente e o estado autoritativo do servidor, e não simplesmente porque a entidade parou de andar.
-
-Antes de implementar, explique se essa abordagem é compatível com a arquitetura atual de Client-side Prediction e Server Reconciliation e qual tolerância faz mais sentido utilizar.
+o plano está em leia1.txt

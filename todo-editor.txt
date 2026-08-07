@@ -1,0 +1,578 @@
+EDITOR DE MAPAS 3D — MANUAL COMPLETO DE FUNCIONALIDADES E COMPORTAMENTOS
+=========================================================================
+(documento gerado por varredura completa da UI e da lógica do editor —
+descreve o que existe HOJE, não um plano futuro)
+
+
+1. LAYOUT GERAL
+================
+
+A tela do editor tem quatro áreas:
+
+- Barra superior (fina, ~46px): nome do mapa, ações de arquivo, undo/redo,
+  visões de câmera, snap, seletor de escopo, botão de jogar (preview) e
+  botão Salvar.
+- Barra de ferramentas vertical (esquerda): só os MODOS de interação
+  (selecionar, terreno, decoração, spawn, área, rota, prefab, medir).
+- Área central: o canvas 3D. Uma barra de opções contextual flutua no
+  canto superior-esquerdo dela e muda de conteúdo conforme a ferramenta
+  ativa; só aparece quando há algo para mostrar.
+- Dock direito (coluna rolável, largura fixa): seções recolhíveis —
+  Inspetor, Assets, Camadas & Luz, Relevo/água/estradas, Texturas do
+  terreno, Vegetação & construções, Limpar terreno bloqueado (só em mapa
+  importado), Prefabs, Hierarquia.
+
+Clique com o botão direito do mouse sobre a tela inteira nunca abre o
+menu de contexto do navegador — o botão direito é reservado à câmera.
+
+
+2. BARRA SUPERIOR
+=================
+
+- Campo de nome: renomeia o mapa. Só grava ao sair do campo (clique fora)
+  ou apertar Enter — não a cada tecla digitada, para não gerar um undo
+  por letra.
+- Bolinha amarela ao lado do nome: aparece quando há alteração não salva.
+- Botão "Novo mapa em branco": pede confirmação (perde alterações não
+  salvas) e cria um mapa vazio novo.
+- Botão "Limpar tudo" (vermelho/perigo): zera TERRENO, PROPS, SPAWNS e
+  GATILHOS do mapa aberto, mantendo id, nome, tamanho e o vínculo com o
+  mapa do servidor. Pede confirmação mostrando quantas células viram
+  campo plano andável e quantos props/spawns/gatilhos somem. O rascunho
+  automático é reescrito na hora, para o aviso de "restaurar rascunho"
+  não continuar oferecendo o mapa antigo.
+- Desfazer / Refazer: histórico de até 60 passos (ver seção 9).
+- "Visão": botões Topo, Frente, Lado e um botão de reset (⟲) que
+  enquadram a câmera olhando o mapa inteiro a partir daquele ângulo.
+- Botão de Snap (ímã): liga/desliga o encaixe no centro da célula ao
+  colocar ou mover objetos. Ligado por padrão.
+- Seletor de escopo de edição — só aparece em mapa importado do servidor
+  (ver seção 7).
+- Botão "Jogar" (verde, ícone de play): abre uma aba nova com o modo de
+  jogo carregando o mapa atual em modo de teste (preview), sem precisar
+  salvar antes.
+- Texto de status (canto direito): mostra a célula e o nível de altura
+  sob o cursor, a contagem de props e gatilhos, e o status da última
+  ação (salvo / auto-salvo às HH:MM:SS / erro).
+- Botão "Salvar" (roxo, destaque): grava o mapa. Mostra "Salvando…"
+  enquanto a operação está em andamento.
+
+
+3. FERRAMENTAS (barra vertical esquerda)
+=========================================
+
+Cada ferramenta tem uma tecla de atalho de uma letra (ver seção 6).
+Trocar de ferramenta é sempre exclusivo: entrar em "selecionar" solta o
+asset em mãos e sai do modo pincel; armar um prefab desarma qualquer
+outra coisa; etc.
+
+- SELECIONAR / MOVER — clique escolhe um objeto (prop, spawn ou
+  gatilho); arrastar move o objeto no chão. Shift+clique adiciona ou
+  remove da seleção múltipla (lote).
+- TERRENO — ativa os pincéis de relevo e superfície (ver seção 4.1).
+- DECORAÇÃO — depois de escolher um asset no dock de Assets, cada
+  clique planta uma cópia dele no mapa.
+- SPAWN — marca onde nascem jogador, monstros, NPCs, ou nós de estrada
+  e de rio.
+- ÁREA — arrasta um retângulo na grade para desenhar um gatilho (warp,
+  evento de script, dano, cura ou ponto de salvamento).
+- ROTA — só habilitada com um NPC selecionado; cada clique adiciona um
+  ponto de patrulha à rota daquele NPC.
+- PREFAB — só habilitada com um prefab armado no dock de Prefabs; cada
+  clique carimba o grupo inteiro de objetos salvos naquele prefab.
+- MEDIR — dois cliques marcam dois pontos e mostram a distância entre
+  eles, em unidades de mundo.
+
+
+4. OPÇÕES DE CADA FERRAMENTA
+==============================
+
+4.1 Pincéis de terreno (ferramenta "Terreno")
+-----------------------------------------------
+
+Os pincéis são organizados em grupos. Alguns só aparecem em mapa
+IMPORTADO do servidor (indicado abaixo).
+
+GRUPO SUPERFÍCIE (pinta a aparência do chão — nunca a passagem):
+  - Grama — chão padrão do campo aberto.
+  - Terra — terra batida (trilha, praça, chão pisado).
+  - Pedra — rocha andável (a mesma textura da montanha, mas sem
+    bloquear).
+  - Areia — praia e deserto.
+  - Neve — campo nevado.
+  - Lago — água parada: célula andável com uma lâmina d'água visual por
+    cima (é assim que o rAthena trata água — ela não bloqueia).
+
+  Cada botão de superfície mostra a MINIATURA real da textura, não só um
+  quadradinho de cor, porque o nome sozinho não diz a aparência (ex.:
+  "pedra" pode ser rocha áspera, laje ou cascalho).
+
+  A pintura de superfície é tudo-ou-nada (não tem força graduada) e
+  NUNCA pinta célula já bloqueada — nem a aparência dela muda.
+
+GRUPO RELEVO (altura do terreno, com força graduada e degradê na
+vizinhança — "Proportional Editing"):
+  - Subir ▲ / Descer ▼ — sobe ou desce o centro do pincel; a vizinhança
+    acompanha suavemente.
+  - Suavizar — tira a média com os vizinhos (arredonda degrau, mas não
+    cria uma subida contínua — depois de várias passadas, achata em vez
+    de virar ladeira).
+  - Rampa ⟋ — arraste de baixo para cima: cria uma encosta LISA entre o
+    nível de onde o gesto começou e onde está agora. Diferente do
+    Suavizar, ela consegue subir do chão até um topo num gesto só.
+  - Nivelar — puxa a região para o nível do centro do pincel.
+  - Ruído — adiciona variação aleatória de altura.
+
+GRUPO ESCULTURA (no espírito do "Sculpt Mode" de editores 3D):
+  - Puxar ✋ — arraste contínuo: a altura da região acompanha a
+    distância do gesto desde onde começou. Voltar ao ponto de partida
+    desfaz o efeito.
+  - Inflar ◯ — dá volume proporcional à inclinação local: um topo já
+    plano sobe mais que uma encosta íngreme, o que arredonda a forma em
+    vez de criar um pilar.
+  - Raspar ▁ — raspa só o que está ACIMA do nível do centro do pincel,
+    criando um platô. Nunca preenche uma depressão (diferente do
+    Nivelar, que puxa dos dois lados).
+  - Promontório ◤ — arraste da raiz para fora: ergue um morro BICUDO
+    (afunilando até a ponta), com a inclinação da face controlada por um
+    ângulo escolhido (25°, 35°, 45° ou 55° — mais graus = mais alto e
+    mais íngreme). O topo do morro fica com mato, a parte de baixo com
+    rocha exposta. Só ergue, nunca cava; não mexe em célula bloqueada.
+
+GRUPO "BLOQUEADO" — só em mapa importado do servidor. Agem apenas onde
+já existe bloqueio (o "vão" que o mapa original trazia, seja penhasco
+ou encosta) e NUNCA mudam a passagem — só decidem a aparência:
+  - Elevar ⛰ — o vão vira encosta/montanha visível (continua
+    bloqueado).
+  - Afundar ⤓ — o vão vira buraco/ravina visível (continua bloqueado).
+
+GRUPO "PASSAGEM" — também só em mapa importado. São os ÚNICOS pincéis
+de todo o editor que mudam se dá para andar ali ou não:
+  - Montanha ⛰ — ergue relevo BEM alto (formato de maciço de rocha com
+    cristas e sulcos, não uma cúpula lisa) e FECHA a passagem, como uma
+    parede de pedra. É diferente do "Subir ▲", que cria morro andável.
+  - Desfazer ⛏ — devolve ao chão andável a montanha que foi pintada
+    pelo próprio editor ali (não toca em mata nem penhasco do mapa
+    original do servidor).
+  - Rio raso 〰 — água corrente rasa: atravessa-se a pé (visualmente
+    diferente de Lago, mas com o mesmo efeito de passagem).
+  - Rio fundo 🌊 — canal fundo: BLOQUEIA a passagem (a ideia é pintar
+    raso nas margens do canal fundo, para se poder atravessar por ali).
+
+Opções que aparecem conforme o pincel escolhido:
+  - Tamanho — raio do pincel em células, de 0 a 12.
+  - Força — o quanto o centro do pincel se move por aplicação (a
+    vizinhança acompanha em degradê). Vale para Subir, Descer, Suavizar,
+    Nivelar, Ruído, Puxar, Inflar, Raspar e Montanha.
+  - Aspereza — só no pincel Montanha: 0 é a cúpula lisa antiga; acima
+    disso a montanha ganha cristas, sulcos e lascas de rocha em vez de
+    morro redondo.
+  - Ângulo — só no Promontório: escolhe entre 25°, 35°, 45° e 55°. Não
+    existe controle de "força" separado aqui — é o ângulo que decide a
+    altura (largura do gesto × tangente do ângulo).
+
+4.2 Decoração (ferramenta "Decoração")
+-----------------------------------------
+
+- Sem asset escolhido: pede para escolher um no dock de Assets.
+- Com asset escolhido: mostra o nome dele e um botão para soltá-lo.
+- Toggle "Pincel de props": liga um modo de espalhar o asset ao
+  arrastar o mouse em vez de plantar um por clique.
+  - Densidade (1 a 10) — chance de preencher cada célula do pincel.
+  - Raio (0 a 5) — tamanho da área que o arrasto cobre.
+- Peças que representam trecho de CHÃO (estrada, rio, costa, rampa)
+  funcionam diferente das demais decorações: em vez de virar um objeto
+  em cima da grama, elas substituem a SUPERFÍCIE da célula clicada, e
+  continuam pintando ao arrastar o mouse.
+
+4.3 Spawn (ferramenta "Spawn")
+---------------------------------
+
+Cinco tipos, escolhidos por botão:
+  - Player — ponto de nascimento do jogador. Só pode haver UM por mapa;
+    marcar um novo remove o anterior automaticamente.
+  - Monstro — escolhe o monstro num menu, define Quantidade (1 a 20) e
+    Raio de espalhamento (0 a 30 células) em torno do ponto marcado.
+  - NPC — escolhe o NPC num menu.
+  - Nó de estrada — ponto que a geração de Estradas vai usar para
+    traçar a rede (é preciso pelo menos 2 nós; sem nenhum a estrada não
+    é gerada por essa via).
+  - Nó de rio — igual, mas para o gerador de Rio. Sem nenhum nó, o rio
+    gerado atravessa o mapa de borda a borda.
+
+4.4 Área / gatilho (ferramenta "Área")
+------------------------------------------
+
+Escolhe o tipo de gatilho antes de arrastar o retângulo na grade:
+  - Portal (warp) — teleporta quem entra para outro mapa/posição.
+  - Evento (script) — dispara um evento nomeado.
+  - Dano (armadilha) — causa dano por tick a quem está dentro.
+  - Cura (área segura) — cura por tick.
+  - Ponto de save — marca onde o jogador reaparece.
+
+4.5 Rota / Prefab / Medir
+-----------------------------
+
+- Rota: clicar em células adiciona pontos de patrulha ao NPC
+  selecionado; Esc encerra a edição da rota.
+- Prefab: clicar no terreno carimba o grupo de objetos do prefab
+  armado; Esc desarma.
+- Medir: dois cliques marcam a distância; um terceiro clique reinicia
+  a medição a partir dele. Botão "Limpar" apaga a medição atual.
+
+4.6 Seleção (ferramenta "Selecionar")
+------------------------------------------
+
+Com algo selecionado, aparecem botões de:
+  - Girar (esquerda/direita) — a rotação é travada em passos de 60°,
+    ou seja, um objeto só pode ficar alinhado com um dos 6 lados do
+    hexágono, nunca torto.
+  - Escalar (aumentar/diminuir) — em passos fixos, com um teto máximo.
+  - Duplicar, Copiar, Colar, Focar câmera no selecionado, Deletar.
+
+Sem nada selecionado, a dica lembra: clique para selecionar, Shift+clique
+para selecionar vários.
+
+
+5. PAINÉIS DO DOCK DIREITO
+=============================
+
+5.1 Inspetor
+-----------------
+Contextual — muda conforme o que está selecionado:
+
+- Gatilho: nome (opcional), tipo, tamanho e posição da área. Se for
+  Portal, campos de mapa de destino e coordenadas. Se for Evento,
+  campo do nome do evento. Se for Dano/Cura, o valor por tick. Botão de
+  deletar o gatilho.
+- Seleção em lote (mais de um objeto): contagem de itens selecionados,
+  botões Duplicar e Deletar, lembrete de que Shift+clique adiciona ou
+  remove da seleção.
+- Spawn: tipo (Player/NPC/Nó de estrada/Monstro). Se NPC, um seletor do
+  NPC e um bloco de Rota de patrulha (editar rota, contagem de pontos,
+  modo — em loop, ida-e-volta, ou uma vez só — e velocidade de 0.5 a
+  12). Se Monstro, seletor do monstro, quantidade (1 a 20) e raio de
+  espalhamento (0 a 30). Botão de deletar o spawn.
+- Objeto (prop): modelo (pode trocar por outro na lista), posição,
+  rotação (em graus) e escala editáveis em X/Y/Z, tipo de colisor
+  (nenhum, caixa, malha detalhada, ou casco), uma tag de texto livre.
+  Botão de deletar o objeto.
+- Nada selecionado: mensagem informando isso.
+
+5.2 Assets
+----------------
+Lista de categorias de objetos plantáveis (árvores, rochas, colinas,
+montanhas, casas e construções, árvores secas, arbustos, grama,
+estradas, rios, costa, rampas, pontes, outros), cada uma expansível,
+mostrando uma miniatura 3D real de cada item (renderizada uma vez e
+guardada em cache) e o nome. Clicar entra no modo de colocar; clicar de
+novo no mesmo item solta o asset das mãos.
+
+5.3 Camadas & Luz
+-------------------------
+- Iluminação: direção do sol (0-360°), altura do sol (5-90°),
+  intensidade do sol (0-3), intensidade da luz ambiente (0-2).
+- Chão (grama) — prévia local, sem salvar nada: alterna entre visual
+  Original (do modelo), Cor chapada, ou Textura procedural (com campos
+  de tamanho do padrão e intensidade quando escolhida). Um botão "Voltar
+  ao salvo" descarta a prévia. Aviso: para valer no jogo de verdade, é
+  preciso salvar essa escolha na configuração geral do jogo, não aqui.
+- Filtro retrô: liga uma prévia do filtro visual "16 bits" só dentro do
+  editor (desligado por padrão, porque atrapalha posicionar objetos com
+  precisão).
+- Camadas visíveis: checkboxes para mostrar/ocultar Terreno, Vegetação,
+  Rochas/Relevo e Spawns/NPCs — só afeta o que se vê no editor, não o
+  mapa salvo.
+
+5.4 Relevo, água & estradas
+---------------------------------
+- Relevo: dois sliders de 0 a 100% — Colinas (ondulação suave e
+  ANDÁVEL) e Montanhas (maciços de rocha que BLOQUEIAM, na mesma forma
+  do pincel Montanha). Cada um tem um botão de "re-sortear" só aquele
+  aspecto. Um terceiro slider, Rochas na montanha, espalha pedras nas
+  montanhas existentes (matacões no topo, pedras miúdas na base) — fica
+  desabilitado até existir alguma montanha no escopo ativo.
+- Estrada: escolhe a textura usada por toda a rede de estradas (Terra,
+  Pedra, Areia ou Grama), com prévia visual de cada opção. Trocar
+  redesenha a rede na hora.
+- Água: slider de largura do rio, de "fio" (atravessável em qualquer
+  ponto) até um canal de vários passos de largura (o miolo vira canal
+  fundo que bloqueia, com margem rasa andável). Botão "Rio" traça um
+  canal ligando os nós de rio marcados (ou de borda a borda, se não
+  houver nenhum). Para lago, usa-se o pincel de Lago, não este painel.
+- Estradas: botão que gera a rede de estradas ligando os nós marcados,
+  criando nós extras automaticamente se houver menos de dois; um botão
+  de "re-sortear" gera outra rede (o traçado normal, em compensação, é
+  sempre o mesmo se nada mudar — para arrastar um nó só afetar os
+  trechos ligados a ele).
+- Botão geral "Novo relevo": re-sorteia colinas e montanhas de uma vez.
+- Botão "Limpar rios/estradas": reverte tudo que os dois geradores
+  pintaram.
+- Aviso fixo: gerar relevo e lagos primeiro, depois rio e estradas — e,
+  em mapa importado do servidor, o relevo procedural não mexe em parede
+  nem buraco (para isso, usar os pincéis Elevar/Afundar).
+
+5.5 Texturas do terreno
+-----------------------------
+Escolhe QUAL textura cada superfície (Grama, Terra, Pedra, Areia, Neve,
+Água) usa neste mapa específico, e em que TAMANHO ela se repete (o
+padrão pode ficar pequeno demais e parecer cor sólida à distância, ou
+grande demais e virar uma mancha única). Um botão de reset volta ao
+tamanho padrão daquela superfície. Aviso: isto é só aparência — não
+muda colisão nem passagem.
+
+5.6 Vegetação & construções
+----------------------------------
+- Controles de tamanho do mapa (largura e altura, de 8 a 500 células),
+  com aviso quando o mapa fica muito grande e aviso quando encolher o
+  mapa deixaria props ou spawns fora da nova grade (eles não são
+  apagados, mas o próximo Salvar grava assim mesmo).
+- Uma linha por categoria espalhável (árvores, rochas, colinas,
+  montanhas, casas/construções, árvores secas, arbustos, grama): slider
+  de densidade 0-100%, botão de "re-sortear" só aquela categoria, e um
+  painel expansível com miniatura de cada espécie daquela categoria —
+  cada uma pode ser ligada ou desligada individualmente (um mapa novo
+  nasce com TODAS as espécies desligadas por padrão).
+- Checkboxes de Escala aleatória e Rotação aleatória para o que for
+  gerado.
+- Botão "Limpar tudo": remove todas as decorações, inclusive as postas
+  manualmente.
+
+5.7 Limpar terreno bloqueado (só em mapa importado do servidor)
+------------------------------------------------------------------
+O mapa do servidor traz como bloqueio até o menor arbusto e pedra
+avulsa do mapa original — manchas pequenas espalhadas pelo campo que
+não têm representação em 3D e só atrapalham quem edita por cima.
+
+- Mostra a contagem de manchas pequenas e quantas células elas ocupam,
+  discriminado por tamanho (1 célula / 2-4 células / bloco 2×2 /
+  estruturas grandes, que NUNCA são tocadas por este botão).
+- Botão "Remover bloqueios": converte as manchas pequenas em chão
+  andável, respeitando o escopo de edição ativo.
+- Aviso: isso muda a colisão do mapa 3D, mas o servidor só passa a
+  concordar depois de re-exportar o mapa e reiniciar o servidor — até
+  lá, o chão parece livre no editor mas o personagem esbarra numa
+  parede invisível no jogo de verdade.
+- Botão separado "Zerar o mapa inteiro" (com confirmação de dois
+  cliques — o segundo clique precisa ser deliberado): deixa o mapa
+  inteiro plano e andável, apagando relevo, colisão, superfícies,
+  props, spawns e gatilhos. Não respeita escopo — afeta o mapa todo.
+
+5.8 Prefabs
+-----------------
+Campo de nome + botão Salvar (agrupa a seleção atual — lote ou objeto
+único — num prefab reaproveitável, guardado localmente e compartilhado
+entre mapas). Lista do catálogo de prefabs salvos, cada um com botão
+"Colocar" (arma o prefab para carimbar com a ferramenta Prefab) e um
+botão de apagar.
+
+5.9 Hierarquia
+--------------------
+Lista o Terreno (clicável para desmarcar seleção de objeto) e três
+seções: Objetos, Spawns, Gatilhos. Seções com mais de 3 itens ficam
+recolhidas por padrão. Cada item mostra um ícone e um rótulo curto
+(nome do NPC/monstro, tipo de nó, tag do objeto). Cada seção tem um
+botão de apagar TODOS os itens dela — respeitando o escopo de edição
+ativo, com confirmação. Shift+clique marca uma faixa contígua de
+itens; Ctrl+clique marca um a um; Delete apaga tudo que estiver
+marcado.
+
+
+6. ATALHOS DE TECLADO E INTERAÇÕES DE MOUSE
+=============================================
+
+Atalhos de teclado (ignorados quando o foco está num campo de texto):
+
+  Espaço (segurar)      — modo mover câmera; enquanto segurado, o botão
+                          direito do mouse faz "andar" (pan) em vez de
+                          girar.
+  Ctrl+Z                — desfazer
+  Ctrl+Shift+Z / Ctrl+Y  — refazer
+  Ctrl+D                — duplicar seleção
+  Ctrl+C / Ctrl+V        — copiar / colar
+  F                     — focar a câmera no objeto selecionado
+  Delete / Backspace     — apagar seleção
+  Setas (↑↓←→)          — move o selecionado uma célula por vez, na
+                          direção relativa à câmera (segurar a tecla
+                          repete o movimento, mas conta como um único
+                          passo de desfazer)
+  Esc                   — desseleciona, solta o asset em mãos e
+                          desarma o prefab
+  V                     — ferramenta Selecionar
+  B                     — ferramenta Terreno
+  P                     — ferramenta Decoração
+  S                     — ferramenta Spawn
+  A                     — ferramenta Área
+  R                     — ferramenta Rota
+  M                     — ferramenta Medir (limpa a medição anterior)
+
+Mouse:
+
+  Botão esquerdo         — sempre aplica a ferramenta ativa; nunca gira
+                          a câmera.
+  Botão direito          — gira a câmera ao redor do mapa.
+  Botão direito + Espaço  — move a câmera lateralmente ("andar").
+  Roda / botão do meio    — aproxima/afasta o zoom.
+  Arrastar com pincel     — pinta continuamente célula a célula; os
+                          pincéis Rampa e Puxar recalculam a região
+                          inteira a cada movimento do mouse (por isso
+                          voltar pela mesma trilha desfaz o gesto).
+  Arrastar objeto         — move-o sobre o chão (a mira segue o RELEVO,
+                          não um plano liso — o objeto acompanha o topo
+                          da superfície sob o cursor).
+  Shift+clique num objeto — adiciona/remove da seleção múltipla sem
+                          arrastar.
+  Clique num objeto já no
+  lote selecionado        — arrasta o LOTE inteiro junto.
+
+O cursor sobre o terreno sempre mostra, na barra superior, a célula e o
+nível de altura correspondentes.
+
+
+7. ESCOPO DE EDIÇÃO
+======================
+
+Em mapas IMPORTADOS do servidor (não em mapas criados do zero no
+editor), a barra superior mostra um seletor "Editar em" com quatro
+opções, e uma contagem de quantas células cada uma alcança:
+
+  - Dentro — só o miolo jogável do mapa; não encosta em buraco nem na
+    moldura bloqueada ao redor.
+  - Borda — só o cinturão bloqueado da moldura externa.
+  - Buraco — só as células de ravina/penhasco (o "vão" que o mapa
+    original trazia), estejam onde estiverem no mapa.
+  - Tudo — sem restrição nenhuma.
+
+As três regiões restritas são MUTUAMENTE EXCLUSIVAS e cobrem o mapa
+inteiro: uma célula de buraco conta como buraco mesmo se estiver dentro
+do cinturão da borda (o tipo da célula vence a localização dela). Um
+canal de rio nunca conta como "borda", mesmo bloqueado, para não perder
+o miolo do mapa inteiro quando o rio toca a moldura.
+
+Enquanto um escopo restrito estiver ativo, a parte do mapa que fica de
+FORA dele aparece visualmente escurecida na cena 3D, para deixar claro
+por que o pincel não está respondendo ali.
+
+O que respeita o escopo escolhido: pincel de terreno, objetos colocados
+manualmente, geração procedural (vegetação, relevo, rochas de
+montanha), marcação de spawns, carimbo de prefab, e os botões de apagar
+camada inteira da Hierarquia. O que cai fora do escopo é simplesmente
+ignorado, sem aviso.
+
+O escopo "Dentro" é o único que PROTEGE célula já bloqueada dos pincéis
+de relevo comuns (Subir, Descer, Suavizar etc.) — eles não tocam em
+parede nem em buraco ali, exatamente para uma pincelada larga no campo
+não apagar acidentalmente uma ravina do mapa original. Nos escopos
+Borda, Buraco e Tudo, esses mesmos pincéis PODEM moldar bloqueio (é
+onde faz sentido esculpir um paredão). A única exceção: uma montanha
+que o próprio editor pintou pode sempre ser esculpida de novo, mesmo em
+"Dentro", porque ali o bloqueio é intencional.
+
+A geração procedural (vegetação, relevo etc.) guarda densidade, semente
+aleatória e espécies ativas de forma SEPARADA por escopo — gerar
+vegetação "dentro" não mexe na vegetação já gerada na "borda".
+
+
+8. TRAVAS DE SEGURANÇA — O QUE NUNCA ABRE PASSAGEM
+=====================================================
+
+Fora do grupo "Passagem" descrito na seção 4.1, nenhuma outra
+ferramenta ou geração do editor pode transformar uma célula bloqueada
+em andável, nem o contrário. Resumo das garantias:
+
+  - Pincel de superfície nunca pinta célula bloqueada, nem por
+    aparência.
+  - Os pincéis "Elevar"/"Afundar" (grupo Bloqueado) só mudam a
+    aparência de uma célula que já está bloqueada — nunca liberam
+    passagem.
+  - "Desfazer" (mountainClear) só age em células que o próprio editor
+    marcou como montanha — nunca em mata ou penhasco do mapa original.
+  - Os pincéis de rio (raso/fundo) não convertem bloqueio comum em
+    água, e não convertem água em passagem livre a não ser pelo próprio
+    canal desenhado.
+  - Estrada e rio gerados nunca atravessam bloqueio nem entram em água
+    existente — o traçado contorna ou para na margem.
+  - "Limpar terreno bloqueado" nunca toca em buraco (ravina/penhasco),
+    só em bloqueio miúdo comum, e nunca em estruturas grandes.
+  - O Promontório e o pincel "Puxar"/"Inflar"/"Raspar" não mexem em
+    célula já bloqueada — moldam só chão andável.
+
+O ÚNICO pincel de todo o editor que FECHA passagem é "Montanha" (e,
+simetricamente, "Rio fundo" também bloqueia o canal central que
+desenha). Nenhuma geração procedural fecha passagem por conta própria
+fora dessas regras.
+
+
+9. UNDO/REDO, SALVAR, NOVO MAPA, RASCUNHO E PREVIEW
+======================================================
+
+Desfazer / Refazer:
+  - Histórico de até 60 passos, guardado como fotografias completas do
+    mapa.
+  - Um traçado inteiro de pincel (do clique até soltar o mouse) conta
+    como UM passo de desfazer, não um por célula pintada.
+  - Arrastar um slider de geração procedural também conta como um passo
+    só, do início ao fim do arrasto.
+
+Salvar:
+  - Ao salvar, o mapa é gravado com a escala de mundo em que foi
+    autorado carimbada nele, para que reabri-lo depois — mesmo que a
+    escala geral do jogo mude — mantenha objetos e terreno no lugar
+    certo.
+  - Dá erro se a sessão de administrador não estiver autenticada.
+
+Novo mapa / limpar:
+  - "Novo mapa em branco" pede confirmação e começa do zero, com todos
+    os geradores de vegetação desmarcados por padrão.
+  - "Limpar tudo" (na barra superior) e "Zerar o mapa inteiro" (no
+    painel de limpeza) fazem a mesma coisa — apagar terreno, props,
+    spawns e gatilhos — com textos de confirmação diferentes.
+  - "Limpar tudo" no painel de Vegetação apaga só as decorações.
+  - "Limpar rios/estradas" reverte só o que os dois geradores
+    desenharam.
+
+Rascunho automático:
+  - A cada 12 segundos, se houver alteração não salva, um rascunho é
+    gravado localmente no navegador.
+  - Ao reabrir um mapa que tenha um rascunho mais novo que a última
+    versão salva, aparece um aviso oferecendo restaurá-lo.
+  - Só os 3 rascunhos mais recentes de todo o editor são mantidos — os
+    mais antigos são descartados automaticamente para não estourar o
+    espaço de armazenamento do navegador (que é compartilhado com
+    outras partes do jogo).
+  - Salvar no servidor com sucesso apaga o rascunho local daquele mapa.
+
+Preview / Jogar:
+  - O botão de jogar abre o modo de jogo numa aba nova, carregando o
+    mapa exatamente como está no editor no momento do clique — sem
+    precisar salvar antes.
+  - Existem também duas prévias visuais que não salvam nada: a troca de
+    modo de chão (Original/Cor/Textura) e o filtro retrô "16 bits",
+    ambos no painel Camadas & Luz.
+
+Importar/Exportar: o editor em si não tem botão de importar ou exportar
+arquivo. A entrada de mapas do servidor original e a saída de volta
+para o servidor acontecem por processos externos ao editor (fora do
+escopo deste documento de UI).
+
+
+10. RESUMO — REGRAS QUE VALEM PARA TODO O EDITOR
+====================================================
+
+- "Subir" é diferente de "Montanha": o primeiro cria morro andável, o
+  segundo fecha passagem como parede de pedra. É a única distinção
+  desse tipo em todo o editor.
+- Rotação de objetos é sempre travada em múltiplos de 60° (os 6 lados
+  do hexágono), nunca fica torta.
+- O grupo de pincéis "Bloqueado" e "Passagem", o seletor de escopo de
+  edição e o painel "Limpar terreno bloqueado" só existem em mapas
+  IMPORTADOS do servidor — mapas criados do zero no editor não têm essa
+  divisão entre miolo e moldura bloqueada.
+- Regra invisível é tratada como defeito: por isso o escopo de edição
+  ativo é sempre mostrado visualmente na cena (sombreando o que fica de
+  fora) e nunca só como um estado escondido na interface.
+- Cada categoria de vegetação só nasce em superfícies compatíveis com
+  ela (árvore viva não nasce na neve; árvore seca não nasce na grama;
+  rocha não nasce em cima de outra rocha/montanha; construção nasce em
+  qualquer chão seco) e a maioria delas exige terreno relativamente
+  plano — encostas íngremes não recebem vegetação nem construção.

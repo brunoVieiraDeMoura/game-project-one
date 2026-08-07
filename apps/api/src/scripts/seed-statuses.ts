@@ -10,6 +10,14 @@ import { statusToRow } from "../store/status-row.js";
  * Seed da tabela statuses a partir de tools/legacy-migration/output/
  * statuses.json. Upsert por id — re-rodar sobrescreve edições do admin
  * (uso: carga inicial / re-import).
+ *
+ * `--only-derived`: grava só description/params/status_group (os campos que
+ * migrate:statuses recalcula do rathena/doc/status_change.txt e da regra de
+ * grupo). NUNCA inclui `category` — é o campo que o admin edita à mão pra
+ * promover um status a "buff" (não há sinal confiável em status.yml pra
+ * derivar isso, ver packages/game-data/src/status.ts). Rodar o seed cheio
+ * uma vez (pra aplicar a categoria "debuff" alargada) e depois só
+ * --only-derived preserva qualquer curadoria manual subsequente.
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -28,9 +36,20 @@ const client = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const onlyDerived = process.argv.includes("--only-derived");
+
 const raw = JSON.parse(readFileSync(STATUSES_PATH, "utf-8")) as unknown[];
-const rows = raw.map((entry) => statusToRow(StatusEffectDefSchema.parse(entry)));
-console.log(`${rows.length} statuses lidos de ${STATUSES_PATH}`);
+const rows = raw.map((entry) => {
+  const full = statusToRow(StatusEffectDefSchema.parse(entry));
+  if (!onlyDerived) return full;
+  return {
+    id: full.id,
+    description: full.description,
+    params: full.params,
+    status_group: full.status_group,
+  };
+});
+console.log(`${rows.length} statuses lidos de ${STATUSES_PATH}${onlyDerived ? " (--only-derived: description/params/status_group só)" : ""}`);
 
 for (let i = 0; i < rows.length; i += BATCH_SIZE) {
   const batch = rows.slice(i, i + BATCH_SIZE);

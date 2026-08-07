@@ -3,6 +3,7 @@ import { useHudStore, type WindowKey } from "./hudStore";
 import { isTyping } from "../play/isTyping";
 import { useAimStore } from "../net/aimStore";
 import { useSkillWalkStore } from "../net/skillWalkStore";
+import { useSkillTargetStore } from "../net/skillTargetStore";
 import { useWorldStore } from "../net/worldStore";
 
 /**
@@ -42,10 +43,12 @@ export function useHudHotkeys(): void {
       if (e.code === "Escape") {
         const hud = useHudStore.getState();
         if (useAimStore.getState().skill) useAimStore.getState().cancel();
-        // "escolhi o ponto e estou indo até lá" é uma ordem em andamento, e ESC
-        // é como se desiste dela — o passo vem ANTES de largar o alvo porque é a
-        // ordem mais recente, e ESC desfaz da mais nova para a mais velha
+        // "escolhi o ponto (ou o alvo) e estou indo até lá" é uma ordem em
+        // andamento, e ESC é como se desiste dela — o passo vem ANTES de largar
+        // o alvo porque é a ordem mais recente, e ESC desfaz da mais nova para
+        // a mais velha
         else if (useSkillWalkStore.getState().pendente) useSkillWalkStore.getState().parar();
+        else if (useSkillTargetStore.getState().pendente) useSkillTargetStore.getState().parar();
         else if (useWorldStore.getState().target) useWorldStore.getState().setTarget(null);
         else if (hud.openWindow) hud.setWindow(null);
         else hud.toggleWindow("settings");

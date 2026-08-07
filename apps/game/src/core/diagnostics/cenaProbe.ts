@@ -346,9 +346,23 @@ export function amostrarCena(
     q.desmontagensCena = desmontagens;
     q.suspensoMs = suspensoMs;
     escreverColunaDeAssets();
-    escreverColunaDeTroca();
     instantaneo.emVoo = q.assetsEmVoo;
   }
+
+  /**
+   * FORA do `if (ativo())`, e isso não é detalhe.
+   *
+   * O `medir()` acumula sempre que roda em DEV, mas quem ZERA o acumulador é
+   * esta escrita. Dentro do `if`, um período com o voo desligado empilhava tudo
+   * e despejava o total no PRIMEIRO quadro gravado: no
+   * `voo-1785966296680.json` isso saiu como `trocaMs.max = 514,5 ms` num dump
+   * sem um único evento `cena/custo` e sem portal nenhum — um pico fantasma,
+   * exatamente o tipo de coisa que já custou rodadas de investigação.
+   *
+   * Escrever no rascunho com o gravador parado é inofensivo: aquela linha nunca
+   * é confirmada.
+   */
+  escreverColunaDeTroca();
 
   // o "antes" do retrato é o último estado BOM, não o quadro anterior
   if (drawCalls > 0) filhosComDesenho = scene.children.length;

@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   CharacterVariantSchema,
   EquipLocationSchema,
+  ITEM_SUBTYPE_LABELS,
+  ITEM_TYPE_LABELS,
   ItemSchema,
   ItemSubTypeSchema,
   ItemTypeSchema,
+  labelOf,
   type Item,
 } from "@ragnarok/game-data";
 import { createItem, updateItem } from "@/lib/api";
@@ -139,7 +142,7 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
           <Field label="Tipo">
             <Select value={item.type} onChange={(e) => set("type", e.target.value as Item["type"])}>
               {ItemTypeSchema.options.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{labelOf(ITEM_TYPE_LABELS, t)}</option>
               ))}
             </Select>
           </Field>
@@ -147,7 +150,7 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
             <Select value={item.subType ?? ""} onChange={(e) => set("subType", (e.target.value || undefined) as Item["subType"])}>
               <option value="">—</option>
               {ItemSubTypeSchema.options.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{labelOf(ITEM_SUBTYPE_LABELS, t)}</option>
               ))}
             </Select>
           </Field>

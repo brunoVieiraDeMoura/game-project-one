@@ -101,13 +101,17 @@ describe("pincel rampa no editor", () => {
     st().setBrushSize(1);
   });
 
-  it("arrastar do chão até o platô cria a ladeira inteira", () => {
+  it("arrastar do chão até o platô cria a ladeira inteira, em gradiente FRACIONÁRIO (sem degrau seco)", () => {
     st().beginStroke();
     st().beginRamp(20, 10); // chão, nível 0
     st().paintCell(25, 10); // platô, nível 6
-    // sobe ao longo das cinco células, sem degrau seco
+    // sobe ao longo das cinco células, linear — a rampa não arredonda para
+    // nível inteiro (diferente dos outros pincéis de relevo, ela é o único
+    // que promete "encosta LISA": arredondar aqui devolvia degrau, ver
+    // rampBrush.ts). t = (col-20)/5, h = 6*t.
     const perfil = [alt(20, 10), alt(21, 10), alt(22, 10), alt(23, 10), alt(24, 10), alt(25, 10)];
-    expect(perfil).toEqual([0, 1, 2, 4, 5, 6]);
+    const esperado = [0, 1.2, 2.4, 3.6, 4.8, 6];
+    perfil.forEach((v, i) => expect(v).toBeCloseTo(esperado[i]!, 10));
   });
 
   it("arrastar de novo NÃO acumula (a base é o mapa de antes do gesto)", () => {

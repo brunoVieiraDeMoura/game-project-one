@@ -27,7 +27,7 @@ import { AimPreview } from "../play/AimPreview";
 import { AlvoPorTab } from "../play/AlvoPorTab";
 import { melhorAlvo, RAIO_ASSIST_PX, type Candidato } from "../play/aimAssist";
 import { useSoftLockStore } from "../play/softLockStore";
-import { atacar, pegar } from "../net/acoes";
+import { atacar, castarEmAlvo, pegar } from "../net/acoes";
 import { cliqueVaiParaOChao, useAimStore } from "../net/aimStore";
 import { FollowCamera } from "../play/FollowCamera";
 import { useViewCenter } from "../play/useViewCenter";
@@ -38,9 +38,8 @@ import { aplicarNevoaDoCeu } from "../scene/skyFog";
 import { SKY_HORIZON, SKY_TOP } from "../scene/skyGradient.glsl";
 import { RetroFilter } from "../scene/RetroFilter";
 import { PerfProbe, PerfOverlay } from "../scene/PerfHud";
-import { SondaDeCena, SondaDeRender, SondaDeSuspense } from "../core/diagnostics/SondaDeCanvas";
+import { SondaDeCena, SondaDeSuspense } from "../core/diagnostics/SondaDeCanvas";
 import { PreCompilarProps } from "../play/PreCompilarProps";
-import { medir } from "../core/diagnostics/medir";
 import { marcarPropsVisiveis } from "../core/diagnostics/cenaProbe";
 import { scaleToWorld, useGameplayConfig } from "../play/useGameplayConfig";
 import { scatterDemoProps, findWalkableStart } from "../play/demoProps";
@@ -528,7 +527,7 @@ function Scene({
   const isHex = grid.kind === "hex";
   // Amarração com o mapa do rAthena. Sem ela não dá para converter célula do
   // servidor em posição de mundo, então o modo online não liga.
-  const mapping = useMemo(() => medir("legacyMapping", () => legacyMapping(map)), [map]);
+  const mapping = useMemo(() => legacyMapping(map), [map]);
   const net = online && mapping !== null;
   // tamanho do bloco hex — precisa estar setado ANTES de qualquer hexToWorld
   // (inclusive o do memo logo abaixo, que computa o spawn do player). Síncrono
@@ -574,8 +573,7 @@ function Scene({
        */
       if (mira && mira.mode === "entity") {
         if (alvo.tipo !== "mob") return false;
-        gateway().emit("skill:use", { skillId: mira.id, level: mira.level, targetGid: alvo.gid });
-        useWorldStore.getState().setTarget(alvo.gid);
+        castarEmAlvo(mira.id, mira.level, mira.name, alvo.gid);
         useAimStore.getState().cancel();
         return true;
       }
@@ -630,7 +628,7 @@ function Scene({
     // Props sólidos entram no caminho pela MESMA regra que o exportador usa ao
     // gravar o `map_cache` (grid/propCells): é assim que o desenho do cliente
     // acompanha o desvio que o servidor já faz em volta da árvore.
-    const bloqueadasPorProp = medir("props→colisão", () => propBlockedCellsCached(map));
+    const bloqueadasPorProp = propBlockedCellsCached(map);
     return {
       caminho: (from: { x: number; y: number }, to: { x: number; y: number }) => {
         const a = serverToLocal(mapping, from.x, from.y);
@@ -691,7 +689,7 @@ function Scene({
     // (export:mapcache), o servidor barra exatamente as células dos props
     // sólidos, então o cursor de chão dizer o mesmo é a verdade — não mais uma
     // promessa que o servidor desmentia.
-    const terrain = medir("terrainQuery", () => grid.terrainQuery(map));
+    const terrain = grid.terrainQuery(map);
     // mapa autorado: player_start do editor, ou o centro da grade;
     // mapa do servidor: primeira célula andável
     const playerStart = map.spawns.find((s) => s.kind === "player_start");
@@ -968,6 +966,7 @@ function Scene({
         maxZoom={gameplay.cameraMaxZoom}
         rotateSpeed={gameplay.cameraRotateSpeed}
         targetHeight={gameplay.charScale * CHAR_MODEL_HEIGHT}
+        terrain={world.terrain}
       />
     </>
   );
@@ -1297,9 +1296,7 @@ export function PlayView() {
         */}
         <Suspense fallback={import.meta.env.DEV ? <SondaDeSuspense nome="cena" /> : null}>
           {import.meta.env.DEV && <PerfProbe />}
-          {/* qual subárvore come os 650 ms do portal — ver `SondaDeRender` */}
           {map && (
-            <SondaDeRender id="cena">
             <Scene
               map={map}
               gameplay={gameplay}
@@ -1311,7 +1308,6 @@ export function PlayView() {
               precarregarTerreno={carregandoTerreno}
               precompilarProps={aquecendo}
             />
-            </SondaDeRender>
           )}
         </Suspense>
       </Canvas>
@@ -1389,9 +1385,7 @@ export function PlayView() {
       */}
       {mapaDoHud && (
         <div style={{ display: carregando || !map ? "none" : "contents" }}>
-          <SondaDeRender id="hud">
-            <Hud map={mapaDoHud} playerPos={playerPos} />
-          </SondaDeRender>
+          <Hud map={mapaDoHud} playerPos={playerPos} />
         </div>
       )}
     </div>

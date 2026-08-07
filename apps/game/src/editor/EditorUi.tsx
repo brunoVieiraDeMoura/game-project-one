@@ -29,7 +29,10 @@ export function RailButton({
   const [hover, setHover] = useState(false);
   return (
     <button
+      type="button"
       title={label}
+      aria-label={label}
+      aria-pressed={active}
       onClick={onClick}
       disabled={disabled}
       onPointerEnter={() => setHover(true)}
@@ -85,7 +88,10 @@ export function IconBtn({
   const bg = active ? accent : hover && !disabled ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)";
   return (
     <button
+      type="button"
       title={label}
+      aria-label={label}
+      aria-pressed={active}
       onClick={onClick}
       disabled={disabled}
       onPointerEnter={() => setHover(true)}
@@ -119,6 +125,8 @@ export function TextBtn({ children, active, onClick, accent = ACCENT, style }: {
   const [hover, setHover] = useState(false);
   return (
     <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
@@ -166,6 +174,8 @@ export function DockSection({
     <div style={{ borderBottom: `1px solid ${ink.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", userSelect: "none" }}>
         <button
+          type="button"
+          aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           style={{ display: "flex", alignItems: "center", gap: 7, flex: 1, minWidth: 0, background: "none", border: "none", color: ink.text, cursor: "pointer", padding: 0 }}
         >

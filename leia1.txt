@@ -1,11 +1,1 @@
-Antes de implementar, faça uma estimativa baseada nas medições do profiler. Se todas as props repetidas forem convertidas para InstancedMesh, qual a redução esperada em:
-
-draw calls;
-tempo de updateMatrixWorld;
-tempo de renderização por frame;
-FPS médio;
-FPS mínimo;
-uso de CPU;
-uso de GPU.
-
-Se possível, indique também o custo da implementação (baixo, médio ou alto risco) e quais sistemas podem ser afetados, como raycast, seleção de objetos e colisão.
+Auditoria e Mapper aprovados. Pode prosseguir para o Validator e o Writer, mantendo o mesmo padrão utilizado em Skills. Acrescente um JobDatabaseWriter responsável por orquestrar a geração dos cinco arquivos como uma única operação atômica: todos os arquivos são gerados, validados, passam por round-trip, diff e backup antes que qualquer substituição ocorra. Não quero gravações parciais. Amplie também o Cross Validator para verificar consistência entre os cinco arquivos do domínio Classes, além das referências para Skills e Jobs. Após isso, execute os testes funcionais incluindo Super Novice, Ninja, Gunslinger, Summoner, uma classe Baby, uma classe Transcendent e uma classe que utilize BaseLevel na árvore de skills. Somente após esses testes considerar o módulo Classes concluído.

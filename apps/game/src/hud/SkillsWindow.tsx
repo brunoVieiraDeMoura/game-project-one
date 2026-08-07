@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { gateway } from "../net/gateway";
+import { ATAQUE_BASICO, ATAQUE_BASICO_ID } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
 import { useSkillCatalog, type SkillInfo } from "../net/skillCatalog";
 import { useHudStore } from "./hudStore";
@@ -107,23 +108,32 @@ export function SkillsWindow() {
     useSkillCatalog.getState().ensure(netSkills.map((sk) => sk.id), niveis);
   }, [online, netSkills]);
 
-  const linhas = useMemo<Linha[]>(
-    () =>
-      netSkills.map((sk) => {
-        const info = catalog[sk.id];
-        return {
-          id: sk.id,
-          // o `name` do pacote É a constante; o nome bonito vem do catálogo
-          aegis: info?.aegisName || sk.name,
-          nome: info?.name ?? sk.name,
-          nivel: sk.level,
-          maxNivel: info?.maxLevel ?? 0,
-          upgradable: sk.upgradable,
-          info,
-        };
-      }),
-    [netSkills, catalog],
-  );
+  const linhas = useMemo<Linha[]>(() => {
+    const doServidor = netSkills.map((sk) => {
+      const info = catalog[sk.id];
+      return {
+        id: sk.id,
+        // o `name` do pacote É a constante; o nome bonito vem do catálogo
+        aegis: info?.aegisName || sk.name,
+        nome: info?.name ?? sk.name,
+        nivel: sk.level,
+        maxNivel: info?.maxLevel ?? 0,
+        upgradable: sk.upgradable,
+        info,
+      };
+    });
+    // Ataque Básico não vem do servidor (id -1, `net/ataqueBasico`), então
+    // entra à mão — sem `info` de catálogo, a `Detalhe` trata o caso à parte.
+    const basica: Linha = {
+      id: ATAQUE_BASICO_ID,
+      aegis: "BASIC",
+      nome: ATAQUE_BASICO.name,
+      nivel: 1,
+      maxNivel: 1,
+      upgradable: false,
+    };
+    return [basica, ...doServidor];
+  }, [netSkills, catalog]);
 
   /** classes presentes, na ordem de progressão da tabela */
   const abas = useMemo(() => {
@@ -356,21 +366,29 @@ function PaginaVazia({ online }: { online: boolean }) {
  * dano, elemento, alvo e raio de área.
  */
 function Detalhe({ linha }: { linha: Linha }) {
+  const basica = linha.id === ATAQUE_BASICO_ID;
   const info = linha.info;
-  const tipo = info ? (SK_TYPE_NAMES[info.type] ?? info.type) : "—";
-  const elemento = info ? (SK_ELEMENT_NAMES[info.element] ?? info.element) : "—";
+  const tipo = basica ? "Ativa" : info ? (SK_TYPE_NAMES[info.type] ?? info.type) : "—";
+  const elemento = basica ? "—" : info ? (SK_ELEMENT_NAMES[info.element] ?? info.element) : "—";
 
-  const fatos: [string, string][] = [
-    ["Tipo", tipo],
-    ["Elemento", elemento],
-    ["Custo", info ? `${info.spCost} SP` : "—"],
-    // Alcance NEGATIVO é a convenção do rAthena para "o alcance de ataque da
-    // arma", não uma distância: mostrar "-1 células" seria mentira. E zero numa
-    // skill usada no próprio personagem também não é distância — é a ausência
-    // dela.
-    ["Alcance", info ? alcance(info) : "—"],
-    ["Recarga", info ? (info.cooldownMs > 0 ? `${(info.cooldownMs / 1000).toFixed(1)} s` : "—") : "—"],
-  ];
+  const fatos: [string, string][] = basica
+    ? [
+        ["Tipo", tipo],
+        ["Custo", "— (nenhum)"],
+        ["Alcance", "o da arma equipada"],
+        ["Recarga", "—"],
+      ]
+    : [
+        ["Tipo", tipo],
+        ["Elemento", elemento],
+        ["Custo", info ? `${info.spCost} SP` : "—"],
+        // Alcance NEGATIVO é a convenção do rAthena para "o alcance de ataque da
+        // arma", não uma distância: mostrar "-1 células" seria mentira. E zero
+        // numa skill usada no próprio personagem também não é distância — é a
+        // ausência dela.
+        ["Alcance", info ? alcance(info) : "—"],
+        ["Recarga", info ? (info.cooldownMs > 0 ? `${(info.cooldownMs / 1000).toFixed(1)} s` : "—") : "—"],
+      ];
 
   return (
     <>
@@ -486,6 +504,14 @@ function alcance(info: SkillInfo): string {
  * de descrever no escuro.
  */
 function descrever(linha: Linha): string {
+  if (linha.id === ATAQUE_BASICO_ID) {
+    return (
+      "Liga o ataque contínuo: o personagem vai até o alvo selecionado e bate " +
+      "nele até ele morrer, você trocar de alvo ou desligar a habilidade. Vale " +
+      "para arma corpo a corpo e à distância — quem decide alcance e dano é o " +
+      "servidor."
+    );
+  }
   const info = linha.info;
   if (!info) return "Detalhes desta habilidade não chegaram do catálogo.";
 

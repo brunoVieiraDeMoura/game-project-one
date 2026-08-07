@@ -19,8 +19,9 @@ export class SupabaseSkillRepository implements SkillRepository {
     });
   }
 
-  async list({ page, pageSize, search }: SkillListQuery): Promise<SkillListResult> {
+  async list({ page, pageSize, search, classPrefix }: SkillListQuery): Promise<SkillListResult> {
     let query = this.client.from("skills").select("*", { count: "exact" });
+    if (classPrefix && classPrefix.length > 0) query = query.in("class_prefix", classPrefix);
     if (search) {
       const q = sanitizeSearch(search);
       if (q) {

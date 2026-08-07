@@ -1,38 +1,30 @@
-checar a renderização de cada asset no mapa
-
-checar se o mapa do rathena está interferindo no terreno andável dentro do editor de mapas e se o editor de mapas está levando isso para o /play (porque de eu achar isso: ao tentar limpar o mapa novo ex: prt_field08, eu editando a parte de "dentro", o que era toda a área 400x400, ele me limitou a algumas edições, como se já ouvesse diretrizes dizendo aonde é a borda, aonde é a parte andável)
-
-auto suavizar a raiz da montanha com o terreno ao lado na criação de montanhas.
-
-"Rio fundo", aparentemente se tornou um "Rio raso", e o lago está com a textura do rio fundo, mas continua andável.
-
-"Rio fundo", o player nao pode andar.
-
-"Criar textura do Promontório de grama em cima, terra em baaixo, ao invés de terra em cima e pedra em baixo.
-
-"criar mapas em http://localhost:3000/maps , deixe eu conseguir escolher o nome do mapa, e a área ( dimensao) com select insert"
-Criar um lugar para editar essas opções
-
-"rever todo o sitema de auto renderização (Vegerações & Construções)
-
-Arvores nunca podem ser renderizadas em areia, montanha, ou qualquer tipo de agua (lago, rio fundo, rio raso), inclinações, pedras e neves, ou em cima de outro asset.
-o mesmo vale para gramas e arbustos
-
-rochas/montanhas  nunca podem ser renderizadas em montanha, ou qualquer tipo de agua (lago, rio fundo, rio raso), ou em cima de outro asset.
-
-Arvores secas nunca podem ser renderizadas em grama ou qualquer tipo de agua (lago, rio fundo, rio raso), inclinações, pedras ou em cima de outro asset.
+ver se o http://localhost:3000/monsters está funcionando, se estão corretos com o rathena
+e se os monstros modificados aqui (e vinculados aos mapas por aqui), vão modificar os monstros reais dos mapas
 
 
-"rever todo o sitema de auto renderização de (relevo, água & estrada)"
+ver se os itens de http://localhost:3000/items estão corretos com o rathena
+e se os itens modificados aqui, vão modificar os itens dos mobs
 
-Colinas : Criar colinas em todo o mapa, e o slide definir o quao alto/quantidade de mapa vai ser afetado, vao ter essas colinas
 
-Rochas na montanha: Criar montanhas,e o slide definir o quao alto/quantidade de mapa vai ser afetado, vao ter essas montanhas espalhasdas no mapa
+confira também http://localhost:3000/classes 
+http://localhost:3000/statuses
+http://localhost:3000/skills
+http://localhost:3000/npcs
 
-Lagos : remover 
+conferir se está tudo correto.
 
-Estradas "recriar o sistema de estradas, deixando que o usuário possa escolher a textura da estrada gerada, sendo elas, areia,pedra, grama, terra ( deixar o Nó da estrada)
 
-Rio ser gerado (deixar similar ao sistema de estradas, deixar escolher a textura da agua, e fazer ele com nós, deixar a largura do rio com celulas)
+em http://localhost:3000/items
+cria uma maneira mais facil de categorizar as buscas com filtro, por tipo (adicione também uma tradução para os tipos)
 
-ver um glitch de renderização do mapa no editor, que está deixando um quadrado cinza, ao criar algo grande ou desfazer algo grande
+
+em http://localhost:3000/skills
+bota para categorizar pela classe
+
+em http://localhost:3000/npcs
+cria uma maneira mais facil de categorizar as buscas com filtro, por tipo (adicione também uma tradução para os tipos)
+
+em http://localhost:3000/statuses está muito dificil de intender o que é pra que serve, se der para criar um detalhe para cada um dos buff/debuff
+e categorizar eles também de uma maneira mais facil que faça mais sentido.
+
+em http://localhost:3000/monsters categoriza eles em 2 filtros, level e elementos

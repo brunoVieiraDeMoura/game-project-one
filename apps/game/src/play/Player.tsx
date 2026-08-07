@@ -29,7 +29,9 @@ export function Player({
   terrain,
   cellSize,
   start,
-  characterKey = "knight",
+  // mesmo modelo do NetPlayer (Mago) — este é o player LOCAL (demo/preview),
+  // e os dois devem mostrar o mesmo personagem principal
+  characterKey = "mage",
   positionRef,
   gameplay,
   lattice,

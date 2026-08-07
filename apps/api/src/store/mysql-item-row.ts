@@ -44,6 +44,33 @@ export interface MysqlItemRow {
 	script: string | null;
 	equip_script: string | null;
 	unequip_script: string | null;
+	flag_buyingstore: number | boolean | null;
+	flag_deadbranch: number | boolean | null;
+	flag_container: number | boolean | null;
+	flag_uniqueid: number | boolean | null;
+	flag_bindonequip: number | boolean | null;
+	flag_dropannounce: number | boolean | null;
+	flag_noconsume: number | boolean | null;
+	flag_dropeffect: string | null;
+	delay_duration: number | null;
+	delay_status: string | null;
+	stack_amount: number | null;
+	stack_inventory: number | boolean | null;
+	stack_cart: number | boolean | null;
+	stack_storage: number | boolean | null;
+	stack_guildstorage: number | boolean | null;
+	nouse_override: number | null;
+	nouse_sitting: number | boolean | null;
+	trade_override: number | null;
+	trade_nodrop: number | boolean | null;
+	trade_notrade: number | boolean | null;
+	trade_tradepartner: number | boolean | null;
+	trade_nosell: number | boolean | null;
+	trade_nocart: number | boolean | null;
+	trade_nostorage: number | boolean | null;
+	trade_noguildstorage: number | boolean | null;
+	trade_nomail: number | boolean | null;
+	trade_noauction: number | boolean | null;
 	[column: string]: unknown;
 }
 
@@ -133,6 +160,86 @@ function flagsFrom(row: MysqlItemRow, columns: Record<string, string>): string[]
 		.map(([key]) => key);
 }
 
+/**
+ * `flags`/`delay`/`stack`/`trade`/`noUse` são sub-objetos OPCIONAIS do schema
+ * (`ItemSchema:117-121`) que ficam em colunas próprias de `item_db_re`
+ * (`flag_*`, `delay_*`, `stack_*`, `nouse_*`, `trade_*`) — nunca eram lidas
+ * nem escritas aqui, então toda edição dessas 5 seções no `ItemForm` (Flags,
+ * Delay de uso, Empilhamento, Condições de não-uso, Restrições de troca) era
+ * salva com 200 OK e descartada em silêncio no backend MySQL, que é o ativo
+ * em produção. Achado durante a auditoria de reliability (2026-08-07).
+ */
+function itemFlagsFrom(row: MysqlItemRow): Item["flags"] | undefined {
+	const has =
+		row.flag_buyingstore !== null ||
+		row.flag_deadbranch !== null ||
+		row.flag_container !== null ||
+		row.flag_uniqueid !== null ||
+		row.flag_bindonequip !== null ||
+		row.flag_dropannounce !== null ||
+		row.flag_noconsume !== null ||
+		row.flag_dropeffect !== null;
+	if (!has) return undefined;
+	return {
+		buyingStore: truthy(row.flag_buyingstore),
+		deadBranch: truthy(row.flag_deadbranch),
+		container: truthy(row.flag_container),
+		uniqueId: truthy(row.flag_uniqueid),
+		bindOnEquip: truthy(row.flag_bindonequip),
+		dropAnnounce: truthy(row.flag_dropannounce),
+		noConsume: truthy(row.flag_noconsume),
+		dropEffect: row.flag_dropeffect ?? undefined,
+	};
+}
+
+function itemDelayFrom(row: MysqlItemRow): Item["delay"] | undefined {
+	if (row.delay_duration === null && row.delay_status === null) return undefined;
+	return { durationMs: row.delay_duration ?? 0, statusId: row.delay_status ?? undefined };
+}
+
+function itemStackFrom(row: MysqlItemRow): Item["stack"] | undefined {
+	if (row.stack_amount === null) return undefined;
+	return {
+		amount: row.stack_amount,
+		inventory: truthy(row.stack_inventory),
+		cart: truthy(row.stack_cart),
+		storage: truthy(row.stack_storage),
+		guildStorage: truthy(row.stack_guildstorage),
+	};
+}
+
+function itemNoUseFrom(row: MysqlItemRow): Item["noUse"] | undefined {
+	if (row.nouse_override === null && row.nouse_sitting === null) return undefined;
+	return { overrideGroupLevel: row.nouse_override ?? 100, sitting: truthy(row.nouse_sitting) };
+}
+
+function itemTradeFrom(row: MysqlItemRow): Item["trade"] | undefined {
+	const has =
+		row.trade_override !== null ||
+		row.trade_nodrop !== null ||
+		row.trade_notrade !== null ||
+		row.trade_tradepartner !== null ||
+		row.trade_nosell !== null ||
+		row.trade_nocart !== null ||
+		row.trade_nostorage !== null ||
+		row.trade_noguildstorage !== null ||
+		row.trade_nomail !== null ||
+		row.trade_noauction !== null;
+	if (!has) return undefined;
+	return {
+		overrideGroupLevel: row.trade_override ?? 100,
+		noDrop: truthy(row.trade_nodrop),
+		noTrade: truthy(row.trade_notrade),
+		tradePartnerOnly: truthy(row.trade_tradepartner),
+		noSell: truthy(row.trade_nosell),
+		noCart: truthy(row.trade_nocart),
+		noStorage: truthy(row.trade_nostorage),
+		noGuildStorage: truthy(row.trade_noguildstorage),
+		noMail: truthy(row.trade_nomail),
+		noAuction: truthy(row.trade_noauction),
+	};
+}
+
 export function mysqlRowToItem(row: MysqlItemRow): MysqlItem {
 	const jobs = flagsFrom(row, JOB_COLUMNS);
 	const item = ItemSchema.parse({
@@ -164,6 +271,11 @@ export function mysqlRowToItem(row: MysqlItemRow): MysqlItem {
 		gradable: truthy(row.gradable),
 		viewSprite: row.view ?? 0,
 		aliasName: row.alias_name ?? undefined,
+		flags: itemFlagsFrom(row),
+		delay: itemDelayFrom(row),
+		stack: itemStackFrom(row),
+		noUse: itemNoUseFrom(row),
+		trade: itemTradeFrom(row),
 	});
 
 	return {
@@ -202,6 +314,33 @@ export function itemToMysqlRow(item: MysqlItem): MysqlItemRow {
 		script: item.rawScript ?? null,
 		equip_script: item.rawEquipScript ?? null,
 		unequip_script: item.rawUnequipScript ?? null,
+		flag_buyingstore: item.flags?.buyingStore ? 1 : item.flags ? 0 : null,
+		flag_deadbranch: item.flags?.deadBranch ? 1 : item.flags ? 0 : null,
+		flag_container: item.flags?.container ? 1 : item.flags ? 0 : null,
+		flag_uniqueid: item.flags?.uniqueId ? 1 : item.flags ? 0 : null,
+		flag_bindonequip: item.flags?.bindOnEquip ? 1 : item.flags ? 0 : null,
+		flag_dropannounce: item.flags?.dropAnnounce ? 1 : item.flags ? 0 : null,
+		flag_noconsume: item.flags?.noConsume ? 1 : item.flags ? 0 : null,
+		flag_dropeffect: item.flags?.dropEffect ?? null,
+		delay_duration: item.delay?.durationMs ?? null,
+		delay_status: item.delay?.statusId ?? null,
+		stack_amount: item.stack?.amount ?? null,
+		stack_inventory: item.stack ? (item.stack.inventory ? 1 : 0) : null,
+		stack_cart: item.stack ? (item.stack.cart ? 1 : 0) : null,
+		stack_storage: item.stack ? (item.stack.storage ? 1 : 0) : null,
+		stack_guildstorage: item.stack ? (item.stack.guildStorage ? 1 : 0) : null,
+		nouse_override: item.noUse?.overrideGroupLevel ?? null,
+		nouse_sitting: item.noUse ? (item.noUse.sitting ? 1 : 0) : null,
+		trade_override: item.trade?.overrideGroupLevel ?? null,
+		trade_nodrop: item.trade ? (item.trade.noDrop ? 1 : 0) : null,
+		trade_notrade: item.trade ? (item.trade.noTrade ? 1 : 0) : null,
+		trade_tradepartner: item.trade ? (item.trade.tradePartnerOnly ? 1 : 0) : null,
+		trade_nosell: item.trade ? (item.trade.noSell ? 1 : 0) : null,
+		trade_nocart: item.trade ? (item.trade.noCart ? 1 : 0) : null,
+		trade_nostorage: item.trade ? (item.trade.noStorage ? 1 : 0) : null,
+		trade_noguildstorage: item.trade ? (item.trade.noGuildStorage ? 1 : 0) : null,
+		trade_nomail: item.trade ? (item.trade.noMail ? 1 : 0) : null,
+		trade_noauction: item.trade ? (item.trade.noAuction ? 1 : 0) : null,
 	};
 
 	// booleano por coluna: só escrevemos as marcadas; NULL = "não permitido"
@@ -281,6 +420,16 @@ const SUBTYPE_TO_SCHEMA: Record<string, ItemSubType> = {
 
 const TYPE_TO_RATHENA = invert(TYPE_TO_SCHEMA);
 const SUBTYPE_TO_RATHENA = invert(SUBTYPE_TO_SCHEMA);
+
+/** schema → grafia do rAthena, pro filtro de tipo (WHERE type = ?). */
+export function itemTypeToRathena(type: ItemType): string {
+	return TYPE_TO_RATHENA[type] ?? "Etc";
+}
+
+/** schema → grafia do rAthena, pro filtro de subtipo. `null` quando o subtipo não tem coluna correspondente. */
+export function itemSubTypeToRathena(subType: ItemSubType): string | null {
+	return SUBTYPE_TO_RATHENA[subType] ?? null;
+}
 
 function invert(map: Record<string, string>): Record<string, string> {
 	const out: Record<string, string> = {};

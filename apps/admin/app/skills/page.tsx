@@ -1,12 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Skill } from "@ragnarok/game-data";
+import {
+  SKILL_DAMAGE_NATURE_LABELS,
+  SKILL_TARGET_LABELS,
+  SKILL_TYPE_LABELS,
+  classeDaSkill,
+  labelOf,
+  skillClassFilterOptions,
+} from "@ragnarok/game-data";
 import { deleteSkill, listSkills } from "@/lib/api";
-import { Button, Input, Select } from "@/components/ui";
+import { Badge, Button, Checkbox, Input, Pager, Select } from "@/components/ui";
 
 const PAGE_SIZES = [10, 20, 50, 100];
+const CLASS_OPTIONS = skillClassFilterOptions();
 
 export default function SkillsPage() {
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -14,6 +23,8 @@ export default function SkillsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
+  const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set());
+  const [classPickerOpen, setClassPickerOpen] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,9 +37,17 @@ export default function SkillsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  const classPrefix = useMemo(() => {
+    const prefixes = new Set<string>();
+    for (const opt of CLASS_OPTIONS) {
+      if (selectedClasses.has(opt.value)) for (const p of opt.prefixes) prefixes.add(p);
+    }
+    return [...prefixes];
+  }, [selectedClasses]);
+
   const load = useCallback(() => {
     setLoading(true);
-    listSkills(page, pageSize, debouncedSearch)
+    listSkills({ page, pageSize, search: debouncedSearch, classPrefix: classPrefix.length ? classPrefix : undefined })
       .then((res) => {
         setSkills(res.skills);
         setTotal(res.total);
@@ -36,11 +55,21 @@ export default function SkillsPage() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, pageSize, debouncedSearch]);
+  }, [page, pageSize, debouncedSearch, classPrefix]);
 
   useEffect(load, [load]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  function toggleClass(value: string) {
+    setSelectedClasses((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+    setPage(1);
+  }
 
   async function onDelete(s: Skill) {
     if (!confirm(`Excluir skill #${s.id} — ${s.name}?`)) return;
@@ -61,13 +90,46 @@ export default function SkillsPage() {
         </Link>
       </div>
 
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <Input
           placeholder="Buscar por nome, nome Aegis ou ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
+        <div className="relative">
+          <Button type="button" variant="outline" onClick={() => setClassPickerOpen((v) => !v)}>
+            Classe {selectedClasses.size > 0 ? `(${selectedClasses.size})` : ""}
+          </Button>
+          {classPickerOpen && (
+            <div className="absolute z-10 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 p-3 shadow-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-400">Filtrar por classe</span>
+                {selectedClasses.size > 0 && (
+                  <button
+                    className="text-xs text-indigo-400 hover:underline"
+                    onClick={() => {
+                      setSelectedClasses(new Set());
+                      setPage(1);
+                    }}
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                {CLASS_OPTIONS.map((opt) => (
+                  <Checkbox
+                    key={opt.value}
+                    label={opt.label}
+                    checked={selectedClasses.has(opt.value)}
+                    onChange={() => toggleClass(opt.value)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <Select
           value={pageSize}
           onChange={(e) => {
@@ -94,6 +156,7 @@ export default function SkillsPage() {
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">Aegis</th>
+              <th className="px-3 py-2">Classe</th>
               <th className="px-3 py-2">Tipo</th>
               <th className="px-3 py-2">Natureza</th>
               <th className="px-3 py-2">Alvo</th>
@@ -106,13 +169,13 @@ export default function SkillsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={11} className="px-3 py-6 text-center text-zinc-500">
                   Carregando...
                 </td>
               </tr>
             ) : skills.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={11} className="px-3 py-6 text-center text-zinc-500">
                   Nenhuma skill encontrada
                 </td>
               </tr>
@@ -122,9 +185,12 @@ export default function SkillsPage() {
                   <td className="px-3 py-2 text-zinc-400">{s.id}</td>
                   <td className="px-3 py-2">{s.name}</td>
                   <td className="px-3 py-2 font-mono text-xs text-zinc-400">{s.aegisName}</td>
-                  <td className="px-3 py-2">{s.type}</td>
-                  <td className="px-3 py-2 text-zinc-400">{s.damageNature}</td>
-                  <td className="px-3 py-2 text-zinc-400">{s.target}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone="indigo">{classeDaSkill(s.aegisName).label}</Badge>
+                  </td>
+                  <td className="px-3 py-2">{labelOf(SKILL_TYPE_LABELS, s.type)}</td>
+                  <td className="px-3 py-2 text-zinc-400">{labelOf(SKILL_DAMAGE_NATURE_LABELS, s.damageNature)}</td>
+                  <td className="px-3 py-2 text-zinc-400">{labelOf(SKILL_TARGET_LABELS, s.target)}</td>
                   <td className="px-3 py-2">{s.maxLevel}</td>
                   <td className="px-3 py-2">
                     {s.damageFormula ? (
@@ -155,25 +221,7 @@ export default function SkillsPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>
-            «
-          </Button>
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-            »
-          </Button>
-        </div>
-      </div>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </main>
   );
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { GameMap } from "@ragnarok/map-format";
 import { useEditorStore, MOUNTAIN_ROCK_LAYER } from "./editorStore";
 import { setHexScale } from "../hex/hexGrid";
-import { propCategory, propRadius } from "../props/registry";
+import { propCategory, propRadius, PROP_BY_CATEGORY } from "../props/registry";
 
 /**
  * Rochas na montanha: a camada procedural que povoa BLOQUEIO em vez de chão.
@@ -130,5 +130,77 @@ describe("rochas na montanha", () => {
     }
     // correlação de Pearson: positiva = quanto mais alto, maior a pedra
     expect(num / Math.sqrt(dA * dR || 1)).toBeGreaterThan(0.25);
+  });
+});
+
+describe("seletor de espécies de rocha da montanha", () => {
+  const especies = PROP_BY_CATEGORY.find((g) => g.cat === "rock")?.items ?? [];
+
+  it("sem nenhum toggle, usa o catálogo inteiro (não regride o comportamento antigo)", () => {
+    st().setMountainRocks(100);
+    const usadas = new Set(rochas().map((p) => p.assetId));
+    // pelo menos mais de uma espécie apareceu (com o catálogo inteiro
+    // disponível, a chance de sair só uma é desprezível num mapa com dezenas
+    // de rochas geradas)
+    expect(usadas.size).toBeGreaterThan(1);
+  });
+
+  it("desligar uma espécie tira ela da regeneração", () => {
+    st().setMountainRocks(100);
+    const antes = new Set(rochas().map((p) => p.assetId));
+    expect(antes.size).toBeGreaterThan(0);
+    const alvo = [...antes][0]!; // uma espécie que REALMENTE apareceu neste seed
+
+    st().toggleMountainRockSpecies(alvo);
+    expect(rochas().every((p) => p.assetId !== alvo)).toBe(true);
+  });
+
+  it("desligar é POR ESCOPO — desligar em 'all' não mexe no toggle de 'inside'", () => {
+    const alvo = especies[0]!.id;
+    st().setEditScope("all");
+    st().toggleMountainRockSpecies(alvo);
+    st().setEditScope("inside");
+    expect(st().procDisabled["inside:mountain_rock"] ?? []).not.toContain(alvo);
+  });
+
+  it("religar a espécie volta a incluí-la", () => {
+    const alvo = especies[0]!.id;
+    st().toggleMountainRockSpecies(alvo); // desliga
+    st().toggleMountainRockSpecies(alvo); // religa
+    st().setMountainRocks(100);
+    // com o catálogo inteiro de volta, a espécie pode voltar a aparecer —
+    // não garantimos que ELA especificamente saia no seed fixo, só que o
+    // desligamento não ficou "preso"
+    expect(st().procDisabled["all:mountain_rock"] ?? []).not.toContain(alvo);
+  });
+
+  it("desligar TODAS as espécies zera a geração (sem travar em catálogo vazio)", () => {
+    for (const e of especies) st().toggleMountainRockSpecies(e.id);
+    st().setMountainRocks(100);
+    expect(rochas()).toHaveLength(0);
+  });
+});
+
+describe("montanha fora do escopo ativo não gera rocha (base de dado do fix de UI)", () => {
+  /**
+   * `TerrainPanel.tsx: MountainRocksRow` passou a checar `cellInScope` célula
+   * a célula pra decidir se HABILITA o slider — antes varria o mapa inteiro,
+   * então uma montanha na borda mantinha o slider ativo mesmo com "Dentro"
+   * escolhido, onde `generateMountainRocks` já filtrava (corretamente) e não
+   * gerava nada. A parte de UI não é testável aqui sem renderizar componente
+   * (fora do padrão deste projeto) — este teste confirma o dado que a UI lê:
+   * o gerador continua vazio nesse cenário, então "slider desabilitado" é a
+   * leitura certa quando ele checar o mesmo predicado.
+   */
+  it("montanha só na BORDA não gera nada com escopo 'Dentro' escolhido", () => {
+    const m = mapaComMontanha();
+    const collision = [...(m.collision as string[])];
+    const surface = [...(m.surface as string[])];
+    for (let r = 10; r < 19; r++) for (let c = 10; c < 19; c++) { collision[idx(c, r)] = "walkable"; surface[idx(c, r)] = "grass"; }
+    for (let c = 0; c < W; c++) { collision[idx(c, 0)] = "wall"; surface[idx(c, 0)] = "stone"; }
+    st().init({ ...m, collision, surface } as unknown as GameMap);
+    st().setEditScope("inside");
+    st().setMountainRocks(100);
+    expect(rochas()).toHaveLength(0);
   });
 });

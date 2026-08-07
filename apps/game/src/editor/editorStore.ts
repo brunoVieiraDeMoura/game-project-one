@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { GameMap, MapProp, MapSpawn, SurfaceType, MapTrigger, TriggerKind, Lighting, TerrainStyle } from "@ragnarok/map-format";
-import { cellIndex, createBlankMap, DEFAULT_LIGHTING } from "@ragnarok/map-format";
+import { cellIndex, createBlankMap, DEFAULT_LIGHTING, resizeGameMap } from "@ragnarok/map-format";
 import { getHexScale } from "../hex/hexGrid";
 import { editorGrid, setEditorGrid } from "./activeGrid";
 import { findBlockedClusters } from "./blockedClusters";
@@ -13,7 +13,7 @@ import { cornerNormal, sampleHeight } from "../grid/heightField";
 export type { EditScope };
 import { edgeBetween, neighborAt } from "../hex/hexTiles";
 import type { GroundSettings } from "../hex/groundMaterial";
-import { propDefaultScale, propCategory, propRadius, propSpread, tileSurfaceFor, SOLID_CATEGORIES, colliderForCategory, colliderForAsset, PROP_BY_CATEGORY, type PropCatalogEntry } from "../props/registry";
+import { propDefaultScale, propCategory, propRadius, propSpread, tileSurfaceFor, SOLID_CATEGORIES, SCATTER_CATEGORIES, colliderForCategory, colliderForAsset, PROP_BY_CATEGORY, type PropCatalogEntry } from "../props/registry";
 
 /** persistência das configs procedurais (sobrevive ao F5) */
 const PROC_KEY = "ragnarok.editor.procedural";
@@ -36,6 +36,26 @@ function activeSpecies(key: string, disabled: Record<string, string[]>, category
   const items = PROP_BY_CATEGORY.find((g) => g.cat === cat)?.items ?? [];
   const off = disabled[key] ?? disabled[cat];
   return off && off.length ? items.filter((it) => !off.includes(it.id)) : items;
+}
+
+/**
+ * Espécies de ROCHA ativas NA MONTANHA — pool vem da categoria "rock", mas o
+ * desligado é só o que foi desligado AQUI, sem herdar o desligado do scatter
+ * comum de "rock".
+ *
+ * Não pode usar `activeSpecies` puro: aquele cai em `disabled[cat]` como
+ * reserva quando a chave da camada não existe — e para "rock" no scatter
+ * comum, `disabled["rock"]` nasce com TUDO desligado em mapa novo
+ * (`allSpeciesDisabled`). Herdando isso, o slider de montanha voltaria a
+ * gerar zero rocha por padrão, que era exatamente o problema que a versão
+ * anterior (sem seletor próprio) evitava usando o catálogo inteiro sempre.
+ * Sem entrada própria, o padrão daqui é "tudo ligado" — símetrico ao inverso
+ * do resto do scatter, mas é o único jeito de não regredir o que já existia.
+ */
+function activeMountainRockSpecies(key: string, disabled: Record<string, string[]>): PropCatalogEntry[] {
+  const items = PROP_BY_CATEGORY.find((g) => g.cat === "rock")?.items ?? [];
+  const off = disabled[key] ?? [];
+  return off.length ? items.filter((it) => !off.includes(it.id)) : items;
 }
 
 /** mapa novo começa com TODAS as espécies desmarcadas em TODAS as categorias
@@ -86,13 +106,54 @@ function fbm(x: number, y: number, seed: number): number {
  * fazia melhor, porque o pincel escava a bacia sobre o corpo inteiro e o
  * gerador cavava discos soltos. Água continua existindo: pelo pincel e pelo rio.
  */
-export interface TerrainFeatures {
-  hill: number; // 0-100: colinas (relevo suave e ANDÁVEL)
-  mountain: number; // 0-100: montanhas (maciço de rocha, BLOQUEIA)
+/**
+ * Uma célula que o gerador de montanha escreveu, com o que havia ANTES.
+ *
+ * Guardar só o índice (como era antes de dividir "Montanhas" em dois
+ * sliders) bastava enquanto desfazer sempre significava "walkable/grass" —
+ * mas montanha pode nascer em cima de um `cliff` (fora do escopo "Dentro"),
+ * e regenerar duas vezes na mesma sessão (um slider, depois o outro) tornou
+ * comum precisar desfazer de verdade. Sem o estado original, desfazer
+ * chutava chão andável em cima de uma ravina.
+ */
+export interface MontanhaCell {
+  i: number;
+  colisaoOriginal: GameMap["collision"][number];
+  superficieOriginal: SurfaceType;
+  alturaOriginal: number;
 }
 
-/** seed por feature (colina/montanha) — cada ♻ re-randomiza só a sua */
-type TerrainSeeds = Record<keyof TerrainFeatures, number>;
+export interface TerrainFeatures {
+  hill: number; // 0-100: colinas (relevo suave e ANDÁVEL)
+  /**
+   * Montanha virou DOIS sliders (pedido do usuário): quantos maciços nascem
+   * e quão grandes eles são — "tamanho" aqui é um número só, mas ele escala
+   * ALTURA e RAIO juntos ("pra cima e pros lados"), não dois eixos
+   * independentes. Antes era um slider único casando as duas coisas; agora
+   * dá pra pedir "poucas montanhas bem grandes" ou "muitas montanhas
+   * pequenas" sem um forçar o outro.
+   */
+  mountainQty: number; // 0-100: QUANTOS maciços nascem
+  mountainSize: number; // 0-100: TAMANHO de cada um (altura + raio)
+}
+
+/**
+ * Seed por GERADOR: colina e montanha, não por slider.
+ *
+ * Montanha tem DOIS sliders (`mountainQty`/`mountainSize`) mas UM gerador só
+ * — as duas leituras alimentam o mesmo laço de posicionamento, então
+ * re-sortear qualquer um dos dois botões re-sorteia o mesmo `mountain`
+ * (ver `seedKeyFor`). Não é `Record<keyof TerrainFeatures, number>` mais,
+ * de propósito: um terceiro slot de seed pra "mountainSize" não teria com o
+ * que ligar sozinho.
+ */
+type TerrainSeeds = { hill: number; mountain: number };
+
+/** a chave de SEED que um slider de `TerrainFeatures` usa — `hill` tem a sua
+ * própria, `mountainQty`/`mountainSize` compartilham `mountain` (ver `TerrainSeeds`). */
+function seedKeyFor(feature: keyof TerrainFeatures): keyof TerrainSeeds {
+  return feature === "hill" ? "hill" : "mountain";
+}
 
 /** gera heightmap/collision/surface/ramps do zero: base plana + colinas (fbm) +
  * lagos (água em bacias). Cada feature usa o SEU seed → reciclar uma não mexe
@@ -117,8 +178,8 @@ function generateTerrain(
    * A colina não precisa disto — ela reescreve a altura de TODA célula do escopo
    * a cada passada, então baixar o slider já achata o que subiu.
    */
-  montanhaAnterior: readonly number[] = [],
-): Pick<GameMap, "heightmap" | "collision" | "surface" | "ramps"> & { montanhaCells: number[] } {
+  montanhaAnterior: readonly MontanhaCell[] = [],
+): Pick<GameMap, "heightmap" | "collision" | "surface" | "ramps"> & { montanhaCells: MontanhaCell[] } {
   const { width: W, height: H } = map.size;
   const n = W * H;
   /**
@@ -138,19 +199,36 @@ function generateTerrain(
     editar ? (map.surface.length ? map.surface.slice() : surfaceFromCollision(map)) : new Array(n).fill("grass")
   ) as SurfaceType[];
   /**
-   * Desfaz a montanha da passada anterior.
+   * Desfaz a montanha da passada anterior — restaurando o que ESTAVA ALI
+   * antes, não um "walkable/grass" chutado.
+   *
+   * Achado ao dividir "Montanhas" em dois sliders (quantidade/tamanho): ajustar
+   * os dois em sequência gera a montanha DUAS VEZES na mesma sessão (uma por
+   * slider), então desfazer-e-regenerar deixou de ser um caso raro. Em
+   * qualquer escopo que não seja "Dentro", o pincel/gerador de montanha PODE
+   * nascer em cima de um BURACO (`cliff`) — é permitido de propósito, é o que
+   * deixa esculpir um paredão na moldura. Só que "desfazer para walkable/grass"
+   * não sabe se aquele buraco era originalmente uma ravina: a segunda chamada
+   * (ajustar o tamanho) desfazia a montanha da primeira e, ao invés de devolver
+   * o `cliff`, deixava CHÃO ANDÁVEL — abrindo passagem onde nunca deveria (pego
+   * por `blockedInviolavel.test.ts`, escopo "hole").
    *
    * Só onde AINDA é rocha nossa: se o autor pintou por cima, ou um rio passou
-   * ali, apagar para grama destruiria a edição dele. Mesma cautela da estrada.
+   * ali, apagar destruiria a edição dele. Mesma cautela da estrada.
    */
-  for (const i of montanhaAnterior) {
-    if (surface[i] === "stone" && collision[i] === "wall") {
-      surface[i] = "grass";
-      collision[i] = "walkable";
-      heightmap[i] = 0;
+  for (const c of montanhaAnterior) {
+    if (surface[c.i] === "stone" && collision[c.i] === "wall") {
+      surface[c.i] = c.superficieOriginal;
+      collision[c.i] = c.colisaoOriginal;
+      heightmap[c.i] = c.alturaOriginal;
     }
   }
-  const montanhaCells: number[] = [];
+  const montanhaCells: MontanhaCell[] = [];
+  // uma célula pode ser tocada por VÁRIOS maciços na mesma passada (`for k`
+  // mais abaixo) — captura o original só na PRIMEIRA vez, senão a segunda
+  // captura gravaria o estado JÁ montanhoso da primeira como se fosse o
+  // "original", e desfazer devolveria montanha em vez do chão de baixo.
+  const originalCapturado = new Set<number>();
   const rampAt = new Map<number, number>(); // célula → borda de descida
   const clamp = (v: number) => Math.max(0, Math.min(12, v));
   const noEscopo = (col: number, row: number) => !editar || cellInScope(map, scope, col, row);
@@ -191,24 +269,27 @@ function generateTerrain(
    * próxima surpresa, e a aspereza é justamente o que distingue maciço de
    * cúpula.
    *
-   * O slider governa quantas e quão altas — as duas crescem juntas, como pedido.
-   * Cada maciço tem raio próprio (`R`), e o falloff `smoothstep` dá a massa;
-   * fora dele nada é tocado, então o campo entre montanhas continua campo.
+   * Dois sliders independentes: QUANTIDADE decide quantos maciços nascem,
+   * TAMANHO decide quão grandes — antes das duas juntas, agora cada uma na
+   * sua. Cada maciço tem raio próprio (`R`), e o falloff `smoothstep` dá a
+   * massa; fora dele nada é tocado, então o campo entre montanhas continua
+   * campo.
    *
    * Grava as três coisas, como o pincel: altura, `collision: "wall"` e
    * `surface: "stone"`. Erguer sem fechar passagem deixaria o jogador subir o
    * pico a pé — `isWalkable` e o A* olham só a colisão.
    */
-  if (f.mountain > 0) {
-    const t = f.mountain / 100;
+  if (f.mountainQty > 0) {
+    const tQtd = f.mountainQty / 100;
+    const tTam = f.mountainSize / 100;
     const rnd = rngFrom(seeds.mountain);
     /** quantos maciços: proporcional à ÁREA, para a densidade não mudar com o mapa */
-    const quantos = Math.max(1, Math.round(t * (n / 9000)));
-    const alturaMax = 6 + t * 18;
+    const quantos = Math.max(1, Math.round(tQtd * (n / 9000)));
+    const alturaMax = 6 + tTam * 18;
     for (let k = 0; k < quantos; k++) {
       const cc = Math.floor(rnd() * W);
       const cr = Math.floor(rnd() * H);
-      const R = 4 + Math.floor(rnd() * (6 + t * 14));
+      const R = 4 + Math.floor(rnd() * (6 + tTam * 14));
       for (let row = Math.max(0, cr - R); row <= Math.min(H - 1, cr + R); row++)
         for (let col = Math.max(0, cc - R); col <= Math.min(W - 1, cc + R); col++) {
           const d = Math.hypot(col - cc, row - cr);
@@ -221,10 +302,18 @@ function generateTerrain(
           const peso = smooth(1 - d / R);
           const alto = peso * alturaMax * perfilDeRocha(col, row, 0.6);
           if (alto < 0.6) continue; // a saia do maciço não vira mancha de rocha rala
+          if (!originalCapturado.has(i)) {
+            originalCapturado.add(i);
+            montanhaCells.push({
+              i,
+              colisaoOriginal: collision[i] as GameMap["collision"][number],
+              superficieOriginal: surface[i]!,
+              alturaOriginal: heightmap[i] ?? 0,
+            });
+          }
           heightmap[i] = clamp(Math.max(heightmap[i] ?? 0, alto));
           collision[i] = "wall";
           surface[i] = "stone";
-          montanhaCells.push(i);
           rampAt.delete(i); // trilha engolida pelo maciço
         }
     }
@@ -475,15 +564,15 @@ const EDIT_SCOPES: EditScope[] = ["all", "inside", "border", "hole"];
 
 /** relevo/lago em zero em TODAS as camadas (nada gera até o usuário pedir) */
 function emptyTerrainFeatures(): Record<EditScope, TerrainFeatures> {
-  return Object.fromEntries(EDIT_SCOPES.map((e) => [e, { hill: 0, mountain: 0 }])) as Record<
+  return Object.fromEntries(EDIT_SCOPES.map((e) => [e, { hill: 0, mountainQty: 0, mountainSize: 0 }])) as Record<
     EditScope,
     TerrainFeatures
   >;
 }
 
 /** nenhuma montanha gerada ainda, em camada nenhuma */
-function semMontanha(): Record<EditScope, number[]> {
-  return Object.fromEntries(EDIT_SCOPES.map((e) => [e, [] as number[]])) as Record<EditScope, number[]>;
+function semMontanha(): Record<EditScope, MontanhaCell[]> {
+  return Object.fromEntries(EDIT_SCOPES.map((e) => [e, [] as MontanhaCell[]])) as Record<EditScope, MontanhaCell[]>;
 }
 
 /** seeds independentes por camada: re-randomizar a borda não mexe no miolo */
@@ -667,16 +756,21 @@ const MASSA_NO_CUME = 2.5;
  */
 function generateMountainRocks(
   map: GameMap,
-  o: { amount: number; seed: number; scope: EditScope; occupied?: OccupiedArea[]; jitterScale: boolean; jitterRot: boolean },
+  o: {
+    amount: number;
+    seed: number;
+    scope: EditScope;
+    /** espécies ativas (subconjunto de "rock" — ver `activeMountainRockSpecies`) */
+    species: PropCatalogEntry[];
+    occupied?: OccupiedArea[];
+    jitterScale: boolean;
+    jitterRot: boolean;
+  },
 ): MapProp[] {
   if (o.amount <= 0) return [];
-  // todas as rochas do catálogo, da menor para a maior — a montanha não tem
-  // seletor de espécies próprio, e filtrar pelo `procDisabled` da categoria
-  // "rock" faria o slider gerar zero justamente em mapa novo, onde tudo nasce
-  // desmarcado
-  const especies = [...(PROP_BY_CATEGORY.find((g) => g.cat === "rock")?.items ?? [])].sort(
-    (a, b) => (a.radius ?? 0) - (b.radius ?? 0),
-  );
+  // da menor para a maior — a ordem é o que faz a espécie sair da ALTURA
+  // relativa (matacão no cume, pedra miúda na saia)
+  const especies = [...o.species].sort((a, b) => (a.radius ?? 0) - (b.radius ?? 0));
   if (especies.length === 0) return [];
 
   const { width: W, height: H } = map.size;
@@ -927,6 +1021,22 @@ const LEDGE_MAX = 24;
 const BARRANCO_CELULAS = 3;
 
 /**
+ * Curva de suavização QUÍNTICA (Ken Perlin, "smootherstep"): zera a 1ª E A 2ª
+ * derivada nas duas pontas (C2), não só a 1ª como a cúbica `smoothstep` (C1).
+ *
+ * A altura do barranco vira NORMAL do terreno (gradiente da altura,
+ * `heightField.cornerNormal`), e é a normal que decide a luz. Com C1 a
+ * curvatura ainda pula nas pontas — some o degrau de altura, mas sobra uma
+ * faceta sutil bem na beira da água e na borda externa do barranco. C2 tira
+ * essa faceta também, pelo custo de um polinômio de grau 5 em vez de 3 —
+ * irrelevante numa janela de ~80 células por semente.
+ */
+function suave(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
+/**
  * Escava o BARRANCO em volta da água recém-criada.
  *
  * Pedido do `next-change.txt`, item 1: a terra ao lado tem de ficar um pouco
@@ -939,9 +1049,29 @@ const BARRANCO_CELULAS = 3;
  *      agua
  * ```
  *
- * Anda para fora a partir das células de água (`sementes`) e interpola a altura
- * entre o nível do campo e o do leito. Não encosta em bloqueio nem em água
- * vizinha: os dois têm relevo próprio.
+ * DISTÂNCIA EUCLIDIANA REAL até a água mais próxima, não passos de BFS.
+ *
+ * A versão antiga andava em ANÉIS de vizinho (grafo 8-conectado): duas
+ * células de terra genuinamente à mesma distância da água podiam cair em
+ * anéis DIFERENTES sempre que o contorno da água não fosse um círculo
+ * perfeito — e um pincel arrastado à mão nunca é (é a união de vários
+ * círculos sobrepostos, contorno ondulado). Anel diferente = fração `t`
+ * diferente = degrau de altura entre duas células vizinhas na margem. Era a
+ * causa raiz do serrilhado da saia (`Desktop/ref/agua-bugada.jpg`): a
+ * profundidade da ÁGUA já ficou uniforme (correção anterior), mas a altura da
+ * TERRA ao lado — que vira a BASE da parede — continuava irregular.
+ *
+ * Aqui cada célula de terra recebe a menor distância euclidiana (`Math.hypot`)
+ * até QUALQUER célula da água nova, medida numa janela local por semente — o
+ * mesmo princípio que a lâmina já usa pra margem/alpha (`RAIO_BORRAO` em
+ * `squareChunks.ts`), agora também pro relevo. Distância euclidiana não
+ * depende do caminho no grafo, só da geometria: duas células à mesma
+ * distância real da água SEMPRE recebem o mesmo `t`, ponto.
+ *
+ * Janela por semente, não grade do mapa inteiro: como só interessa até
+ * `BARRANCO_CELULAS+1` células de distância (além disso `t` satura em 1, sem
+ * efeito nenhum), o custo é O(sementes × janela) — mesma ordem do BFS antigo,
+ * independente do tamanho do mapa ou de quantos chunks o rio atravessa.
  *
  * Devolve `true` se mexeu em alguma coisa.
  */
@@ -952,33 +1082,55 @@ function escavarBarranco(
   collision: GameMap["collision"],
   sementes: Iterable<number>,
   nivelDaAgua: number,
+  /**
+   * De onde ler o "campo" (a altura de fora do barranco que a rampa mira) —
+   * por padrão o próprio `heightmap` que a função escreve, como sempre foi.
+   *
+   * Chamar a função DUAS VEZES sobre a mesma célula (não é o caso de uso
+   * normal — uma pincelada só passa aqui uma vez — mas é exatamente o que um
+   * REPARO faz, de propósito, sobre barranco que já existe) lê de volta o
+   * `alvo` que a primeira chamada acabou de escrever: o campo "encolhe" a
+   * cada rodada e a rampa desce um pouco mais a cada reparo, em vez de
+   * estabilizar. Um `campoDe` congelado ANTES do reparo começar quebra esse
+   * laço — a segunda chamada mira o mesmo campo que a primeira mirou.
+   */
+  campoDe: readonly number[] = heightmap,
 ): boolean {
   const { width: W, height: H } = map.size;
-  const daAgua = new Map<number, number>();
-  const dentro = new Set<number>(sementes);
-  let frente = [...dentro];
-  let mudou = false;
-  for (let anel = 1; anel <= BARRANCO_CELULAS; anel++) {
-    const proxima: number[] = [];
-    for (const i of frente) {
-      const col = i % W;
-      const row = Math.floor(i / W);
-      for (const [nc, nr] of editorGrid().neighbors(col, row)) {
-        if (nc < 0 || nc >= W || nr < 0 || nr >= H) continue;
-        const j = cellIndex(map, nc, nr);
-        if (dentro.has(j) || daAgua.has(j)) continue;
+  // além deste raio t já satura em 1 (altura = campo, sem mudança) — janela
+  // por semente, nunca a grade do mapa inteiro
+  const R = BARRANCO_CELULAS + 1;
+  const menorDist = new Map<number, number>();
+  for (const s of sementes) {
+    const sc = s % W;
+    const sr = Math.floor(s / W);
+    const c0 = Math.max(0, sc - R);
+    const c1 = Math.min(W - 1, sc + R);
+    const r0 = Math.max(0, sr - R);
+    const r1 = Math.min(H - 1, sr + R);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const j = cellIndex(map, c, r);
+        // não é candidato de barranco: já é água nossa, ou bloqueio de
+        // outra natureza (mata/penhasco importados) — cada um tem relevo
+        // próprio, o barranco não pisa em nenhum dos dois
         if (surface[j] === "river" || surface[j] === "water") continue;
         if (collision[j] === "wall" || collision[j] === "cliff") continue;
-        daAgua.set(j, anel);
-        proxima.push(j);
+        const dx = c - sc;
+        const dz = r - sr;
+        const d = Math.hypot(dx, dz); // distância EUCLIDIANA real, em células
+        if (d > R) continue;
+        const atual = menorDist.get(j);
+        if (atual === undefined || d < atual) menorDist.set(j, d);
       }
     }
-    frente = proxima;
   }
-  for (const [j, anel] of daAgua) {
-    // t = 0 na beira da água, 1 na borda de fora do barranco
-    const t = anel / (BARRANCO_CELULAS + 1);
-    const campo = Math.min(1, heightmap[j] ?? 0);
+  let mudou = false;
+  for (const [j, d] of menorDist) {
+    // t = 0 na beira da água, 1 na borda externa do barranco — suavizado,
+    // não linear, pra não plantar quina de derivada na malha
+    const t = suave(Math.min(1, d / (BARRANCO_CELULAS + 1)));
+    const campo = Math.min(1, campoDe[j] ?? 0);
     const alvo = nivelDaAgua + (campo - nivelDaAgua) * t;
     if (alvo < (heightmap[j] ?? 0)) {
       heightmap[j] = alvo;
@@ -1056,6 +1208,16 @@ const RAIZ_ANEIS = 2;
  * fora. Célula bloqueada de OUTRA natureza (a mata importada, a ravina) fica de
  * fora: erguer ali daria ladeira onde o servidor não deixa subir, que é a mesma
  * regra que o `cornerLevel` já segue.
+ *
+ * ÁGUA (`collision === "water"`) também fica de fora, pela mesma razão que
+ * `cornerLevel` nunca mistura o grupo `"water"` com `"blocked"`: sem esta
+ * guarda, `heightmap[j] = Math.max(...)` escrevia DIRETO na altura da célula
+ * de rio/lago vizinha — e essa altura é a mesma que `cornerLevel` lê para o
+ * canto de água. Era o "a água sobe a montanha junto com o relevo novo"
+ * (`Desktop/ref/agua-bugada.jpg`, item 1): a separação de grupos só protegia a
+ * LEITURA do canto, nunca esta escrita anterior no array cru. A função é
+ * de antes dos três grupos existirem — o comentário só falava em "bloqueio de
+ * outra natureza", água não estava no radar.
  */
 function suavizarRaiz(
   map: GameMap,
@@ -1080,8 +1242,10 @@ function suavizarRaiz(
         const j = cellIndex(map, nc, nr);
         if (visto.has(j)) continue;
         visto.add(j);
-        // a raiz é chão: não invade bloqueio de outra natureza
-        if (collision[j] === "wall" || collision[j] === "cliff") continue;
+        // a raiz é chão ANDÁVEL de verdade: não invade bloqueio de outra
+        // natureza nem água (rio/lago tem sua própria altura de canto — ver
+        // comentário da função)
+        if (collision[j] === "wall" || collision[j] === "cliff" || collision[j] === "water") continue;
         heightmap[j] = Math.max(heightmap[j] ?? 0, (heightmap[i] ?? 0) * fracao);
         proxima.push(j);
       }
@@ -1285,6 +1449,16 @@ interface EditorState {
   currentAsset: string | null;
   propPaint: boolean; // place em modo pincel: espalha vários ao arrastar
   propDensity: number; // 1-10, chance de preencher cada célula do pincel
+  /**
+   * Raio do pincel de DECORAÇÃO (0-5), separado do `brushSize` do pincel de
+   * Terreno (0-12).
+   *
+   * Os dois sliders da UI ("Tamanho" em Terreno, "Raio" em Decoração)
+   * escreviam no MESMO campo — trocar de ferramenta fazia um herdar o valor
+   * do outro, e o raio de decoração podia passar do teto documentado (5) sem
+   * o número na tela bater com a posição do controle.
+   */
+  propBrushRadius: number;
   camMove: boolean; // espaço pressionado → modo mover câmera (desliga ferramentas)
   dragging: { kind: "prop" | "spawn"; index: number } | null; // arrastar objeto no chão
   clipboard: { kind: "prop"; data: MapProp } | { kind: "spawn"; data: MapSpawn } | null;
@@ -1300,14 +1474,16 @@ interface EditorState {
   future: GameMap[];
 
   init: (map: GameMap) => void;
-  newMap: () => void;
+  newMap: (name?: string, width?: number, height?: number) => void;
   resizeMap: (width: number, height: number) => void; // redimensiona a grade (preserva sobreposição)
+  setMapName: (name: string) => void;
   addProp: (p: MapProp) => void;
   /** peça de chão (estrada/rio/costa/rampa) → pinta a superfície da célula */
   placeTileAsset: (col: number, row: number, assetId: string) => void;
   paintProps: (col: number, row: number) => void; // espalha o asset atual no raio
   setPropPaint: (on: boolean) => void;
   setPropDensity: (n: number) => void;
+  setPropBrushRadius: (n: number) => void;
   updateProp: (i: number, patch: Partial<MapProp>) => void;
   rotateSelected: (deltaRad: number) => void; // gira o prop no eixo Y (horizontal)
   scaleSelected: (delta: number) => void; // aumenta/diminui escala em passos
@@ -1352,6 +1528,8 @@ interface EditorState {
   /** rochas nas células de montanha (parede + pedra) do escopo ativo */
   setMountainRocks: (amount: number) => void;
   reseedMountainRocks: () => void;
+  /** liga/desliga 1 espécie de rocha da montanha (pool "rock", desligado próprio) */
+  toggleMountainRockSpecies: (assetId: string) => void;
   toggleSpecies: (category: string, assetId: string) => void; // liga/desliga 1 asset
   restoreProcedural: () => void; // restaura configs salvas (F5) e regenera
   setProcJitter: (patch: { scale?: boolean; rot?: boolean }) => void;
@@ -1367,7 +1545,7 @@ interface EditorState {
    * gerador EDITA o mapa e a rocha da passada anterior ja fazia parte dele.
    * Mesma solucao da estrada — quem gera precisa saber o que gerou.
    */
-  montanhaCells: Record<EditScope, number[]>;
+  montanhaCells: Record<EditScope, MontanhaCell[]>;
   setTerrainFeature: (feature: keyof TerrainFeatures, amount: number) => void;
   reseedFeature: (feature: keyof TerrainFeatures) => void; // ♻ re-randomiza SÓ essa feature
   reseedTerrain: () => void; // ♻ re-randomiza todas
@@ -1387,6 +1565,16 @@ interface EditorState {
    */
   riverWidth: number;
   setRiverWidth: (n: number) => void;
+  /**
+   * Meia-largura da estrada, em células. 0 = sempre foi (1 célula de fio).
+   *
+   * Acima de 0, cada célula da espinha (o traçado que já existe, com rampa e
+   * corredor de altura) ganha um "ombro" de células ao redor, na MESMA altura
+   * e textura — sem rampa própria e sem entrar no corredor: só a espinha
+   * decide onde a estrada sobe ou desce, a largura só acompanha.
+   */
+  roadWidth: number;
+  setRoadWidth: (n: number) => void;
   roadCells: number[]; // células viradas estrada (p/ reverter no limpar)
   /**
    * Textura da estrada GERADA — escolha do usuário.
@@ -1411,6 +1599,11 @@ interface EditorState {
    * Sempre vazio hoje — mantido pra "limpar" reverter mapas antigos. */
   fordCells: number[];
   clearPaths: () => void; // reverte estradas + rio
+  /**
+   * Refaz bacia + barranco de TODA água já pintada, com o algoritmo de hoje —
+   * sem mudar onde a água está. Ver implementação para o porquê.
+   */
+  repairWaterBanks: () => void;
   clearProps: () => void; // remove todas as decorações
   /**
    * Escopo das edições num mapa importado (change.txt): o mapa do rAthena tem
@@ -1519,6 +1712,27 @@ function histPush(s: EditorState): { past: GameMap[]; future: GameMap[] } {
   return { past: s.map ? [...s.past, s.map].slice(-HISTORY_LIMIT) : s.past, future: [] };
 }
 
+/**
+ * CONVENÇÃO DE UNDO — uma ação, um push.
+ *
+ * `histPush` só entra numa action quando ela é o ÚNICO jeito de mutar o mapa
+ * naquele gesto (clique único: addProp, addSpawn, placePrefab, commitArea,
+ * deleteSelected, clearAll…). Qualquer ação que faz parte de um GESTO
+ * CONTÍNUO — arrasto de pincel, arrasto de slider, clique-e-solta de um
+ * traçado — NUNCA chama `histPush` sozinha: quem abre o passo de undo é
+ * `beginStroke()`, uma vez, no início do gesto (mousedown/pointerdown), e a
+ * função chamada repetidamente durante o gesto (paintCell, paintProps,
+ * placeTileAsset, resizeMap, setTerrainFeature, setCategoryAmount…) só
+ * escreve no `map`, sem tocar `past`/`future`.
+ *
+ * Duas vezes essa convenção foi violada em silêncio (♻ de Relevo/Montanha e o
+ * slider de tamanho do mapa duplicavam o snapshot a cada clique/tick; peça de
+ * chão arrastada empilhava um passo POR CÉLULA) — os três foram corrigidos
+ * quando descobertos. Nova action que muta `map`: se ela é chamada de um
+ * `onClick` isolado, pode ter `histPush` própria; se é chamada de um
+ * `onChange`/`onMove` dentro de um arrasto, NÃO pode.
+ */
+
 export const useEditorStore = create<EditorState>((set) => ({
   map: null,
   selected: null,
@@ -1540,6 +1754,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   currentAsset: null,
   propPaint: false,
   propDensity: 5,
+  propBrushRadius: 2,
   camMove: false,
   dragging: null,
   clipboard: null,
@@ -1571,6 +1786,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   fordCells: [],
   roadSalt: 0,
   riverWidth: 2,
+  roadWidth: 0,
   mountainRough: 0.75,
   ledgeAngle: 45,
   prefabs: loadPrefabs(),
@@ -1602,8 +1818,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       lighting: { ...(map.lighting ?? DEFAULT_LIGHTING) }, // mapa salvo já traz seu sol/ambiente
     });
   },
-  newMap: () => {
-    const novo = createBlankMap(`novo_${Date.now().toString(36)}`, "Novo mapa");
+  newMap: (name, width, height) => {
+    const novo = createBlankMap(`novo_${Date.now().toString(36)}`, name || "Novo mapa", width, height);
     setEditorGrid(novo);
     set({
       map: novo,
@@ -1634,25 +1850,24 @@ export const useEditorStore = create<EditorState>((set) => ({
       const W = Math.max(4, Math.min(500, Math.round(width)));
       const H = Math.max(4, Math.min(500, Math.round(height)));
       if (W === map.size.width && H === map.size.height) return s;
-      const n = W * H;
-      const heightmap = new Array<number>(n).fill(0);
-      const collision = new Array(n).fill("walkable") as GameMap["collision"];
-      const surface = new Array(n).fill("grass") as SurfaceType[];
-      const oldSurface = map.surface.length ? map.surface : new Array(map.heightmap.length).fill("grass");
-      const oldRamps = rampMap(map.ramps);
-      const ramps = new Map<number, number>();
-      for (let row = 0; row < Math.min(H, map.size.height); row++) {
-        for (let col = 0; col < Math.min(W, map.size.width); col++) {
-          const oi = row * map.size.width + col;
-          const ni = row * W + col;
-          heightmap[ni] = map.heightmap[oi] ?? 0;
-          collision[ni] = map.collision[oi] ?? "walkable";
-          surface[ni] = (oldSurface[oi] as SurfaceType) ?? "grass";
-          const r = oldRamps.get(oi);
-          if (r != null) ramps.set(ni, r); // índice muda com a largura: remapeia
-        }
-      }
-      return { ...histPush(s), map: { ...map, size: { width: W, height: H }, heightmap, collision, surface, ramps: flattenRamps(ramps) }, dirty: true };
+      // Lógica de array (preserva sobreposição, reindexa rampas) mora em
+      // `@ragnarok/map-format` desde que o admin passou a precisar dela pra
+      // editar tamanho de mapa ANTES de abrir o editor 3D — as duas telas
+      // usam a MESMA função, senão "quantos objetos ficam fora" divergiria
+      // entre elas para o mesmo resize.
+      const { map: resized } = resizeGameMap(map, W, H);
+      // SEM histPush aqui: o slider de tamanho (ProceduralPanel) já chama
+      // beginStroke() no onPointerDown, e o onChange dispara isto a cada tick
+      // do arrasto — histPush próprio faria cada tick empilhar um snapshot
+      // (dezenas por arrasto), violando "um arrasto = um passo de undo".
+      return { map: resized, dirty: true };
+    }),
+  setMapName: (name) =>
+    set((s) => {
+      if (!s.map) return s;
+      const limpo = name.trim();
+      if (!limpo || limpo === s.map.name) return s;
+      return { ...histPush(s), map: { ...s.map, name: limpo }, dirty: true };
     }),
 
   addProp: (p) =>
@@ -1704,8 +1919,13 @@ export const useEditorStore = create<EditorState>((set) => ({
         const c = editorGrid().worldToCell(p.position[0], p.position[2]);
         return !(c.col === col && c.row === row);
       });
+      // SEM histPush: EditorScene chama beginStroke() UMA VEZ no mousedown e
+      // reusa o mesmo traçado a cada célula pintada durante o arrasto (igual
+      // ao pincel de terreno) — um push aqui faria CADA célula da estrada/rio
+      // arrastada virar um passo de undo separado (achado durante o Módulo 1,
+      // não estava na auditoria original: peça de chão era o único "pincel"
+      // de arrastar que se auto-empilhava).
       return {
-        ...histPush(s),
         map: { ...map, surface, collision, props, ramps: flattenRamps(ramps) },
         // estrada/rio pintados à mão entram na lista de reversão do "limpar"
         roadCells: surf === "dirt" && !s.roadCells.includes(i) ? [...s.roadCells, i] : s.roadCells,
@@ -1713,34 +1933,55 @@ export const useEditorStore = create<EditorState>((set) => ({
         dirty: true,
       };
     }),
-  // pincel de vegetação: espalha o asset atual nas células do raio (densidade),
-  // com jitter de posição, rotação aleatória e escala variando ±20%. Respeita um
-  // espaçamento mínimo pra não empilhar. NÃO empilha histórico (beginStroke faz 1×).
+  /**
+   * Pincel de vegetação: espalha o asset atual nas células do raio
+   * (densidade), com jitter de posição, rotação aleatória e escala variando
+   * ±20%. NÃO empilha histórico (beginStroke faz 1×).
+   *
+   * Módulo 6 (Assets): antes esta era a ÚNICA das duas ferramentas que
+   * colocam decoração (a outra é `generateScatter`, a geração procedural) que
+   * não passava pelas regras centrais — plantava em qualquer superfície
+   * (árvore na neve, pedra sobre pedra), em célula bloqueada ou de água, e só
+   * conferia o escopo de edição no CENTRO do pincel, não célula a célula.
+   * Agora usa exatamente a mesma regra (`podeNascer`, `editor/podeNascer.ts`)
+   * e o mesmo índice espacial (`areaIndex`/`occupiedAreas`) que o gerador —
+   * uma fonte só de "isto pode nascer aqui" para as duas ferramentas.
+   */
   paintProps: (col, row) =>
     set((s) => {
       const map = s.map;
       if (!map || !s.currentAsset) return s;
-      // escopo escolhido na barra: fora dele, a edição simplesmente não acontece
-      if (!cellInScope(map, s.editScope, col, row)) return s;
       const { width: W, height: H } = map.size;
+      const categoria = propCategory(s.currentAsset);
+      // Só as categorias que `podeNascer` de fato cataloga (as mesmas que a
+      // geração procedural usa, `SCATTER_CATEGORIES`) passam pela tabela de
+      // superfície/inclinação. Ponte e "outro" não têm regra de superfície
+      // definida — restringir por uma tabela que não existe desligaria o
+      // pincel PARA ELAS por completo; continuam exigindo só chão andável.
+      const restrito = categoria != null && SCATTER_CATEGORIES.includes(categoria);
       const baseScale = propDefaultScale(s.currentAsset);
-      const spacing = Math.max(2, baseScale * 0.5); // props grandes → mais espaçados
-      const cells = cellsInRadius(W, H, col, row, s.brushSize);
+      const cells = cellsInRadius(W, H, col, row, s.propBrushRadius);
       const added: MapProp[] = [];
-      const existing = map.props.map((p) => p.position);
-      const tooClose = (x: number, z: number) => {
-        for (const e of existing) if (Math.hypot(e[0] - x, e[2] - z) < spacing) return true;
-        for (const a of added) if (Math.hypot(a.position[0] - x, a.position[2] - z) < spacing) return true;
-        return false;
-      };
+      // mesmo índice espacial do gerador procedural (O(1) amortizado por
+      // consulta) — troca o `tooClose` linear de antes, que varria TODOS os
+      // props do mapa a cada candidata.
+      const occupied = areaIndex(occupiedAreas(map.props, map.spawns));
       for (const [c, r] of cells) {
+        // Escopo conferido CÉLULA A CÉLULA, igual ao pincel de terreno
+        // (paintCell) — barrar só pelo centro deixava o pincel furar o
+        // escopo com um raio largo.
+        if (!cellInScope(map, s.editScope, c, r)) continue;
         if (Math.random() > s.propDensity / 10) continue;
+        const i = cellIndex(map, c, r);
+        if (restrito ? !podeNascer(map, categoria!, c, r) : map.collision[i] !== "walkable") continue;
         const { x, z } = editorGrid().cellToWorld(c, r);
         const jx = x + (Math.random() - 0.5) * 1.2;
         const jz = z + (Math.random() - 0.5) * 1.2;
-        if (tooClose(jx, jz)) continue;
-        const y = editorGrid().levelToY(map.heightmap[cellIndex(map, c, r)] ?? 0);
         const sc = baseScale * (0.8 + Math.random() * 0.4);
+        const rad = propSpread(s.currentAsset, sc);
+        if (occupied.blocks(jx, jz, rad)) continue;
+        occupied.add({ x: jx, z: jz, r: rad });
+        const y = editorGrid().levelToY(map.heightmap[i] ?? 0);
         added.push({
           id: nextPropId(),
           assetId: s.currentAsset,
@@ -1755,6 +1996,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     }),
   setPropPaint: (propPaint) => set({ propPaint }),
   setPropDensity: (n) => set({ propDensity: Math.max(1, Math.min(10, Math.round(n))) }),
+  setPropBrushRadius: (n) => set({ propBrushRadius: Math.max(0, Math.min(5, Math.round(n))) }),
   // gira SÓ nos 6 lados do hexágono: primeiro encaixa a rotação atual (podia
   // vir torta do scatter aleatório) no múltiplo de 60° mais próximo, depois
   // soma o passo — nunca fica num ângulo fora dos 6 alinhamentos possíveis.
@@ -1972,6 +2214,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         amount,
         seed,
         scope,
+        species: activeMountainRockSpecies(chave, s.procDisabled),
         occupied: occupiedAreas(kept, s.map.spawns),
         jitterScale: s.procJitterScale,
         jitterRot: s.procJitterRot,
@@ -1992,11 +2235,37 @@ export const useEditorStore = create<EditorState>((set) => ({
         amount: s.procAmounts[chave] ?? 0,
         seed,
         scope,
+        species: activeMountainRockSpecies(chave, s.procDisabled),
         occupied: occupiedAreas(kept, s.map.spawns),
         jitterScale: s.procJitterScale,
         jitterRot: s.procJitterRot,
       });
       return { procSeeds: { ...s.procSeeds, [chave]: seed }, map: { ...s.map, props: [...kept, ...gen] }, dirty: true };
+    }),
+  /** liga/desliga UMA espécie de rocha da montanha (por escopo, como as
+   * outras camadas) e regenera com o conjunto atualizado. */
+  toggleMountainRockSpecies: (assetId) =>
+    set((s) => {
+      if (!s.map) return s;
+      const scope = s.editScope;
+      const chave = procKey(scope, MOUNTAIN_ROCK_LAYER);
+      const cur = s.procDisabled[chave] ?? [];
+      const off = cur.includes(assetId) ? cur.filter((id) => id !== assetId) : [...cur, assetId];
+      const procDisabled = { ...s.procDisabled, [chave]: off };
+      const amount = s.procAmounts[chave] ?? 0;
+      const seed = s.procSeeds[chave] ?? (Math.random() * 1e9) | 0;
+      const kept = s.map.props.filter((p) => !isGenerated(p, MOUNTAIN_ROCK_LAYER, scope));
+      const gen = generateMountainRocks(s.map, {
+        amount,
+        seed,
+        scope,
+        species: activeMountainRockSpecies(chave, procDisabled),
+        occupied: occupiedAreas(kept, s.map.spawns),
+        jitterScale: s.procJitterScale,
+        jitterRot: s.procJitterRot,
+      });
+      saveProc(s.procAmounts, procDisabled);
+      return { procDisabled, procSeeds: { ...s.procSeeds, [chave]: seed }, map: { ...s.map, props: [...kept, ...gen] }, dirty: true };
     }),
   reseedCategory: (category) =>
     set((s) => {
@@ -2097,7 +2366,9 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => {
       if (!s.map) return s;
       const scope = s.editScope;
-      const seeds = { ...s.terrainSeeds[scope], [feature]: (Math.random() * 1e9) | 0 };
+      // mountainQty e mountainSize compartilham o MESMO seed (`mountain`) —
+      // são dois sliders, um gerador só (ver `seedKeyFor`)
+      const seeds = { ...s.terrainSeeds[scope], [seedKeyFor(feature)]: (Math.random() * 1e9) | 0 };
       const terrainSeeds = { ...s.terrainSeeds, [scope]: seeds };
       const { montanhaCells, ...t } = generateTerrain(
         s.map,
@@ -2106,8 +2377,10 @@ export const useEditorStore = create<EditorState>((set) => ({
         scope,
         s.montanhaCells[scope],
       );
+      // SEM histPush: os dois call-sites de UI (♻ da feature, ♻ "Novo relevo")
+      // já chamam beginStroke() antes de invocar isto — um push aqui duplicava
+      // o snapshot a cada clique.
       return {
-        ...histPush(s),
         terrainSeeds,
         montanhaCells: { ...s.montanhaCells, [scope]: montanhaCells },
         map: { ...s.map, ...t },
@@ -2127,8 +2400,8 @@ export const useEditorStore = create<EditorState>((set) => ({
         scope,
         s.montanhaCells[scope],
       );
+      // SEM histPush (mesma razão do reseedFeature acima)
       return {
-        ...histPush(s),
         terrainSeeds,
         montanhaCells: { ...s.montanhaCells, [scope]: montanhaCells },
         map: { ...s.map, ...t },
@@ -2363,6 +2636,45 @@ export const useEditorStore = create<EditorState>((set) => ({
           if (down != null) ramps.set(seq[t]!, down);
         }
       sanitizeRamps(ramps, heightmap, W, H); // o corredor mexeu no relevo
+      /**
+       * LARGURA: cada célula da espinha ganha um "ombro" ao redor, na mesma
+       * altura (já corrigida pelo corredor) e textura — sem rampa própria e
+       * sem entrar no corredor/`seqs`: só a espinha decide onde a estrada
+       * sobe ou desce, a largura só acompanha. Mesma ideia do alargamento do
+       * rio (`generateRiver`), sem fundo/margem porque estrada não tem
+       * profundidade — é plano do início ao fim da largura.
+       */
+      const larguraMeia = Math.max(0, Math.round(s.roadWidth));
+      if (larguraMeia > 0) {
+        const maisProxima = new Map<number, { origem: number; d: number }>();
+        for (const i of roadSet) {
+          const col = i % W;
+          const row = Math.floor(i / W);
+          for (let dr = -larguraMeia; dr <= larguraMeia; dr++) {
+            for (let dc = -larguraMeia; dc <= larguraMeia; dc++) {
+              const nc = col + dc;
+              const nr = row + dr;
+              if (nc < 0 || nc >= W || nr < 0 || nr >= H) continue;
+              const d = Math.hypot(dc, dr);
+              if (d > larguraMeia + 0.001) continue;
+              const j = cellIndex(map, nc, nr);
+              if (roadSet.has(j)) continue; // já é espinha
+              const atual = maisProxima.get(j);
+              if (!atual || d < atual.d) maisProxima.set(j, { origem: i, d });
+            }
+          }
+        }
+        for (const [j, { origem }] of maisProxima) {
+          // as mesmas travas da espinha: água nunca é atravessada, bloqueio
+          // nunca vira passagem
+          if (surface[j] === "water" || surface[j] === "river") continue;
+          if (collision[j] === "wall" || collision[j] === "cliff") continue;
+          surface[j] = superficieDaVia;
+          collision[j] = "walkable";
+          heightmap[j] = heightmap[origem] ?? 0;
+          roadCells.push(j);
+        }
+      }
       // spawns intactos (inclusive os nós auto já existentes, que agora
       // persistem) + só os nós auto criados nesta chamada
       // limpa tiles-prop legados e as pontes de mapas gerados antes de a estrada
@@ -2393,6 +2705,16 @@ export const useEditorStore = create<EditorState>((set) => ({
   // Guarda as células p/ o "limpar" reverter só o rio (sem tocar nos lagos).
   // Regenerar o TERRENO reconstrói a superfície do zero → gere o rio DEPOIS.
   setRiverWidth: (n) => set({ riverWidth: Math.max(0, Math.min(6, Math.round(n))) }),
+  /**
+   * Muda a LARGURA e redesenha na hora — mesmo padrão de `setRoadSurface`: o
+   * traçado já está no mapa, então a escolha é sobre algo que está na tela.
+   */
+  setRoadWidth: (n) => {
+    const largura = Math.max(0, Math.min(6, Math.round(n)));
+    if (useEditorStore.getState().roadWidth === largura) return;
+    set({ roadWidth: largura });
+    if (useEditorStore.getState().roadCells.length > 0) useEditorStore.getState().generateRoads();
+  },
   /**
    * Troca a textura da estrada e REDESENHA na hora.
    *
@@ -2429,12 +2751,24 @@ export const useEditorStore = create<EditorState>((set) => ({
        * trechos que saem dele; o resto do rio sai idêntico, em vez de a rede
        * inteira ser re-sorteada a cada ajuste.
        *
-       * Com menos de dois nós, o comportamento antigo continua valendo — é o
-       * atalho de "quero um rio, não importa onde".
+       * SEM nó nenhum, o comportamento antigo continua valendo — é o atalho de
+       * "quero um rio, não importa onde".
+       *
+       * Com EXATAMENTE UM nó, ele não pode ser ignorado: era o que acontecia
+       * antes (caía direto no atalho de borda-a-borda, e o traçado nem
+       * passava perto do nó que a pessoa plantou de propósito). `generateRoads`
+       * já resolve isso completando a rede com nós automáticos quando faltam;
+       * aqui o traçado sai do nó do usuário até um ponto na borda mais
+       * distante dele, então o rio pelo menos nasce onde foi pedido.
        */
       const nodeSpawns = map.spawns.filter((sp) => sp.kind === "river_node");
       let cells: { col: number; row: number }[];
-      if (nodeSpawns.length >= 2) {
+      if (nodeSpawns.length === 1) {
+        const no = editorGrid().worldToCell(nodeSpawns[0]!.position[0], nodeSpawns[0]!.position[2]);
+        const destCol = no.col < W / 2 ? W - 1 : 0; // borda mais longe do nó
+        const destRow = Math.floor(Math.random() * H);
+        cells = wanderPath(no.col, no.row, destCol, destRow, 0.16, (Math.random() * 1e9) | 0);
+      } else if (nodeSpawns.length >= 2) {
         const nodes = nodeSpawns.map((sp) => editorGrid().worldToCell(sp.position[0], sp.position[2]));
         // Prim: começa no nó 0 e vai puxando o mais próximo — a mesma rede da
         // estrada, e pelo mesmo motivo (um rio ramificado é mais crível que uma
@@ -2568,6 +2902,80 @@ export const useEditorStore = create<EditorState>((set) => ({
       const props = s.map.props.filter((p) => !(p.tags?.[0] === "_gen" && (p.tags?.[1] === "road" || p.tags?.[1] === "bridge")));
       return { ...histPush(s), map: { ...s.map, surface, collision, heightmap, props, ramps: flattenRamps(ramps) }, roadCells: [], riverCells: [], fordCells: [], dirty: true };
     }),
+  /**
+   * Reconstrói o BARRANCO/BACIA de toda água já pintada no mapa, com o
+   * algoritmo de HOJE — sem mexer no traçado nem na forma da água.
+   *
+   * `escavarBarranco`/`escavarBacia` só rodam no fim de uma pincelada ou de
+   * `generateRiver`: código novo não recalcula sozinho o que já foi ESCRITO
+   * no heightmap. Um mapa pintado antes da distância euclidiana (barranco) ou
+   * do blur da saia (`cornerLevelSaia`) carrega o degrau/serrilhado antigo
+   * gravado célula a célula — é o "corolário" que a documentação já registra
+   * ("quem quiser o perfil novo repassa o pincel na borda"), agora sem
+   * precisar redesenhar a mão o rio/lago inteiro: usa a água que já existe
+   * como semente, do mesmo jeito que um re-roll de `generateRiver` faria.
+   *
+   * Corpo de lago é agrupado por COMPONENTE CONECTADO antes de chamar
+   * `escavarBacia` — chamá-la uma vez com TODOS os lagos do mapa juntos
+   * fundiria lagoas sem relação num `corpo.size` só, e é esse tamanho que
+   * decide se a bacia bloqueia passagem (`LAGO_MIN_PARA_BLOQUEAR`) — uma
+   * poça pequena herdaria o tamanho de um lago longe dali.
+   *
+   * NÃO é idempotente byte a byte se clicado várias vezes: a rampa gravada
+   * pela primeira chamada vira o "campo" da segunda (ver `campoDe` em
+   * `escavarBarranco`), então repetir desce a margem um pouco mais a cada
+   * clique — contrai a cada rodada (nunca diverge), mas não estaciona no
+   * mesmo valor. Um clique resolve o mapa legado; não precisa de mais.
+   */
+  repairWaterBanks: () =>
+    set((s) => {
+      if (!s.map || !s.map.surface.length) return s; // sem superfície: não há água autorada pra reparar
+      const map = s.map;
+      const { width: W, height: H } = map.size;
+      const n = W * H;
+      const heightmap = map.heightmap.slice();
+      // congelado ANTES do reparo mexer em qualquer barranco — ver o
+      // comentário de `campoDe` em `escavarBarranco`. Sem isso, reparar duas
+      // vezes (ou reparar um rio E um lago que dividem barranco) descia a
+      // rampa um pouco mais a cada chamada, em vez de estabilizar.
+      const campoOriginal = map.heightmap;
+      const surface = map.surface.slice() as SurfaceType[];
+      const collision = map.collision.slice();
+
+      const riverCells: number[] = [];
+      const lakeCells: number[] = [];
+      for (let i = 0; i < n; i++) {
+        if (surface[i] === "river") riverCells.push(i);
+        else if (surface[i] === "water") lakeCells.push(i);
+      }
+      if (riverCells.length === 0 && lakeCells.length === 0) return s;
+
+      const vistoLago = new Set<number>();
+      for (const seed of lakeCells) {
+        if (vistoLago.has(seed)) continue;
+        const componente: number[] = [seed];
+        vistoLago.add(seed);
+        const pilha = [seed];
+        while (pilha.length > 0) {
+          const i = pilha.pop()!;
+          const col = i % W;
+          const row = (i - col) / W;
+          for (const [nc, nr] of editorGrid().neighbors(col, row)) {
+            if (nc < 0 || nc >= W || nr < 0 || nr >= H) continue;
+            const j = cellIndex(map, nc, nr);
+            if (vistoLago.has(j) || surface[j] !== "water") continue;
+            vistoLago.add(j);
+            componente.push(j);
+            pilha.push(j);
+          }
+        }
+        escavarBacia(map, heightmap, surface, collision, componente);
+      }
+      if (riverCells.length > 0) escavarBarranco(map, heightmap, surface, collision, riverCells, RIVER_SHALLOW_Y, campoOriginal);
+      if (lakeCells.length > 0) escavarBarranco(map, heightmap, surface, collision, lakeCells, LAGO_LAMINA_Y, campoOriginal);
+
+      return { ...histPush(s), map: { ...map, heightmap, surface, collision }, dirty: true };
+    }),
   clearProps: () =>
     set((s) => {
       if (!s.map) return s;
@@ -2602,13 +3010,28 @@ export const useEditorStore = create<EditorState>((set) => ({
       let limpas = 0;
       for (const cluster of findBlockedClusters(s.map)) {
         if (cluster.kind === "structure") continue;
-        if (escopo === "border" && !cluster.onBorder) continue;
-        if (escopo === "inside" && cluster.onBorder) continue;
         for (const [col, row] of cluster.cells) {
+          /**
+           * Escopo conferido CÉLULA A CÉLULA por `cellInScope` — a mesma
+           * fonte de verdade do resto do editor (`editScope.ts: borderMask`,
+           * flood-fill da região conectada à moldura).
+           *
+           * Antes, este painel usava `cluster.onBorder`
+           * (`blockedClusters.ts`), que só marca uma mancha como "borda" se
+           * ela toca literalmente a última linha/coluna do array — uma
+           * noção bem mais estreita que a do resto do editor (que classifica
+           * o CINTURÃO inteiro, ligado por flood fill, como borda). E
+           * "Buraco" não filtrava nada aqui (caía no mesmo caminho de
+           * "Tudo"). Com `cellInScope`, os 4 escopos se comportam igual em
+           * qualquer tela do editor.
+           */
+          if (!cellInScope(s.map, escopo, col, row)) continue;
           const i = cellIndex(s.map, col, row);
           // BURACO nunca é limpo. O painel existe para varrer arbusto e pedra
           // avulsa (`wall`), que não viram nada em 3D; um `cliff` é ravina, e
-          // regra do projeto é que borda e buraco NÃO ficam andáveis.
+          // regra do projeto é que borda e buraco NÃO ficam andáveis. Em
+          // escopo "hole" isto zera o total — de propósito: nada aqui deve
+          // liberar um buraco.
           if (collision[i] === "cliff") continue;
           collision[i] = "walkable";
           if (surface.length) surface[i] = "grass";
@@ -2859,7 +3282,18 @@ export const useEditorStore = create<EditorState>((set) => ({
         return { ...histPush(s), map: { ...map, spawns: restam }, selectedSpawn: null, multiSpawn: [], dirty: true };
       }
       const triggers = map.triggers ?? [];
-      const restam = triggers.filter((t) => !cellInScope(map, escopo, t.area.col, t.area.row));
+      // pelo CENTRO da área, não pelo canto (col,row): um gatilho grande que
+      // começa dentro do escopo mas se estende para fora dele (ou o
+      // contrário) era classificado só pelo canto — o centro é a mesma
+      // convenção que `BlockedCluster.center` já usa.
+      const centroDoGatilho = (t: MapTrigger) => ({
+        col: Math.round(t.area.col + (t.area.w - 1) / 2),
+        row: Math.round(t.area.row + (t.area.h - 1) / 2),
+      });
+      const restam = triggers.filter((t) => {
+        const c = centroDoGatilho(t);
+        return !cellInScope(map, escopo, c.col, c.row);
+      });
       if (restam.length === triggers.length) return s;
       return { ...histPush(s), map: { ...map, triggers: restam }, selectedTrigger: null, dirty: true };
     }),
@@ -3108,6 +3542,10 @@ export const useEditorStore = create<EditorState>((set) => ({
           // mesma regra dos outros pincéis de relevo: bloqueio só nos escopos
           // que são bloqueio, e a colisão nunca muda
           if (bloq && !escopoBloqueio(i)) continue;
+          // e a mesma trava contra mexer em água já pintada (ver o comentário
+          // grande no laço principal, mais abaixo) — rio raso e lago são
+          // andáveis, então `bloq` sozinho não os pega
+          if (surface[i] === "river" || surface[i] === "water") continue;
           const nivel = clamp(cel.level);
           if (heightmap[i] !== nivel) {
             heightmap[i] = nivel;
@@ -3141,6 +3579,7 @@ export const useEditorStore = create<EditorState>((set) => ({
           if (!cellInScope(map, s.editScope, c, r)) continue;
           const bloq = collision[i] === "wall" || collision[i] === "cliff";
           if (bloq && !escopoBloqueio(i)) continue;
+          if (surface[i] === "river" || surface[i] === "water") continue;
           const alvoH = clamp((base[i] ?? 0) + alturaDoGesto * peso);
           if (heightmap[i] !== alvoH) {
             heightmap[i] = alvoH;
@@ -3215,6 +3654,10 @@ export const useEditorStore = create<EditorState>((set) => ({
             const i = cellIndex(map, c2, r2);
             if (!cellInScope(map, s.editScope, c2, r2)) continue;
             if (collision[i] === "wall" || collision[i] === "cliff") continue;
+            // idem: promontório nunca escreve em cima de rio/lago — sem isso ele
+            // não só erguia o leito, como sobrescrevia `surface` pra "grass"/
+            // "dirt" na linha de baixo, apagando o rio da célula de vez
+            if (surface[i] === "river" || surface[i] === "water") continue;
             // fora do cone liso (só o recorte alcança) a subida seria negativa,
             // e negativa aqui CAVARIA o terreno em vez de estender a borda
             const subida = Math.max(0, (meia - d) * passo);
@@ -3271,6 +3714,23 @@ export const useEditorStore = create<EditorState>((set) => ({
           b === "scrape";
         if (bloqueada && relevo && !escopoBloqueio(i)) continue;
         /**
+         * Relevo NUNCA mexe em água já pintada (rio raso, rio fundo, lago).
+         *
+         * `bloqueada` só pega o rio FUNDO (`collision: "wall"`) — o rio RASO e o
+         * lago são `collision: "water"`, andáveis, então passavam batido pela
+         * trava de cima e "Subir ▲"/"Suavizar"/etc erguia o LEITO em vez do
+         * campo ao lado. Um disco de raio grande, com o falloff decaindo célula
+         * a célula, erguia cada célula do leito um tanto DIFERENTE — e como a
+         * lâmina do rio lê a altura da PRÓPRIA célula
+         * (`nivelDosCorpos`/`squareChunks.ts`), a água ficava com uma escada de
+         * alturas em vez de um nível só: exatamente os picos triangulares
+         * escuros saindo da água da referência `agua-bugada.jpg` (o caso "subo
+         * o relevo do lado do rio"). A mesma trava que já existia só para
+         * `mountain` — aqui vale para TODO o grupo `relevo`, porque qualquer um
+         * deles escreve direto no heightmap da célula.
+         */
+        if (relevo && (surface[i] === "river" || surface[i] === "water")) continue;
+        /**
          * Relevo é PROPORCIONAL: o peso do falloff entra na conta.
          *
          * O centro do pincel se move `força` níveis; a vizinhança acompanha cada
@@ -3296,8 +3756,38 @@ export const useEditorStore = create<EditorState>((set) => ({
          * já traduz "wall" para a célula tipo 1 do rAthena.
          */
         if (b === "mountain") {
+          // NUNCA sobre rio nem lago: mesma trava que `generateTerrain` já
+          // aplica ao relevo procedural de montanha (`surface[i] === "water"
+          // || "river"` pula a célula). Sem ela, cruzar o disco por cima de
+          // um rio traçado converte aquele trecho em parede de pedra e corta
+          // o canal em dois — o pincel manual era o único lugar sem essa
+          // proteção (o gerador já a tinha, e o pincel de Rio já se recusa a
+          // sobrescrever bloqueio alheio no sentido contrário).
+          if (surface[i] === "river" || surface[i] === "water") continue;
+          /**
+           * Teto por CÉLULA, não um teto global.
+           *
+           * Sem isso, pintar (ou arrastar) muitas vezes no mesmo lugar satura
+           * TODA célula do disco em `MOUNTAIN_MAX` — não só o centro, a borda
+           * também, porque nada aqui limitava o quanto uma célula distante
+           * podia subir, só o QUANTO ela subia por passada. E arrastar o mouse
+           * dispara `paintCell` dezenas de vezes por segundo, então na prática
+           * qualquer gesto normal já satura o disco inteiro: o resultado é um
+           * platô com parede quase vertical na borda ("sobe seco, sem
+           * transição", `Desktop/ref/aqui-animal.jpg`, painel 1) em vez de um
+           * morro com encosta.
+           *
+           * `peso` já é o falloff suave do PRÓPRIO pincel (1 no centro, 0 na
+           * borda, `brushFalloff`) — multiplicado pelo teto, ele vira a
+           * ENCOSTA: por mais que se pinte, uma célula a meio caminho da borda
+           * nunca passa de `teto × peso` daquele ponto, e a subida continua
+           * curva do centro até a base (painel 2 da referência), em vez de virar
+           * mesa.
+           */
+          const tetoLocal = teto * peso;
           // o falloff dá a MASSA, o perfil de rocha dá a FORMA
-          heightmap[i] = clamp((heightmap[i] ?? 0) + passo * MOUNTAIN_GAIN * perfilDeRocha(c, r, s.mountainRough));
+          const alvo = clamp((heightmap[i] ?? 0) + passo * MOUNTAIN_GAIN * perfilDeRocha(c, r, s.mountainRough));
+          heightmap[i] = Math.min(alvo, tetoLocal);
           collision[i] = "wall";
           surface[i] = "stone";
           pintouMontanha.add(i);
@@ -3336,6 +3826,14 @@ export const useEditorStore = create<EditorState>((set) => ({
           // "Rio fundo" a converteria em `wall` (ainda bloqueada, parece
           // inofensivo) e o "Rio raso" em seguida a tornaria água ANDÁVEL.
           if (bloqueada && surface[i] !== "river") continue;
+          // NUNCA sobre lago: célula de lago tem `collision === "water"`, não
+          // "wall"/"cliff", então `bloqueada` não pega este caso. Sem a
+          // trava, o pincel trocava a bacia gradual do lago (percentil 90 dos
+          // leitos + declive por anel) por um platô de profundidade FIXA
+          // (RIVER_SHALLOW_Y/RIVER_DEEP_Y), abrindo um degrau na emenda. O
+          // gerador (`generateRiver`) já pula célula de lago — só o pincel
+          // manual não tinha essa proteção.
+          if (surface[i] === "water") continue;
           const fundo = b === "riverDeep";
           surface[i] = "river";
           collision[i] = fundo ? "wall" : "water";
@@ -3360,7 +3858,8 @@ export const useEditorStore = create<EditorState>((set) => ({
            * sobem pouco — é isso que arredonda a forma em vez de erguer um pilar
            * de lados retos, que é o que `raise` faz.
            */
-          const [, ny] = cornerNormal(map, c, r, bloqueada);
+          const grupoDaCelula = bloqueada ? "blocked" : collision[i] === "water" ? "water" : "land";
+          const [, ny] = cornerNormal(map, c, r, grupoDaCelula);
           heightmap[i] = clamp((heightmap[i] ?? 0) + passo * ny);
         } else if (b === "scrape") {
           // Scrape: raspa só o que está ACIMA do plano do centro. Nunca preenche
@@ -3400,6 +3899,14 @@ export const useEditorStore = create<EditorState>((set) => ({
            *   própria (mata, penhasco) e só a Montanha ⛰ muda isso.
            */
           if (bloqueada) continue;
+          // grama/terra/pedra/areia/neve nunca sobrescrevem rio já traçado —
+          // mesma trava do resto do grupo relevo: um disco grande de propósito
+          // em OUTRO lugar não pode, de passagem, apagar um trecho do rio que
+          // caiu dentro do raio. O próprio pincel de Lago segue livre pra
+          // pintar sobre rio (é assim que os dois se fundem, ver `generateRiver`
+          // "já é lagoa: NÃO sobrescreve" — aqui é o sentido contrário, e ele
+          // já era permitido antes desta trava).
+          if (b !== "water" && surface[i] === "river") continue;
           surface[i] = b as SurfaceType;
           collision[i] = SURFACE_COLLISION[b as SurfaceType];
           if (b === "water") {

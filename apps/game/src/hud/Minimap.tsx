@@ -7,7 +7,6 @@ import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { MINIMAP_WIDTH, MM_ART, MM_COLORS, MM_LAYOUT, MM_PLATE, MM_ZOOM, isDaytime } from "../ui/minimap";
 import { canvasDeColisao } from "./colisaoCanvas";
-import { medir } from "../core/diagnostics/medir";
 import { NotificationBell } from "./NotificationBell";
 
 const escala = MINIMAP_WIDTH / MM_PLATE.w;
@@ -65,7 +64,7 @@ export function Minimap({ map, playerPos }: { map: GameMap; playerPos: React.Mut
    * porque a janela do Alt+M desenha o MESMO mapa: com um canvas por tela seria
    * o dobro do bitmap (640 KB cada num 400×400) para o mesmo pixel.
    */
-  const fonte = useMemo(() => medir("minimapa→bitmap", () => canvasDeColisao(map)), [map]);
+  const fonte = useMemo(() => canvasDeColisao(map), [map]);
 
   // mapa + entidades + seta, no ritmo de MINIMAPA_FPS
   useEffect(() => {

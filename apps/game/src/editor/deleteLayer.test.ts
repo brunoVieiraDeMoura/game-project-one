@@ -97,6 +97,36 @@ describe("apagar camada", () => {
   });
 });
 
+describe("apagar camada de gatilhos — pelo CENTRO da área, não pelo canto", () => {
+  /**
+   * Módulo 7: `t.area.col,row` é só o canto superior-esquerdo. Um gatilho que
+   * COMEÇA na borda mas se estende pro miolo (ou o contrário) tinha o escopo
+   * decidido só pelo canto — agora é pelo centro, a mesma convenção que
+   * `BlockedCluster.center` já usa.
+   */
+  function comGatilhoNaFronteira() {
+    const map = st().map!;
+    // cols 0/1 são borda (c<2); o gatilho começa no 1 (borda) e vai até o 3
+    // (miolo) — o CENTRO (col 2) cai do lado de DENTRO.
+    const trigger = { id: "tr1", kind: "script", area: { col: 1, row: 10, w: 3, h: 1 }, event: "x" };
+    useEditorStore.setState({ map: { ...map, triggers: [trigger] } as typeof map });
+  }
+
+  it('escopo "Dentro": o gatilho é apagado (o CENTRO dele está dentro)', () => {
+    comGatilhoNaFronteira();
+    st().setEditScope("inside");
+    st().deleteLayer("triggers");
+    expect(st().map!.triggers).toHaveLength(0);
+  });
+
+  it('escopo "Borda": o gatilho NÃO é apagado (o centro não é borda, só o canto era)', () => {
+    comGatilhoNaFronteira();
+    st().setEditScope("border");
+    st().deleteLayer("triggers");
+    expect(st().map!.triggers).toHaveLength(1);
+  });
+});
+
 describe("seleção por faixa (Shift)", () => {
   it("marca do último selecionado até o clicado, nas duas direções", () => {
     st().select(0);

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { GameMap, SurfaceType } from "@ragnarok/map-format";
 import { cellIndex } from "@ragnarok/map-format";
 import { SQUARE_SIZE, squareLevelToY } from "./squareGrid";
-import { cornerLevel, cornerNormal, isBlockedCell } from "./heightField";
+import { cellGroup, cornerLevel, cornerLevelSaia, cornerNormal, isBlockedCell, type CellGroup } from "./heightField";
 import { TERRAIN_BASE_HEX, TERRAIN_LAYER, TERRAIN_LAYERS } from "./terrainTextures";
 
 /**
@@ -441,27 +441,43 @@ export function buildWaterGeometry(map: GameMap, cx: number, cz: number): THREE.
   const somaPesos = pesos.reduce((a, b) => a + b, 0);
 
   const dadosCanto = (col: number, row: number, laminaY: number): [number, number] => {
-    // profundidade: só as 4 células do canto — ela descreve o LEITO logo abaixo,
-    // e borrar isso arrastaria a cor de fundo para dentro da margem rasa
-    let agua = 0;
-    let soma = 0;
-    for (let dr = -1; dr <= 0; dr++) {
-      for (let dc = -1; dc <= 0; dc++) {
-        if (!aguaEm(col + dc, row + dr)) continue;
-        agua++;
-        soma += laminaY - squareLevelToY(visualLevel(map, cellIndex(map, col + dc, row + dr)));
-      }
-    }
-    // margem: o campo borrado, que é quem desenha o contorno
+    /**
+     * Profundidade — borrada no MESMO raio que a margem, e por um motivo que
+     * só apareceu com o rio LARGO (`riverWidth`/`larguraEstrada`-like slider,
+     * `next-change.txt`): o miolo fundo e o ombro raso de um canal largo se
+     * tocam numa fronteira que é um CÍRCULO por distância num grid quadrado —
+     * uma escada, igual qualquer fronteira diagonal. A média crua de 4
+     * células fazia essa escada aparecer como listras escuras alternando com
+     * claras na COR da água (o "serrilhado residual" de `agua-bugada.jpg`
+     * depois da correção do relevo — sem montanha, sem saia, só a lâmina
+     * mudando de tom em ziguezague). Com raio 1 (rio de 1 célula) o resultado
+     * não muda: só há uma célula de água no kernel, então a média é ela
+     * mesma, borrada ou não.
+     *
+     * O receio antigo era plausível ("arrastar a cor de fundo pra margem
+     * rasa"), mas media só as 4 células do CANTO, sem peso — um raio maior
+     * com peso decrescente (o mesmo `pesos[]` da margem) suaviza a transição
+     * em vez de apagá-la: a margem rasa ainda lê como rasa, só não pula de
+     * canto a canto.
+     */
+    let somaProf = 0;
+    let pesoProf = 0;
     let acc = 0;
     let k = 0;
     for (let dr = -RAIO_BORRAO; dr <= RAIO_BORRAO - 1; dr++) {
       for (let dc = -RAIO_BORRAO; dc <= RAIO_BORRAO - 1; dc++) {
-        if (aguaEm(col + dc, row + dr)) acc += pesos[k]!;
+        const c2 = col + dc;
+        const r2 = row + dr;
+        if (aguaEm(c2, r2)) {
+          acc += pesos[k]!;
+          const p = laminaY - squareLevelToY(visualLevel(map, cellIndex(map, c2, r2)));
+          somaProf += p * pesos[k]!;
+          pesoProf += pesos[k]!;
+        }
         k++;
       }
     }
-    return [agua === 0 ? 0 : soma / agua, acc / somaPesos];
+    return [pesoProf === 0 ? 0 : somaProf / pesoProf, acc / somaPesos];
   };
 
   /**
@@ -592,20 +608,23 @@ export function buildChunkGeometry(map: GameMap, cx: number, cz: number): THREE.
    * 433 ms para montar os 177 chunks visíveis contra 170 ms antes do relevo
    * suave. Com a grade pronta, o custo volta ao patamar anterior.
    *
-   * São duas grades porque chão e bloqueio não se misturam (ver heightField): o
-   * mesmo canto tem uma altura "de chão" e uma "de bloqueio".
+   * São TRÊS grades porque chão, bloqueio e água RASA não se misturam (ver
+   * heightField: `CellGroup`) — o mesmo canto tem uma altura "de chão", uma
+   * "de bloqueio" e uma "de água" (senão erguer um morro do lado de um lago
+   * puxa a lâmina/leito da água para cima do próprio barranco).
    */
   const lado = CHUNK_CELLS + 2; // +2: uma folga de canto em cada ponta
-  const yCanto = [new Float32Array(lado * lado), new Float32Array(lado * lado)];
-  const nCanto = [new Float32Array(lado * lado * 3), new Float32Array(lado * lado * 3)];
-  for (let g = 0; g < 2; g++) {
-    const bloq = g === 1;
+  const GRUPOS: CellGroup[] = ["land", "water", "blocked"];
+  const yCanto = GRUPOS.map(() => new Float32Array(lado * lado));
+  const nCanto = GRUPOS.map(() => new Float32Array(lado * lado * 3));
+  for (let g = 0; g < GRUPOS.length; g++) {
+    const grupo = GRUPOS[g]!;
     for (let r = 0; r < lado; r++) {
       for (let c = 0; c < lado; c++) {
         const col = col0 + c;
         const row = row0 + r;
         const k = r * lado + c;
-        yCanto[g]![k] = squareLevelToY(cornerLevel(map, col, row, bloq));
+        yCanto[g]![k] = squareLevelToY(cornerLevel(map, col, row, grupo));
       }
     }
     // normal pelo gradiente da grade já calculada (diferença central)
@@ -626,17 +645,17 @@ export function buildChunkGeometry(map: GameMap, cx: number, cz: number): THREE.
     }
   }
   /** altura do canto (col,row) já convertida para mundo */
-  const alturaCanto = (col: number, row: number, bloq: boolean): number => {
+  const alturaCanto = (col: number, row: number, grupo: CellGroup): number => {
     const c = col - col0;
     const r = row - row0;
-    if (c < 0 || r < 0 || c >= lado || r >= lado) return squareLevelToY(cornerLevel(map, col, row, bloq));
-    return yCanto[bloq ? 1 : 0]![r * lado + c]!;
+    if (c < 0 || r < 0 || c >= lado || r >= lado) return squareLevelToY(cornerLevel(map, col, row, grupo));
+    return yCanto[GRUPOS.indexOf(grupo)]![r * lado + c]!;
   };
-  const normalCanto = (col: number, row: number, bloq: boolean): [number, number, number] => {
+  const normalCanto = (col: number, row: number, grupo: CellGroup): [number, number, number] => {
     const c = col - col0;
     const r = row - row0;
-    if (c < 0 || r < 0 || c >= lado || r >= lado) return cornerNormal(map, col, row, bloq);
-    const g = bloq ? 1 : 0;
+    if (c < 0 || r < 0 || c >= lado || r >= lado) return cornerNormal(map, col, row, grupo);
+    const g = GRUPOS.indexOf(grupo);
     const k = (r * lado + c) * 3;
     return [nCanto[g]![k]!, nCanto[g]![k + 1]!, nCanto[g]![k + 2]!];
   };
@@ -843,14 +862,20 @@ export function buildChunkGeometry(map: GameMap, cx: number, cz: number): THREE.
       const z1 = z0 + SQUARE_SIZE;
       const color = cellColor(map, idx);
       const bloqueada = isBlockedCell(map, idx);
+      // grupo de canto (3 vias: chão/água/bloqueio) — usado nas consultas de
+      // altura/normal do PRÓPRIO quad. `bloqueada` continua existindo à parte:
+      // a saia (mais abaixo) é uma decisão de PASSAGEM (chão↔bloqueio), não de
+      // chão↔água — água rasa é andável, então nunca ganha saia.
+      const grupo = cellGroup(map, idx);
       const la = lCell[(r + 1) * lado + (c + 1)]!;
       const lb = camadaVizinha(c, r, la);
 
       // Topo: altura e normal de CANTO. Os cantos são compartilhados com as
-      // células vizinhas do mesmo grupo, então a superfície não tem costura e a
-      // inclinação existe de verdade.
-      const yc = (c2: number, r2: number) => alturaCanto(c2, r2, bloqueada);
-      const nc = (c2: number, r2: number) => normalCanto(c2, r2, bloqueada);
+      // células vizinhas do MESMO grupo, então a superfície não tem costura e a
+      // inclinação existe de verdade — e água nunca puxa nem é puxada pelo chão
+      // vizinho, então erguer um morro do lado do lago não faz a água "subir".
+      const yc = (c2: number, r2: number) => alturaCanto(c2, r2, grupo);
+      const nc = (c2: number, r2: number) => normalCanto(c2, r2, grupo);
       const y00 = yc(col, row);
       const y10 = yc(col + 1, row);
       const y11 = yc(col + 1, row + 1);
@@ -893,23 +918,35 @@ export function buildChunkGeometry(map: GameMap, cx: number, cz: number): THREE.
         { c: col, r: row + 1, pts: [[x1, 0, z1], [x0, 0, z1]], nx: 0, nz: 1 },
         { c: col - 1, r: row, pts: [[x0, 0, z1], [x0, 0, z0]], nx: -1, nz: 0 },
       ];
+      // Fora do cache do chunk (`alturaCanto` lê `yCanto`, construído com
+      // `cornerLevel` puro) DE PROPÓSITO: a saia perto de água precisa da
+      // variante borrada (`cornerLevelSaia`), e recalcular na hora é barato
+      // aqui — skirt só roda nas células de fronteira, uma fração pequena do
+      // chunk (ao contrário do topo, que é TODO vértice de TODA célula).
       const alturaDoCanto = (px: number, pz: number) => {
         const cc = Math.round(px / SQUARE_SIZE);
         const rr = Math.round(pz / SQUARE_SIZE);
-        return { meu: alturaCanto(cc, rr, bloqueada), cc, rr };
+        return { meu: squareLevelToY(cornerLevelSaia(map, cc, rr, grupo)), cc, rr };
       };
       for (const lado of lados) {
         const nivelViz = nivelEm(lado.c, lado.r);
         if (nivelViz == null) continue; // borda do mapa: nada a fechar
         const idxViz = cellIndex(map, lado.c, lado.r);
-        // mesmo grupo = superfície contínua, sem degrau para tapar
+        // mesmo grupo de PASSAGEM (chão↔bloqueio) = superfície contínua, sem
+        // degrau para tapar. Continua em 2 vias de propósito: água rasa é
+        // andável, então uma borda chão↔água nunca ganha saia — só vira saia
+        // na fronteira com bloqueio de verdade.
         if (isBlockedCell(map, idxViz) === bloqueada) continue;
         if (nivelViz >= level) continue;
         const [a, b] = lado.pts as [number[], number[]];
         const topoA = alturaDoCanto(a[0]!, a[2]!);
         const topoB = alturaDoCanto(b[0]!, b[2]!);
-        const baseA = alturaCanto(topoA.cc, topoA.rr, !bloqueada);
-        const baseB = alturaCanto(topoB.cc, topoB.rr, !bloqueada);
+        // a BASE da saia é o canto no grupo do VIZINHO de verdade (chão OU
+        // água, o que ele for) — não um genérico "o oposto de bloqueio", que
+        // deixou de fazer sentido com três grupos.
+        const grupoViz = cellGroup(map, idxViz);
+        const baseA = alturaCanto(topoA.cc, topoA.rr, grupoViz);
+        const baseB = alturaCanto(topoB.cc, topoB.rr, grupoViz);
         /**
          * Só há saia se houver VÃO de verdade.
          *

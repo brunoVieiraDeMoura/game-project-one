@@ -2256,10 +2256,19 @@ pnpm --filter @ragnarok/api link:legacy-map <mapa3d> <mapaRO> <x> <y>  # janela 
           fn)` é transparente (devolve o que a função devolveu, deixa o erro
           subir), acumula na coluna `trocaMs` e só vira evento acima de
           `LIMIAR_MS` (15) — laço quente não pode encher o anel de 512.
-          Embrulhados hoje: `zod→mapa`, `props→colisão`, `terrainQuery`,
-          `legacyMapping`, `minimapa→bitmap`. Adivinhar qual deles custa seria
-          fácil e provavelmente errado: foi assim que a hipótese do contexto
-          WebGL (8 ms, medido) sobreviveu duas rodadas.
+          Adivinhar qual suspeito custa seria fácil e provavelmente errado: foi
+          assim que a hipótese do contexto WebGL (8 ms, medido) sobreviveu duas
+          rodadas.
+        - **Instrumentação de CAÇA é desligada quando a caça acaba.** Os cinco
+          `medir()` (`zod→mapa`, `props→colisão`, `terrainQuery`,
+          `legacyMapping`, `minimapa→bitmap`) somaram **28 ms no caso inteiro** e
+          cumpriram o papel de ELIMINAR cinco suspeitos; o sexto
+          (`terreno→descarte`) nunca disparou; e a `SondaDeRender` (`<Profiler>`)
+          mediu 39 ms e eliminou a fase de render do React. Todos foram
+          desembrulhados depois disso. Manter o `<Profiler>` montado seria somar
+          `performance.measure` ao caminho quente EXATAMENTE onde o problema era
+          esse tipo de sobrecarga. **Os módulos ficam** — embrulhar de novo é um
+          import e uma linha, e desembrulhado o custo é zero.
         - **Esconder NÃO BASTOU, e o laudo pegou**: no `voo-1785946077631.json`
           o `desmontou-em hud` continuou saindo em cada portal, com
           `retrato:jogador` e `retrato:alvo` no MESMO milissegundo. A causa é o
@@ -2279,6 +2288,14 @@ pnpm --filter @ragnarok/api link:legacy-map <mapa3d> <mapaRO> <x> <y>  # janela 
         não estão na cena. Desmontar depois não desfaz nada — o material vem por
         referência do cache do `useGLTF` e é compartilhado com os props de
         verdade.
+      - **E tem de trazer o RESUMO das colunas** (`resumo`: p50/p95/máximo de
+        cada uma, sobre o anel). Sem caso, a série de quadros sumia inteira — e
+        zero caso é o resultado NORMAL de medir um custo em regime. Pego ao
+        tentar ler `matrizMs` depois de desligar o `matrixAutoUpdate` dos props:
+        o arquivo tinha eventos, censo e estado de gravação, e **nenhuma das 48
+        colunas**. Mediana pela mesma razão do `perf/orcamento` (pausa do
+        coletor envenena a média), com `p95`/`max` ao lado para o pior quadro
+        não desaparecer nessa robustez. `NaN` sai da conta em vez de virar zero.
       - **Um despejo com ZERO casos tem de PROVAR que estava gravando**
         (`gravacao` + o anel de `eventos` no `despejo`): esse é o resultado
         normal de conferir uma correção, e era justamente nele que o arquivo não
@@ -2438,6 +2455,18 @@ pnpm --filter @ragnarok/api link:legacy-map <mapa3d> <mapaRO> <x> <y>  # janela 
       quem escreve a transform dela é o R3F, no commit, e desligar antes disso
       congelaria o prop na origem. A ORDEM importa — `updateMatrix()` primeiro,
       desligar depois; invertido, a matriz nunca é composta.
+    - **CONFERIDO** no `voo-1785966296680.json` (`resumo.matrizMs`):
+      **p50 1,11 → 0,50 ms**, p95 0,8, máx 1,1. Metade exata, como o modelo
+      previa — a leitura do three estava certa.
+    - **Acumulador que só zera com o gravador ligado MENTE.** O `medir()` soma
+      sempre em DEV, mas quem zerava a coluna era uma chamada dentro do
+      `if (ativo())` do `amostrarCena`: um período com o voo parado empilhava
+      tudo e despejava o total no PRIMEIRO quadro gravado. Saiu como
+      `trocaMs.max = 514,5 ms` num dump **sem um único evento `cena/custo` e sem
+      portal nenhum** — pico fantasma, do tipo que já mandou esta investigação
+      atrás de causa errada. A escrita foi para fora do `if`; escrever no
+      rascunho com o gravador parado é inofensivo, porque aquela linha nunca é
+      confirmada. (Os acumuladores do `rendererProbe` já zeravam fora do `if`.)
     - **Isso corta METADE do custo, não ele todo.** O `updateMatrixWorld` faz
       duas coisas por nó: o `compose` local (eliminado aqui) e a multiplicação
       pela matriz do pai. A segunda continua porque a RAIZ DA CENA tem

@@ -2,11 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { Monster } from "@ragnarok/game-data";
+import type { Element, Monster } from "@ragnarok/game-data";
+import { ELEMENT_LABELS, MONSTER_AI_MODE_LABELS, RACE_LABELS, labelOf, selectOptions } from "@ragnarok/game-data";
 import { deleteMonster, listMonsters } from "@/lib/api";
-import { Button, Input, Select } from "@/components/ui";
+import { Badge, Button, FilterSelect, Input, Pager, Select } from "@/components/ui";
 
 const PAGE_SIZES = [10, 20, 50, 100];
+const ELEMENT_OPTIONS = selectOptions(ELEMENT_LABELS, "Todos os elementos");
+/** faixas comuns — só preenchem os dois campos de nível, não é um filtro à parte */
+const LEVEL_PRESETS = [
+  { label: "1~20", min: 1, max: 20 },
+  { label: "21~40", min: 21, max: 40 },
+  { label: "41~60", min: 41, max: 60 },
+  { label: "61~80", min: 61, max: 80 },
+  { label: "81~100", min: 81, max: 100 },
+  { label: "101+", min: 101, max: undefined },
+] as const;
 
 export default function MonstersPage() {
   const [monsters, setMonsters] = useState<Monster[]>([]);
@@ -15,22 +26,35 @@ export default function MonstersPage() {
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
   const [dropsItem, setDropsItem] = useState("");
-  const [debounced, setDebounced] = useState({ search: "", dropsItem: "" });
+  const [levelMin, setLevelMin] = useState("");
+  const [levelMax, setLevelMax] = useState("");
+  const [element, setElement] = useState<"" | Element>("");
+  const [debounced, setDebounced] = useState({ search: "", dropsItem: "", levelMin: "", levelMax: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setDebounced({ search, dropsItem });
+      setDebounced({ search, dropsItem, levelMin, levelMax });
       setPage(1);
     }, 300);
     return () => clearTimeout(t);
-  }, [search, dropsItem]);
+  }, [search, dropsItem, levelMin, levelMax]);
 
   const load = useCallback(() => {
     setLoading(true);
     const itemId = debounced.dropsItem.trim() !== "" ? Number(debounced.dropsItem) : undefined;
-    listMonsters(page, pageSize, debounced.search, Number.isNaN(itemId!) ? undefined : itemId)
+    const min = debounced.levelMin.trim() !== "" ? Number(debounced.levelMin) : undefined;
+    const max = debounced.levelMax.trim() !== "" ? Number(debounced.levelMax) : undefined;
+    listMonsters({
+      page,
+      pageSize,
+      search: debounced.search,
+      dropsItem: itemId !== undefined && !Number.isNaN(itemId) ? itemId : undefined,
+      levelMin: min !== undefined && !Number.isNaN(min) ? min : undefined,
+      levelMax: max !== undefined && !Number.isNaN(max) ? max : undefined,
+      element: element || undefined,
+    })
       .then((res) => {
         setMonsters(res.monsters);
         setTotal(res.total);
@@ -38,7 +62,7 @@ export default function MonstersPage() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [page, pageSize, debounced]);
+  }, [page, pageSize, debounced, element]);
 
   useEffect(load, [load]);
 
@@ -63,7 +87,7 @@ export default function MonstersPage() {
         </Link>
       </div>
 
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <Input
           placeholder="Buscar por nome, nome Aegis ou ID..."
           value={search}
@@ -75,6 +99,49 @@ export default function MonstersPage() {
           value={dropsItem}
           onChange={(e) => setDropsItem(e.target.value)}
           className="max-w-48"
+        />
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            placeholder="Nv mín"
+            value={levelMin}
+            onChange={(e) => setLevelMin(e.target.value)}
+            className="w-24"
+          />
+          <span className="text-zinc-500">~</span>
+          <Input
+            type="number"
+            placeholder="Nv máx"
+            value={levelMax}
+            onChange={(e) => setLevelMax(e.target.value)}
+            className="w-24"
+          />
+        </div>
+        <Select
+          value=""
+          onChange={(e) => {
+            const preset = LEVEL_PRESETS.find((p) => p.label === e.target.value);
+            if (preset) {
+              setLevelMin(String(preset.min));
+              setLevelMax(preset.max !== undefined ? String(preset.max) : "");
+            }
+          }}
+          className="w-auto"
+        >
+          <option value="">Faixa de nível...</option>
+          {LEVEL_PRESETS.map((p) => (
+            <option key={p.label} value={p.label}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
+        <FilterSelect
+          value={element}
+          onChange={(v) => {
+            setElement(v);
+            setPage(1);
+          }}
+          options={ELEMENT_OPTIONS}
         />
         <Select
           value={pageSize}
@@ -135,16 +202,14 @@ export default function MonstersPage() {
                   </td>
                   <td className="px-3 py-2">{m.level}</td>
                   <td className="px-3 py-2">{m.hp.toLocaleString("pt-BR")}</td>
-                  <td className="px-3 py-2 text-zinc-400">{m.race}</td>
+                  <td className="px-3 py-2 text-zinc-400">{labelOf(RACE_LABELS, m.race)}</td>
                   <td className="px-3 py-2 text-zinc-400">
-                    {m.element.type} {m.element.level}
+                    {labelOf(ELEMENT_LABELS, m.element.type)} {m.element.level}
                   </td>
-                  <td className="px-3 py-2 text-zinc-400">{m.aiMode}</td>
+                  <td className="px-3 py-2 text-zinc-400">{labelOf(MONSTER_AI_MODE_LABELS, m.aiMode)}</td>
                   <td className="px-3 py-2">{m.drops.length + m.mvpDrops.length}</td>
                   <td className="px-3 py-2">{m.spawns.length}</td>
-                  <td className="px-3 py-2">
-                    {m.mvp && <span className="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-400">MVP</span>}
-                  </td>
+                  <td className="px-3 py-2">{m.mvp && <Badge tone="amber">MVP</Badge>}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <Link href={`/monsters/${m.id}`} className="mr-2 text-indigo-400 hover:underline">
                       Editar
@@ -160,25 +225,7 @@ export default function MonstersPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Página {page} de {totalPages}
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>
-            «
-          </Button>
-          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </Button>
-          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-            »
-          </Button>
-        </div>
-      </div>
+      <Pager page={page} totalPages={totalPages} onPage={setPage} />
     </main>
   );
 }

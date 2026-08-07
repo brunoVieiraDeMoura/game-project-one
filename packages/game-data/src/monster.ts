@@ -13,7 +13,9 @@ import { BaseStatsSchema, ElementSchema, RaceSchema, SizeSchema } from "./common
  */
 
 export const MonsterAiModeSchema = z.enum(["passive", "aggressive", "assist", "looter", "plant"]);
+export type MonsterAiMode = z.infer<typeof MonsterAiModeSchema>;
 export const MonsterClassSchema = z.enum(["normal", "boss", "guardian", "battlefield", "event"]);
+export type MonsterClass = z.infer<typeof MonsterClassSchema>;
 
 export const MonsterDropSchema = z.object({
   itemId: z.number().int().positive(),

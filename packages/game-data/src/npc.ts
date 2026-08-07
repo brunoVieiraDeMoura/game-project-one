@@ -134,3 +134,65 @@ export const NpcSchema = z.object({
   legacyRef: z.string().optional(),
 });
 export type Npc = z.infer<typeof NpcSchema>;
+
+/** classificação FUNCIONAL derivada, pro filtro da dashboard admin — não é campo do schema */
+export const NpcKindSchema = z.enum(["warp", "shop", "dialogue", "duplicate", "other"]);
+export type NpcKind = z.infer<typeof NpcKindSchema>;
+
+export function npcKind(npc: Npc): NpcKind {
+  if (npc.warp) return "warp";
+  if (npc.shop) return "shop";
+  if (npc.duplicateOf) return "duplicate";
+  if (npc.dialogue.length > 0) return "dialogue";
+  return "other";
+}
+
+/**
+ * Origem do NPC pela PASTA de onde ele veio no rAthena (`legacyRef`,
+ * "npc/re/<pasta>/arquivo.txt:linha") — dado real da árvore de origem, não
+ * heurística de texto. Cobre Quest/Guilda/Instância/Evento/Arena/Loja/
+ * Teleporte da lista pedida; "Healer" e "Buff" ficam de fora porque não há
+ * pasta nem campo estruturado que os distinga sem adivinhar conteúdo de
+ * script (ver auditoria).
+ */
+export const NpcOriginSchema = z.enum([
+  "quest",
+  "guild",
+  "instance",
+  "battleground",
+  "event",
+  "merchant",
+  "kafra",
+  "job",
+  "city",
+  "airport",
+  "warp",
+  "other",
+]);
+export type NpcOrigin = z.infer<typeof NpcOriginSchema>;
+
+/** pasta rAthena → origem do filtro. Pasta desconhecida ou sem `legacyRef` = "other" — nunca adivinhado. */
+const ORIGIN_BY_FOLDER: Record<string, NpcOrigin> = {
+  quests: "quest",
+  guild: "guild",
+  guild2: "guild",
+  guild3: "guild",
+  instances: "instance",
+  battleground: "battleground",
+  events: "event",
+  merchants: "merchant",
+  kafras: "kafra",
+  jobs: "job",
+  cities: "city",
+  airports: "airport",
+  warps: "warp",
+};
+
+export function npcOrigin(npc: Npc): NpcOrigin {
+  const ref = npc.legacyRef;
+  if (!ref) return "other";
+  // "npc/re/<pasta>/arquivo.txt:linha" ou "npc/<pasta>/arquivo.txt:linha"
+  const parts = ref.split("/");
+  const folder = parts[1] === "re" ? parts[2] : parts[1];
+  return (folder && ORIGIN_BY_FOLDER[folder]) || "other";
+}

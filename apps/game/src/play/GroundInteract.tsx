@@ -191,6 +191,7 @@ export function GroundInteract({
   const scene = useThree((s) => s.scene);
   // raycaster próprio: o do R3F é reconfigurado a cada evento
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const plano = useRef<THREE.Mesh>(null);
 
   // mesma conversão ponto→célula→centro do controller (grade quadrada default)
   const cells: CellLattice = useMemo(
@@ -301,36 +302,6 @@ export function GroundInteract({
     return topmostXZ(candidatos, { x: e.point.x, z: e.point.z });
   };
 
-  /**
-   * O `pointermove` só GUARDA o raio; quem resolve é o `useFrame`.
-   *
-   * O mouse dispara 60 a 120 eventos por segundo, e cada `pontoDoRaio` faz duas
-   * varreduras do grafo (`getObjectByName`) mais dois `intersectObject`
-   * RECURSIVOS — contra as ~25 malhas de chunk do terreno e contra os props.
-   * Só que o resultado é lido uma vez por quadro, ali embaixo: todo evento além
-   * do primeiro de cada quadro era trabalho inteiramente jogado fora, e é
-   * justamente movendo o mouse para clicar que a travada aparecia.
-   *
-   * O evento do R3F não sobrevive ao quadro, então o que se guarda é uma cópia
-   * do raio e da distância — os três números que o `pontoDoRaio` usa.
-   */
-  const raioPendente = useRef({
-    origin: new THREE.Vector3(),
-    direction: new THREE.Vector3(),
-    distance: 0,
-    point: new THREE.Vector3(),
-    /** houve movimento desde o último quadro? */
-    sujo: false,
-  });
-
-  const onMove = (e: ThreeEvent<PointerEvent>) => {
-    const p = raioPendente.current;
-    p.origin.copy(e.ray.origin);
-    p.direction.copy(e.ray.direction);
-    p.distance = e.distance;
-    p.point.copy(e.point);
-    p.sujo = true;
-  };
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     // clique no chão vazio deseleciona o alvo de combate (clicar num monstro é
     // capturado pelo próprio monstro antes de chegar aqui)
@@ -357,13 +328,31 @@ export function GroundInteract({
     setMoveTarget(snapAndavel(p.x, p.z));
   };
 
-  useFrame(() => {
-    // no máximo UMA resolução de raio por quadro, com o último movimento do
-    // mouse — o de antes já não interessa a ninguém
-    const pendente = raioPendente.current;
-    if (pendente.sujo) {
-      pendente.sujo = false;
-      hover.current = pontoDoRaio({ ray: pendente, distance: pendente.distance, point: pendente.point });
+  useFrame((state) => {
+    /**
+     * O raio é refeito TODO quadro, a partir da câmera ATUAL — nunca guardado
+     * de um evento de `pointermove` passado.
+     *
+     * A câmera segue o personagem (`FollowCamera`): andando, o mundo desliza
+     * por BAIXO de um mouse parado na tela. Resolver o raio só quando o mouse
+     * se MEXE (o que fazia antes) reusava a interseção ANTIGA — em coordenada
+     * de MUNDO — quadro após quadro, e o marcador ficava colado na célula do
+     * primeiro clique em vez de acompanhar o chão que está de fato sob o
+     * ponteiro. `state.pointer` é a coordenada de tela (NDC) que o R3F já
+     * mantém sozinho; refazer `setFromCamera` com ela é o que faz o marcador
+     * "andar" com a câmera sem o jogador precisar chacoalhar o mouse.
+     *
+     * Continua sendo NO MÁXIMO uma resolução por quadro — a mesma característica
+     * de custo que a versão anterior já tinha (dois `intersectObject`
+     * recursivos), só que sem o atalho extra que gerava esta trava.
+     */
+    const chao = plano.current;
+    if (chao) {
+      raycaster.setFromCamera(state.pointer, state.camera);
+      const noPlano = raycaster.intersectObject(chao, false)[0];
+      hover.current = noPlano
+        ? pontoDoRaio({ ray: raycaster.ray, distance: noPlano.distance, point: noPlano.point })
+        : null;
     }
 
     const c = cursor.current;
@@ -424,12 +413,7 @@ export function GroundInteract({
 
   return (
     <group>
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[centerX, 0, centerZ]}
-        onPointerMove={onMove}
-        onClick={onClick}
-      >
+      <mesh ref={plano} rotation={[-Math.PI / 2, 0, 0]} position={[centerX, 0, centerZ]} onClick={onClick}>
         <planeGeometry args={[worldWidth, worldDepth]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
