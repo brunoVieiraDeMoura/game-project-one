@@ -1,96 +1,122 @@
-Quero que faça uma análise da arquitetura da movimentação do jogo, e não apenas do sistema de skills.
+Quero que você investigue e CORRIJA a falha de `frameLongo` que começou recentemente no jogo.
 
-Suspeito que o problema do mini teleporte ao lançar uma skill seja consequência da forma como a posição do personagem é representada internamente.
+Existe um voo de diagnóstico em `voo-1786187612919.json`. Use esse arquivo como evidência principal e faça uma investigação causal no código/runtime antes de alterar qualquer coisa.
 
-Quero que você investigue
+### Evidência já observada
 
-Verifique se atualmente o personagem possui apenas uma posição baseada em inteiros, por exemplo:
+O voo registra um `frameLongo` de **851,9 ms** no `walkId=53`, quadro 3621. O gatilho está configurado para qualquer quadro acima de 200 ms.
 
-tileX
-tileY
-pixelX inteiro
-pixelY inteiro
+Pouco antes do frame longo existe:
 
-ou qualquer estrutura equivalente.
+* `network/self:move`
+* `dtMs=5187.8`
+* reconciliação normal
+* fila de predição zerada
+* `filaDeChunks=0`
+* `msDeChunk=0`
+* `renderMs=2.2`
+* GPU sem indicação de um pico correspondente
+* renderer ainda é o mesmo (`renderer #1`)
+* cena continua visível e montada
 
-Quero saber se durante toda a movimentação o personagem sempre permanece alinhado a pixels inteiros ou ao centro das células.
+O próprio recorder classificou o evento como:
 
-Analise também
+`>>> FRAMELONGO 851.90 célula(s) causa=servidor`
 
-Durante a caminhada:
+e o estado do renderer não indica que os ~852 ms tenham sido gastos efetivamente no render.
 
-a posição é armazenada como float ou integer?
-existe perda da parte fracionária?
-existe arredondamento (Math.round, Math.floor, Math.ceil, Math.trunc) em algum ponto da movimentação?
-alguma etapa converte continuamente a posição para o centro do tile?
-Quero estudar outra arquitetura
+Também existe outro caso anterior de `frameLongo` de **448,1 ms**, igualmente classificado como `causa=servidor`, enquanto o render CPU estava em apenas 1,9 ms e GPU em 3,1 ms.
 
-Sem alterar a estética do jogo.
+### O que quero que você descubra
 
-O jogo deve continuar exatamente igual para o jogador:
+Não quero que você simplesmente trate `frameLongo` como problema de GPU, Three.js ou renderização.
 
-movimentação por clique em tiles;
-grid quadrado;
-pathfinding por células;
-alcance baseado em células;
-colisão baseada em células;
-servidor autoritativo;
-Client-side Prediction;
-Server Reconciliation.
+Determine exatamente:
 
-Porém quero estudar uma arquitetura onde a posição interna do personagem seja contínua.
+1. **O que o `quadroMs` está medindo atualmente.**
 
-Exemplo:
+   * Descubra de onde vem esse valor.
+   * Descubra quais timestamps são usados para calculá-lo.
+   * Verifique se ele representa realmente o tempo de execução de um frame ou se está sendo contaminado por alguma outra fonte de tempo.
 
-Posição lógica:
+2. **Por que um `quadroMs` de 851,9 ms aparece quando o custo real de renderização é ~2 ms.**
 
-tile = (14, 8)
+3. **Qual é a relação entre `dtMs` dos eventos `self:move` e `quadroMs`.**
 
-Posição física:
+   * O voo mostra `dtMs=5187,8` imediatamente antes do frame longo de 851,9 ms.
+   * Existe também um caso de 448,1 ms associado a `dtMs=1563,1`.
+   * Verifique se algum relógio, timestamp, delta ou fallback está usando o intervalo de rede/snapshot como se fosse duração de frame.
 
-x = 14.63
-y = 8.18
+4. Verifique se alguma alteração recente em:
 
-ou
+   * snapshots/reconciliação;
+   * client-side prediction;
+   * atualização de posição;
+   * loop de animação;
+   * `requestAnimationFrame`;
+   * instrumentação do flight recorder;
+   * cálculo de `dt`;
+   * relógio monotônico;
+   * tratamento de servidor atrasado;
+   * ou eventos de movimento
 
-worldX = 468.23 px
-worldY = 262.74 px
+   pode ter introduzido essa regressão.
 
-Ou seja, a representação interna pode ser fracionária, enquanto toda a lógica do jogo continua baseada em tiles.
+5. Não confunda **tempo em que o browser ficou sem executar JS** com **tempo gasto executando o frame**. Determine qual dos dois está realmente acontecendo.
 
-Objetivo
+6. Verifique também se o recorder está atribuindo incorretamente o frame longo à causa `servidor` apenas porque o último evento relevante antes do frame foi um `self:move`/snapshot atrasado.
 
-Quero eliminar completamente qualquer snap para o centro da célula durante:
+### Critério para a correção
 
-cast de skill;
-troca de animação;
-parada;
-cancelamento de caminhada;
-troca de estado.
+A correção deve eliminar a causa real da regressão, não apenas:
 
-Sem modificar a sensação clássica de movimentação por clique em grid.
+* aumentar o limiar de 200 ms;
+* desativar o gatilho;
+* ignorar frames longos;
+* mascarar o valor no flight recorder;
+* ou reduzir a quantidade de diagnóstico.
 
-Quero que responda
-A arquitetura atual suporta posições fracionárias?
-Se não suporta, quais partes impedem isso?
-Quais sistemas dependem de posição inteira?
-O servidor pode passar a trabalhar com posição contínua sem quebrar pathfinding, colisão e alcance?
-É melhor manter:
-posição lógica em tiles;
-posição física em float;
-renderização usando posição física;
-validações usando posição lógica?
-Muito importante
+Se o problema estiver no cálculo/medição de `quadroMs`, corrija a medição.
 
-Não faça alterações imediatamente.
+Se o problema estiver causando uma pausa real no main thread, encontre o código que está bloqueando o main thread e corrija a causa.
 
-Primeiro faça uma análise completa da arquitetura.
+Se o problema estiver relacionado ao fluxo de rede/reconciliação, corrija o fluxo responsável sem degradar prediction, reconciliation ou movimentação.
 
-Depois proponha uma migração incremental, identificando todos os arquivos e sistemas que precisariam ser alterados, garantindo que:
+### Investigação obrigatória
 
-o jogo continue visualmente igual;
-o clique em tiles continue funcionando exatamente igual;
-o pathfinding permaneça baseado em células;
-apenas a representação interna da posição passe a ser contínua.
+Antes de modificar código:
 
-Se identificar que essa mudança elimina o problema do mini teleporte durante o cast das skills, explique tecnicamente por quê.
+* localize todas as origens de `quadroMs`;
+* localize o código que gera `frameLongo`;
+* localize como `causa=servidor` é determinado;
+* rastreie o caminho completo entre `requestAnimationFrame`/loop de render e o recorder;
+* compare os timestamps usados pelo render loop com os timestamps usados nos eventos de rede;
+* compare os casos normais com os casos de 448,1 ms e 851,9 ms;
+* procure a regressão recente no histórico/diff do código, se disponível.
+
+Não faça uma refatoração ampla. Identifique a menor causa responsável e corrija-a.
+
+### Validação
+
+Depois da correção:
+
+1. rode typecheck;
+2. rode os testes existentes;
+3. reproduza o cenário de caminhada que gera o `frameLongo`;
+4. gere novamente o flight recorder;
+5. confirme que `quadroMs` representa o tempo correto;
+6. confirme que não aparecem falsos `frameLongo` causados por `dtMs` de snapshot/rede;
+7. confirme que frames realmente longos continuam sendo detectados;
+8. confirme que prediction, reconciliation, snapshots e movimentação continuam funcionando normalmente.
+
+No final, apresente:
+
+* causa raiz exata;
+* evidência no voo que prova a causa;
+* arquivo(s) e trecho(s) responsáveis;
+* correção aplicada;
+* por que a correção elimina a regressão;
+* resultados dos testes;
+* e, se possível, comparação do comportamento antes/depois.
+
+Não altere arquitetura ou implemente uma solução alternativa antes de provar a causa raiz.

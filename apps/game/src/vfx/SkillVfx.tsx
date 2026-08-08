@@ -2,10 +2,17 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
+import type { TerrainQuery } from "@ragnarok/engine-core";
 import { cellToWorld, type LegacyMapping } from "../net/legacyCells";
 import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { useVfxStore, type VfxInstance } from "./vfxStore";
+import { moldarMalhaTerreno } from "../play/pickGround";
+
+/** subdivisões dos discos moldados — mesma ordem de grandeza da mira e do marcador de destino */
+const VFX_MOLD_SEGS = 8;
+/** um dedo acima do chão, como todo decal deste projeto */
+const VFX_ALTURA = 0.05;
 
 /**
  * Efeitos de skill na cena.
@@ -19,6 +26,7 @@ export function SkillVfx({
   map,
   mapping,
   cellSize,
+  terrain,
 }: {
   map: GameMap;
   mapping: LegacyMapping;
@@ -26,6 +34,8 @@ export function SkillVfx({
    * (a área de uma skill do RO é "5x5 células"), senão o mesmo disco fica
    * gigante num mapa e invisível noutro quando o hexScale muda. */
   cellSize: number;
+  /** para o disco de área/conjuração vestir o relevo (ver `AreaCell`/`AreaDisc`) */
+  terrain: TerrainQuery;
 }) {
   const effects = useVfxStore((s) => s.effects);
 
@@ -40,7 +50,7 @@ export function SkillVfx({
   return (
     <group name="skill-vfx">
       {effects.map((effect) => (
-        <VfxNode key={effect.id} effect={effect} map={map} mapping={mapping} cellSize={cellSize} />
+        <VfxNode key={effect.id} effect={effect} map={map} mapping={mapping} cellSize={cellSize} terrain={terrain} />
       ))}
     </group>
   );
@@ -51,11 +61,13 @@ function VfxNode({
   map,
   mapping,
   cellSize,
+  terrain,
 }: {
   effect: VfxInstance;
   map: GameMap;
   mapping: LegacyMapping;
   cellSize: number;
+  terrain: TerrainQuery;
 }) {
   const group = useRef<THREE.Group>(null);
   const born = useRef(performance.now());
@@ -78,14 +90,24 @@ function VfxNode({
     [effect, map, mapping],
   );
 
+  /**
+   * `area`/`cast` são PRESOS À CÉLULA — `worldPositionOf` devolve o mesmo
+   * ponto do nascimento ao fim da vida (não seguem entidade nenhuma). Por
+   * isso eles NÃO passam pelo grupo animado abaixo: `AreaCell`/`AreaDisc` se
+   * posicionam e se moldam ao relevo sozinhos, uma vez, em vez de herdar um
+   * `position`/`scale` que mudaria a forma da malha moldada a cada quadro.
+   */
+  const presoNaCelula = effect.kind === "area" || effect.kind === "cast";
+
   useFrame(() => {
+    if (presoNaCelula) return;
     const g = group.current;
     if (!g) return;
 
     const world = worldPositionOf(effect, map, mapping);
     if (!world) return;
 
-    // "vida" do efeito em 0..1 — o disco cresce e some, o anel sobe
+    // "vida" do efeito em 0..1 — o anel sobe, o flash cresce
     const life = Math.min(1, (performance.now() - born.current) / 600);
 
     // A altura é SEMPRE recalculada a partir do chão. Somar no y do frame
@@ -96,22 +118,21 @@ function VfxNode({
     // A escala de célula já está no `scale` do grupo (montado no primeiro
     // render); aqui só entra a animação, senão o efeito fica cellSize² e cobre
     // meia tela.
-    const grow =
-      effect.kind === "impact" ? 0.4 + life * 0.8 : effect.kind === "buff" ? 1 - life * 0.3 : 1;
+    const grow = effect.kind === "impact" ? 0.4 + life * 0.8 : 1 - life * 0.3;
     g.scale.setScalar(grow * cellSize);
   });
 
+  if (effect.kind === "area") {
+    return <AreaCell cx={initial.x} cz={initial.z} raioMundo={cellSize / 2} terrain={terrain} />;
+  }
+  if (effect.kind === "cast") {
+    const raioMundo = Math.max(0.5, (areaInfo?.areaRadius ?? 0) + 0.5) * cellSize;
+    return <AreaDisc cx={initial.x} cz={initial.z} raioMundo={raioMundo} terrain={terrain} />;
+  }
+
   return (
     <group ref={group} position={[initial.x, initial.y + 0.05, initial.z]} scale={cellSize}>
-      {effect.kind === "area" ? (
-        <AreaCell />
-      ) : effect.kind === "cast" ? (
-        <AreaDisc kind="cast" raioArea={areaInfo?.areaRadius ?? 0} />
-      ) : effect.kind === "buff" ? (
-        <BuffRing />
-      ) : (
-        <ImpactFlash />
-      )}
+      {effect.kind === "buff" ? <BuffRing /> : <ImpactFlash />}
     </group>
   );
 }
@@ -130,16 +151,30 @@ function VfxNode({
  * O quadrado é 1×1 no espaço local e o grupo é escalado por `cellSize`, então
  * ele cobre exatamente a célula em qualquer escala de mundo.
  */
-function AreaCell() {
+function AreaCell({
+  cx,
+  cz,
+  raioMundo,
+  terrain,
+}: {
+  /** centro da célula, em mundo */
+  cx: number;
+  cz: number;
+  /** meia-largura do quadrado, em unidades de mundo (já com `cellSize` embutido) */
+  raioMundo: number;
+  terrain: TerrainQuery;
+}) {
+  const mesh = useRef<THREE.Mesh>(null);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        // sempre por CIMA do chão: numa encosta/montanha, o terreno na frente
-        // ocluía o quad plano (ele não veste o relevo como o `moldarMarcador`
-        // do cursor de clique) e a área "afundava" na pedra em vez de ficar
-        // pintada por cima ("os círculos ficam distorcidos em morros").
+        // sempre por CIMA do chão, propositalmente: é VFX de skill, e a regra
+        // do projeto é ela ficar visível por cima do que estiver na frente —
+        // inclusive o personagem (ver `net/GlowChao`, que é o oposto porque é
+        // decoração de UI, não efeito de combate). Moldar (abaixo) resolve a
+        // FORMA sumir na encosta; `depthTest` continua fora disso.
         depthTest: false,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
@@ -179,43 +214,61 @@ function AreaCell() {
   });
   useEffect(() => () => material.dispose(), [material]);
 
+  // Molda UMA VEZ: a célula não se move nem muda de tamanho durante a vida do
+  // efeito (ao contrário do marcador de destino, que segue o mouse). Vértices
+  // em coordenada de MUNDO, como `play/AimPreview` — por isso não há
+  // `rotation` na malha: ela já nasce deitada, não gira depois de deitada.
+  useEffect(() => {
+    const m = mesh.current;
+    if (!m) return;
+    moldarMalhaTerreno(m.geometry as THREE.BufferGeometry, cx, cz, raioMundo, VFX_MOLD_SEGS, VFX_ALTURA, terrain);
+  }, [cx, cz, raioMundo, terrain]);
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[1, 1]} />
+    <mesh ref={mesh}>
+      <planeGeometry args={[1, 1, VFX_MOLD_SEGS, VFX_MOLD_SEGS]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
 }
 
-/** disco no chão com gradiente radial (shader — sem textura no projeto) */
+/**
+ * Disco no chão com gradiente radial (shader — sem textura no projeto).
+ *
+ * Só usado para `kind: "cast"` — o círculo que aparece quando alguém COMEÇA a
+ * conjurar uma skill de área, avisando onde ela vai cair antes de sair.
+ *
+ * Malha de PLANO com máscara circular no fragmento (`d = distance(vUv,0.5)`),
+ * não `circleGeometry`: `moldarMalhaTerreno` espera a topologia em GRADE
+ * (linha × coluna) de um `PlaneGeometry`, a mesma técnica de
+ * `play/AimPreview` — e é de lá que ela é copiada, letra por letra, para o
+ * disco de conjuração parecer com a prévia que o jogador já viu antes de
+ * clicar.
+ */
 function AreaDisc({
-  kind,
-  raioArea = 0,
+  cx,
+  cz,
+  raioMundo,
+  terrain,
 }: {
-  kind: "area" | "cast";
-  /**
-   * Raio da área em CÉLULAS, do catálogo (`skillCatalog.areaRadius`) —
-   * mesma fonte que o `play/AimPreview` usa para o disco de mira. Antes este
-   * disco tinha um raio CRAVADO (2 células, "o tamanho médio do RO"), então
-   * toda skill conjurada mostrava o mesmo tamanho de área, batesse ou não com
-   * a de verdade. `+0,5`: a área do RO conta em células INTEIRAS ("5x5"), e o
-   * raio 2 cobre do centro da célula até a borda da segunda — a MESMA conta
-   * da mira, para o disco de conjuração não ficar maior nem menor que a
-   * prévia que o jogador já viu antes de clicar.
-   */
-  raioArea?: number;
+  /** centro da célula-alvo, em mundo */
+  cx: number;
+  cz: number;
+  /** raio do disco em unidades de mundo (já com `cellSize` embutido) */
+  raioMundo: number;
+  terrain: TerrainQuery;
 }) {
-  const raio = Math.max(0.5, raioArea + 0.5);
+  const mesh = useRef<THREE.Mesh>(null);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        // idem `AreaCell`: nunca some dentro do relevo.
+        // idem `AreaCell`: VFX de skill fica por cima de propósito.
         depthTest: false,
         side: THREE.DoubleSide,
         uniforms: {
-          uColor: { value: new THREE.Color(kind === "cast" ? "#7dd3fc" : "#c084fc") },
+          uColor: { value: new THREE.Color("#7dd3fc") },
           uTime: { value: 0 },
         },
         vertexShader: `
@@ -241,7 +294,7 @@ function AreaDisc({
           }
         `,
       }),
-    [kind],
+    [],
   );
 
   useFrame((_, dt) => {
@@ -250,9 +303,17 @@ function AreaDisc({
 
   useEffect(() => () => material.dispose(), [material]);
 
+  // Molda UMA VEZ, mesma razão de `AreaCell`: a célula-alvo não se move nem
+  // muda de raio durante a vida do efeito.
+  useEffect(() => {
+    const m = mesh.current;
+    if (!m) return;
+    moldarMalhaTerreno(m.geometry as THREE.BufferGeometry, cx, cz, raioMundo, VFX_MOLD_SEGS, VFX_ALTURA, terrain);
+  }, [cx, cz, raioMundo, terrain]);
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <circleGeometry args={[raio, 40]} />
+    <mesh ref={mesh}>
+      <planeGeometry args={[1, 1, VFX_MOLD_SEGS, VFX_MOLD_SEGS]} />
       <primitive object={material} attach="material" />
     </mesh>
   );

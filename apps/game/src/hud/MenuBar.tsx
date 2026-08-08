@@ -19,7 +19,9 @@ import {
  * ~900 px numa tela de 1280 e as duas se encostariam se o botão passasse de 48.
  */
 export function MenuBar() {
-  const open = useHudStore((s) => s.openWindow);
+  // várias podem estar abertas ao mesmo tempo agora — o botão acende para
+  // TODAS que estiverem na pilha, não só a mais recente
+  const open = useHudStore((s) => s.openWindows);
   const toggle = useHudStore((s) => s.toggleWindow);
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: TOOL_LAYOUT.gap }}>
@@ -29,7 +31,7 @@ export function MenuBar() {
           label={it.label}
           art={it.art}
           hotkey={it.hotkey}
-          active={open === it.key}
+          active={open.includes(it.key)}
           onClick={() => toggle(it.key)}
         />
       ))}

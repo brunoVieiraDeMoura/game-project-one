@@ -16,6 +16,7 @@ function warpNpc(id: string, mapId = "prontera"): Npc {
     direction: 0,
     dialogueEntry: null,
     dialogue: [],
+    eventHandlers: [],
     questTriggers: [],
     questBoard: [],
     warp: { mapId: "geffen", position: [120, 100, 0], triggerSpan: { xs: 1, ys: 1 } },
@@ -35,6 +36,7 @@ function dialogueNpc(id: string, name: string): Npc {
       { id: "n0", kind: "say", text: "Olá!", next: "n1" },
       { id: "n1", kind: "end" },
     ],
+    eventHandlers: [],
     questTriggers: [],
     questBoard: [],
   };

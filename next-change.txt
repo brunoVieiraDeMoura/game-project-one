@@ -8,6 +8,8 @@ acho que a animação de atack basico está duplicada, da um check
 O personagem principal, deve estar na layer acima de todos os objetos (ex: circulo do target do monstro está sobrepondo o personagem)
 [imagino que só os vfx vão ficar acima do personagem]
 
+obss: os assets de monstros também devem estár acima dos objetos e circulos( ex: o proprio circulo que faz target no monstro sobrepoe ele.)
+
 //////
 
 montanha / morros e provavelmente outros assets, estão com o target vazado, monstros que estão atrás dessas coisas são alvos targetáveis(consigo pegar o target no blind da montanha, [o alvo atrás da montanha sem ver ele])
@@ -16,6 +18,8 @@ corrija esse comportamento
 //////
 
 o circulo de onde vai cair a aoe das skills está desaparecendo, e o circulo que aparece quando a pessoa começa a castar a skill aoe, não está se moldando as curvas, montanhas etc..
+adicionar essa parte de moldar para o circulo de target dos monstros também.
+
 
 //////
 

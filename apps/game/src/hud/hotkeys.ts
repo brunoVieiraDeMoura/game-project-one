@@ -20,7 +20,7 @@ import { useWorldStore } from "../net/worldStore";
  * Equipamento e status são a MESMA janela aqui (a nossa mostra os dois lados),
  * então Alt+Q e Alt+A caem no mesmo lugar de propósito.
  */
-const WINDOW_BY_KEY: Record<string, Exclude<WindowKey, null>> = {
+const WINDOW_BY_KEY: Record<string, WindowKey> = {
   KeyA: "status",
   KeyQ: "status",
   KeyE: "inventory",
@@ -50,8 +50,8 @@ export function useHudHotkeys(): void {
         else if (useSkillWalkStore.getState().pendente) useSkillWalkStore.getState().parar();
         else if (useSkillTargetStore.getState().pendente) useSkillTargetStore.getState().parar();
         else if (useWorldStore.getState().target) useWorldStore.getState().setTarget(null);
-        else if (hud.openWindow) hud.setWindow(null);
-        else hud.toggleWindow("settings");
+        // fecha a de CIMA da pilha — a mais nova primeiro, como as ordens acima
+        else if (!hud.closeTopWindow()) hud.toggleWindow("settings");
         return;
       }
 

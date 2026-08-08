@@ -3,15 +3,7 @@ import { CHAT_TABS, DEFAULT_TABS, FIXED_TAB, type ChatTab } from "../ui/chatFram
 
 export type { ChatTab };
 
-export type WindowKey =
-  | "skills"
-  | "status"
-  | "inventory"
-  | "friends"
-  | "quests"
-  | "settings"
-  | "map"
-  | null;
+export type WindowKey = "skills" | "status" | "inventory" | "friends" | "quests" | "settings" | "map";
 
 /**
  * Quais abas o jogador escolheu deixar abertas.
@@ -46,10 +38,38 @@ function gravarAbas(abas: ChatTab[]): void {
   }
 }
 
+/** deslocamento da janela em relação ao CENTRO da tela, em px — o arrasto escreve aqui */
+export interface WindowPos {
+  x: number;
+  y: number;
+}
+
 interface HudState {
-  openWindow: WindowKey;
-  setWindow: (w: WindowKey) => void;
-  toggleWindow: (w: Exclude<WindowKey, null>) => void;
+  /**
+   * Quais janelas estão abertas, na ORDEM DE PILHA — a última é a de CIMA.
+   *
+   * Era um valor só (`openWindow: WindowKey | null`), e abrir uma fechava
+   * qualquer outra: "abro Alt+Q, abro Alt+E, o Alt+Q fecha" era o próprio
+   * formato do estado, não um bug de despacho. Lista em vez de valor é o que
+   * deixa várias abertas ao mesmo tempo, cada uma na sua posição.
+   */
+  openWindows: WindowKey[];
+  /** posições arrastadas — ausente = ainda centralizada (padrão) */
+  positions: Partial<Record<WindowKey, WindowPos>>;
+  isOpen: (w: WindowKey) => boolean;
+  /** abre (ou só traz pra frente, se já estava aberta) — nunca fecha outra */
+  openWindow: (w: WindowKey) => void;
+  closeWindow: (w: WindowKey) => void;
+  toggleWindow: (w: WindowKey) => void;
+  /** põe no topo da pilha sem mudar quem está aberto */
+  bringToFront: (w: WindowKey) => void;
+  /**
+   * Fecha a de CIMA — o ESC do RO desfaz da mais nova pra mais velha.
+   * Devolve `false` quando não havia nenhuma (quem chama decide o próximo
+   * passo da cadeia de ESC).
+   */
+  closeTopWindow: () => boolean;
+  moveWindow: (w: WindowKey, pos: WindowPos) => void;
 
   chatTab: ChatTab;
   setChatTab: (t: ChatTab) => void;
@@ -65,10 +85,35 @@ interface HudState {
   /** mouse sobre um monstro (pra trocar o cursor pra espada) */
 }
 
-export const useHudStore = create<HudState>((set) => ({
-  openWindow: null,
-  setWindow: (openWindow) => set({ openWindow }),
-  toggleWindow: (w) => set((s) => ({ openWindow: s.openWindow === w ? null : w })),
+export const useHudStore = create<HudState>((set, get) => ({
+  openWindows: [],
+  positions: {},
+  isOpen: (w) => get().openWindows.includes(w),
+  openWindow: (w) =>
+    set((s) => ({ openWindows: [...s.openWindows.filter((k) => k !== w), w] })),
+  closeWindow: (w) => set((s) => ({ openWindows: s.openWindows.filter((k) => k !== w) })),
+  toggleWindow: (w) =>
+    set((s) =>
+      s.openWindows.includes(w)
+        ? { openWindows: s.openWindows.filter((k) => k !== w) }
+        : { openWindows: [...s.openWindows, w] },
+    ),
+  bringToFront: (w) =>
+    set((s) => {
+      // já está no topo: nada muda, e nada muda de REFERÊNCIA — importante
+      // porque isto roda em todo `pointerdown` dentro de QUALQUER janela, e
+      // um array novo a cada clique reconciliaria as seis à toa.
+      if (s.openWindows.at(-1) === w) return s;
+      if (!s.openWindows.includes(w)) return s;
+      return { openWindows: [...s.openWindows.filter((k) => k !== w), w] };
+    }),
+  closeTopWindow: () => {
+    const topo = get().openWindows.at(-1);
+    if (topo === undefined) return false;
+    set((s) => ({ openWindows: s.openWindows.filter((k) => k !== topo) }));
+    return true;
+  },
+  moveWindow: (w, pos) => set((s) => ({ positions: { ...s.positions, [w]: pos } })),
 
   chatTab: FIXED_TAB,
   setChatTab: (chatTab) => set({ chatTab }),

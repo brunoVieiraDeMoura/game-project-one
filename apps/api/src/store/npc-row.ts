@@ -16,6 +16,7 @@ export interface NpcRow {
   direction: number;
   dialogue_entry: string | null;
   dialogue: unknown;
+  event_handlers: unknown;
   quest_triggers: unknown;
   shop: unknown | null;
   warp: unknown | null;
@@ -37,6 +38,7 @@ export function npcToRow(n: Npc): NpcRow {
     direction: n.direction,
     dialogue_entry: n.dialogueEntry,
     dialogue: n.dialogue,
+    event_handlers: n.eventHandlers,
     quest_triggers: n.questTriggers,
     shop: n.shop ?? null,
     warp: n.warp ?? null,
@@ -57,6 +59,7 @@ export function rowToNpc(row: NpcRow): Npc {
     direction: row.direction,
     dialogueEntry: row.dialogue_entry,
     dialogue: row.dialogue,
+    eventHandlers: row.event_handlers ?? [],
     questTriggers: row.quest_triggers,
     shop: row.shop ?? undefined,
     warp: row.warp ?? undefined,

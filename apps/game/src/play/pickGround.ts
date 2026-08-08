@@ -113,6 +113,44 @@ export function moldarMalhaTerreno(
   geo.computeBoundingSphere();
 }
 
+/**
+ * Há linha de visada entre dois pontos, ou tem montanha/prop no meio?
+ *
+ * Sem isto, targetar um monstro era um teste contra a hitbox DELE só — o R3F só
+ * raycasta objetos com handler, e o terreno/prop não tem nenhum, então o clique
+ * (e a assistência de mira) atravessavam a montanha inteira sem perceber que
+ * havia uma no caminho. É o "consigo pegar o target no blind da montanha".
+ *
+ * O raio sai um pouco ANTES da origem (`recuo`) e para um pouco ANTES do alvo
+ * (`folga`): sem o primeiro, a própria hitbox de quem está perguntando (a
+ * área de clique do personagem, se algum dia tiver uma) entraria na lista; sem
+ * o segundo, a hitbox do PRÓPRIO alvo (mesmos grupos, se algum prop for pai de
+ * uma entidade) bloquearia o teste nele mesmo.
+ */
+const raycasterVisada = new THREE.Raycaster();
+const dirVisada = new THREE.Vector3();
+
+export function temLinhaDeVisada(
+  origem: THREE.Vector3,
+  alvo: THREE.Vector3,
+  obstaculos: readonly THREE.Object3D[],
+  folga = 0.5,
+): boolean {
+  dirVisada.subVectors(alvo, origem);
+  const dist = dirVisada.length();
+  if (dist <= folga) return true;
+  dirVisada.normalize();
+  raycasterVisada.set(origem, dirVisada);
+  raycasterVisada.near = 0;
+  raycasterVisada.far = Math.max(0, dist - folga);
+  for (const obj of obstaculos) {
+    if (!obj) continue;
+    const hits = raycasterVisada.intersectObject(obj, true);
+    if (hits.length > 0) return false;
+  }
+  return true;
+}
+
 /** o marcador de destino, na subdivisão e altura dele (ver `moldarMalhaTerreno`) */
 export function moldarMarcador(
   geo: THREE.BufferGeometry,

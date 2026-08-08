@@ -91,7 +91,7 @@ export function SkillsWindow() {
   const netSkills = usePlayerStore((s) => s.skills);
   const skillPoint = usePlayerStore((s) => s.stats.skillPoint);
   const catalog = useSkillCatalog((s) => s.byId);
-  const fechar = () => useHudStore.getState().setWindow(null);
+  const fechar = () => useHudStore.getState().closeWindow("skills");
 
   const [aba, setAba] = useState<string | null>(null);
   const [pagina, setPagina] = useState(0);

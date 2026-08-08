@@ -82,7 +82,7 @@ export function FriendsWindow() {
   const pedido = useFriendStore((s) => s.pedido);
   const aviso = useFriendStore((s) => s.aviso);
   const rolagem = useRef<HTMLDivElement>(null);
-  const fechar = () => useHudStore.getState().setWindow(null);
+  const fechar = () => useHudStore.getState().closeWindow("friends");
 
   // O aviso ("vocês agora são amigos", "recusado") some sozinho: ele é resposta
   // a um gesto, não estado — deixar na tela faria parecer erro permanente.

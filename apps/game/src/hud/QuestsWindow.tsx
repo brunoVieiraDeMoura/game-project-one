@@ -97,7 +97,7 @@ const MARCA: Record<QuestState, { glifo: string; cor: string; titulo: string }> 
  * componente desta tela conhece a origem dos dados de perto.
  */
 export function QuestsWindow() {
-  const fechar = () => useHudStore.getState().setWindow(null);
+  const fechar = () => useHudStore.getState().closeWindow("quests");
   // Rastreada e aberta moram no `questStore`: o painel fixo da esquerda
   // (`QuestTracker`) mexe nas duas, e as telas têm que concordar.
   const rastreada = useQuestUi((s) => s.rastreada);

@@ -46,7 +46,7 @@ export function QuestTracker() {
 
   const abrirJanela = (id: string) => {
     abrir(id);
-    useHudStore.getState().setWindow("quests");
+    useHudStore.getState().openWindow("quests");
   };
 
   return (

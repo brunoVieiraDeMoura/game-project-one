@@ -59,7 +59,7 @@ export function InventoryWindow() {
   const online = usePlayerStore((s) => s.known);
   const inventory = usePlayerStore((s) => s.inventory);
   const stats = usePlayerStore((s) => s.stats);
-  const fechar = () => useHudStore.getState().setWindow(null);
+  const fechar = () => useHudStore.getState().closeWindow("inventory");
 
   /**
    * Nome de verdade dos itens da bolsa.

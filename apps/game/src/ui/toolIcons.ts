@@ -16,7 +16,7 @@ import type { WindowKey } from "../hud/hudStore";
 const BASE = "/assets/ui/tools";
 
 /** janela → arte. A ORDEM aqui é a da referência, e é a que a barra desenha. */
-export const TOOL_ICONS: { key: Exclude<WindowKey, null>; label: string; art: string; hotkey: string }[] = [
+export const TOOL_ICONS: { key: WindowKey; label: string; art: string; hotkey: string }[] = [
   { key: "inventory", label: "Inventário", art: `${BASE}/bag.png`, hotkey: "Alt+E" },
   { key: "skills", label: "Skills", art: `${BASE}/skills.png`, hotkey: "Alt+S" },
   { key: "status", label: "Status", art: `${BASE}/status.png`, hotkey: "Alt+A" },

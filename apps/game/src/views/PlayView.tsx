@@ -22,7 +22,7 @@ import { Player } from "../play/Player";
 import { usePlayStore } from "../play/playStore";
 import { TriggerRuntime } from "../play/TriggerRuntime";
 import { GroundInteract, markerRadiusFor, PROPS_GROUP } from "../play/GroundInteract";
-import { TERRAIN_GROUP } from "../play/pickGround";
+import { TERRAIN_GROUP, temLinhaDeVisada } from "../play/pickGround";
 import { AimPreview } from "../play/AimPreview";
 import { AlvoPorTab } from "../play/AlvoPorTab";
 import { melhorAlvo, RAIO_ASSIST_PX, type Candidato } from "../play/aimAssist";
@@ -306,8 +306,24 @@ function AssistenciaDeMira({
 }) {
   const gl = useThree((s) => s.gl);
   const tamanho = useThree((s) => s.size);
+  const scene = useThree((s) => s.scene);
   /** ponteiro em px de CSS, relativo ao canvas; `null` = fora dele */
   const ponteiro = useRef<{ px: number; py: number } | null>(null);
+
+  /**
+   * Montanha e prop também BLOQUEIAM a mira, não só a visão.
+   *
+   * Achados por NOME uma vez (não a cada quadro — `getObjectByName` percorre a
+   * cena inteira) e reachados quando o mapa troca, porque a troca desmonta e
+   * remonta os dois grupos. Vazio até o primeiro `useEffect` rodar não é
+   * problema: sem obstáculo nenhum, o gate abaixo simplesmente não filtra nada.
+   */
+  const obstaculos = useRef<THREE.Object3D[]>([]);
+  useEffect(() => {
+    const terreno = scene.getObjectByName(TERRAIN_GROUP);
+    const props = scene.getObjectByName(PROPS_GROUP);
+    obstaculos.current = [terreno, props].filter((o): o is THREE.Object3D => !!o);
+  }, [scene, map]);
 
   useEffect(() => {
     const el = gl.domElement;
@@ -395,7 +411,35 @@ function AssistenciaDeMira({
       mobs.push(candidato(gid, e.x, e.y, estaMeAtacando(gid, agora), cellSize * MIRA_ALTURA_MOB));
     }
 
-    const mob = melhorAlvo(p, mobs);
+    let mob = melhorAlvo(p, mobs);
+    /**
+     * Montanha no meio não é candidato, mesmo perto do ponteiro.
+     *
+     * `visivel` acima só descarta pela NÉVOA — barato, testado por quadro para
+     * todo candidato. O raio contra terreno/prop é caro (centenas de props na
+     * cena), então só roda para o VENCEDOR, e só de novo se ele for excluído:
+     * é "o alvo no blind da montanha", não "todo mob na tela". Teto de 6
+     * exclusões por segurança num aglomerado cercado de obstáculo.
+     */
+    if (mob && obstaculos.current.length > 0) {
+      const excluidos = new Set<number>();
+      while (mob) {
+        const e = mundo.entities[mob.gid];
+        if (!e) break;
+        const w = cellToWorld(map, mapping, e.x, e.y);
+        const alvo = scratch.set(w.x, w.y + cellSize * MIRA_ALTURA_MOB, w.z).clone();
+        if (temLinhaDeVisada(cam.position, alvo, obstaculos.current)) break;
+        excluidos.add(mob.gid);
+        if (excluidos.size >= 6) {
+          mob = null;
+          break;
+        }
+        mob = melhorAlvo(
+          p,
+          mobs.filter((m) => !excluidos.has(m.gid)),
+        );
+      }
+    }
     publicarDiagnostico(p, mobs, mob?.gid ?? 0);
     if (mob) {
       useSoftLockStore.getState().apontar({ gid: mob.gid, tipo: "mob" });
@@ -413,7 +457,26 @@ function AssistenciaDeMira({
     for (const it of Object.values(useGroundItems.getState().items)) {
       itens.push(candidato(it.gid, it.x, it.y, false, cellSize * MIRA_ALTURA_ITEM));
     }
-    const item = melhorAlvo(p, itens);
+    let item = melhorAlvo(p, itens);
+    if (item && obstaculos.current.length > 0) {
+      const excluidos = new Set<number>();
+      while (item) {
+        const it = useGroundItems.getState().items[item.gid];
+        if (!it) break;
+        const w = cellToWorld(map, mapping, it.x, it.y);
+        const alvo = scratch.set(w.x, w.y + cellSize * MIRA_ALTURA_ITEM, w.z).clone();
+        if (temLinhaDeVisada(cam.position, alvo, obstaculos.current)) break;
+        excluidos.add(item.gid);
+        if (excluidos.size >= 6) {
+          item = null;
+          break;
+        }
+        item = melhorAlvo(
+          p,
+          itens.filter((m) => !excluidos.has(m.gid)),
+        );
+      }
+    }
     useSoftLockStore.getState().apontar(item ? { gid: item.gid, tipo: "item" } : null);
   });
 
@@ -873,6 +936,7 @@ function Scene({
               animationSpeed={gameplay.animationSpeed}
               cellSize={moveCell}
               fogFar={visao.fogFar}
+              terrain={world.terrain}
             />
             <GroundItems map={map} mapping={mapping} cellSize={moveCell} />
             <NetPlayer
@@ -920,7 +984,7 @@ function Scene({
         <>
           <NetDamageNumbers map={map} mapping={mapping} />
           {/* efeitos de skill: todos nascem de pacote do servidor */}
-          <SkillVfx map={map} mapping={mapping} cellSize={moveCell} />
+          <SkillVfx map={map} mapping={mapping} cellSize={moveCell} terrain={world.terrain} />
         </>
       ) : (
         <DamageNumbers />

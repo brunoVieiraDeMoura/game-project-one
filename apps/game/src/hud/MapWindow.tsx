@@ -101,7 +101,7 @@ export function MapWindow({
    */
   const panRef = useRef({ x: 0, y: 0 });
   const arrastoRef = useRef<{ x: number; y: number } | null>(null);
-  const fechar = () => useHudStore.getState().setWindow(null);
+  const fechar = () => useHudStore.getState().closeWindow("map");
 
   const campo = { w: px(MAP_LAYOUT.field.w), h: px(MAP_LAYOUT.field.h) };
   const conteudo =

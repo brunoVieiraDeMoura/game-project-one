@@ -96,9 +96,6 @@ describe("JobDatabaseWriter — Writer atômico dos 5 arquivos (Mapper+Validator
     const stamp = `${Date.now()}-${Math.random()}`;
     paths = {
       jobStats: join(tmpdir(), `job_stats-${stamp}.yml`),
-      jobBasepoints: join(tmpdir(), `job_basepoints-${stamp}.yml`),
-      jobExp: join(tmpdir(), `job_exp-${stamp}.yml`),
-      jobAspd: join(tmpdir(), `job_aspd-${stamp}.yml`),
       skillTree: join(tmpdir(), `skill_tree-${stamp}.yml`),
     };
     writer = new JobDatabaseWriter(paths);
@@ -112,37 +109,33 @@ describe("JobDatabaseWriter — Writer atômico dos 5 arquivos (Mapper+Validator
     }
   });
 
-  it("round-trip: grava Swordman, os 5 arquivos batem com o Mapper (Header correto em cada um)", async () => {
+  it("round-trip: grava Swordman — job_stats.yml e skill_tree.yml batem com o Mapper (Header correto)", async () => {
     const { jobs, skills } = resolvers();
     // Swordman referencia Novice em parentClassId/skillTreeInherit — "Classes
     // existentes" (requisito 3) exige que Novice esteja no universo conhecido.
     await writer.writeClasses([jobFixture(), swordman()], jobs, skills);
 
     const jobStatsDoc = JobStatsDocSchema.parse(parseYamlText(await readFile(paths.jobStats, "utf8")));
-    const basepointsDoc = JobStatsDocSchema.parse(parseYamlText(await readFile(paths.jobBasepoints, "utf8")));
-    const expDoc = JobStatsDocSchema.parse(parseYamlText(await readFile(paths.jobExp, "utf8")));
-    const aspdDoc = JobStatsDocSchema.parse(parseYamlText(await readFile(paths.jobAspd, "utf8")));
     const treeDoc = SkillTreeDocSchema.parse(parseYamlText(await readFile(paths.skillTree, "utf8")));
 
     expect(jobStatsDoc.Header).toEqual({ Type: "JOB_STATS", Version: 4 });
     expect(treeDoc.Header).toEqual({ Type: "SKILL_TREE_DB", Version: 1 });
 
+    // as 4 categorias (peso/HP-SP/exp/ASPD) vêm TODAS da mesma entrada —
+    // um único arquivo físico, achado do dispatcher (job-database-writer.ts)
     const statsEntry = jobStatsDoc.Body.find((e) => e.Jobs.Swordman);
-    const basepointsEntry = basepointsDoc.Body.find((e) => e.Jobs.Swordman);
-    const expEntry = expDoc.Body.find((e) => e.Jobs.Swordman);
-    const aspdEntry = aspdDoc.Body.find((e) => e.Jobs.Swordman);
     const treeEntry = treeDoc.Body.find((e) => e.Job === "Swordman");
 
-    expect(jobBasepointsToJobClassPart(basepointsEntry, [], "Swordman").baseHpByLevel).toEqual([40, 48, 56]);
-    expect(jobAspdToJobClassPart(aspdEntry, [], "Swordman").aspdModifiers).toEqual([{ weaponType: "1h_sword", baseAspd: 156 }]);
-    expect(expEntry?.MaxBaseLevel).toBe(10);
+    expect(jobBasepointsToJobClassPart(statsEntry, [], "Swordman").baseHpByLevel).toEqual([40, 48, 56]);
+    expect(jobAspdToJobClassPart(statsEntry, [], "Swordman").aspdModifiers).toEqual([{ weaponType: "1h_sword", baseAspd: 156 }]);
+    expect(statsEntry?.MaxBaseLevel).toBe(10);
     expect(statsEntry?.MaxWeight).toBe(20000);
     expect(treeEntry?.Inherit).toEqual({ Novice: true });
     expect(treeEntry?.Tree).toEqual([{ Name: "SM_SWORD", MaxLevel: 5 }]);
     void jobStatsToJobClassPart(statsEntry); // schema já provou o round-trip; só confere que não lança
   });
 
-  it("validação estrutural: MaxBaseLevel fora de 1..275 é rejeitado, NENHUM dos 5 arquivos é tocado", async () => {
+  it("validação estrutural: MaxBaseLevel fora de 1..275 é rejeitado, NENHUM dos arquivos é tocado", async () => {
     const { jobs, skills } = resolvers();
     await expect(writer.writeClasses([jobFixture(), swordman({ maxBaseLevel: 0 })], jobs, skills)).rejects.toMatchObject({
       statusCode: 400,
@@ -184,10 +177,10 @@ describe("JobDatabaseWriter — Writer atômico dos 5 arquivos (Mapper+Validator
   it("diff: escrever Knight depois de Swordman não toca a entrada já gravada de Swordman", async () => {
     const { jobs, skills } = resolvers();
     await writer.writeClasses([jobFixture(), swordman()], jobs, skills);
-    const afterSwordman = await readFile(paths.jobBasepoints, "utf8");
+    const afterSwordman = await readFile(paths.jobStats, "utf8");
 
     const { diff } = await writer.writeClasses([knight()], jobs, skills);
-    const afterKnight = await readFile(paths.jobBasepoints, "utf8");
+    const afterKnight = await readFile(paths.jobStats, "utf8");
 
     const docBefore = JobStatsDocSchema.parse(parseYamlText(afterSwordman));
     const docAfter = JobStatsDocSchema.parse(parseYamlText(afterKnight));
@@ -202,10 +195,10 @@ describe("JobDatabaseWriter — Writer atômico dos 5 arquivos (Mapper+Validator
   it("backup: reescrever o MESMO job gera .bak com o conteúdo anterior", async () => {
     const { jobs, skills } = resolvers();
     await writer.writeClasses([jobFixture(), swordman()], jobs, skills);
-    const before = await readFile(paths.jobBasepoints, "utf8");
+    const before = await readFile(paths.jobStats, "utf8");
 
     await writer.writeClasses([swordman({ baseHpByLevel: [50, 60, 70] })], jobs, skills);
-    const bak = await readFile(`${paths.jobBasepoints}.bak`, "utf8");
+    const bak = await readFile(`${paths.jobStats}.bak`, "utf8");
     expect(bak).toBe(before);
   });
 

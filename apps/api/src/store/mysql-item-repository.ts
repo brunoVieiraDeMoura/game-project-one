@@ -134,7 +134,7 @@ export class MysqlItemRepository implements ItemRepository {
 	}
 }
 
-export type ReloadKind = "itemdb" | "mobdb" | "skilldb" | "script" | "battleconf" | "pcdb";
+export type ReloadKind = "itemdb" | "mobdb" | "skilldb" | "script" | "battleconf" | "pcdb" | "statusdb";
 
 /**
  * Pede ao map-server que releia a base.

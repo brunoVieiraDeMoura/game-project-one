@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import type * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
 import { useHudStore, type WindowKey } from "./hudStore";
@@ -29,57 +29,127 @@ export function Windows({
   map: GameMap;
   playerPos: React.MutableRefObject<THREE.Vector3>;
 }) {
-  const open = useHudStore((s) => s.openWindow);
-  const close = () => useHudStore.getState().setWindow(null);
-  if (!open) return null;
-
-  // Inventário, Status, Amigos, Habilidades, Missões e Mapa têm arte PRÓPRIA —
-  // moldura, título e botão de fechar vêm no desenho —, então não entram no
-  // `Panel` genérico: a página pixel-art do TravelBook por baixo brigaria com a
-  // madeira pintada delas. Por isso as seis também não aparecem em
-  // TITLES/CONTENT: o desvio é aqui, e o Record cobre só o que ainda usa o Panel.
-  switch (open) {
-    case "inventory":
-      return <Centralizada>{<InventoryWindow />}</Centralizada>;
-    case "status":
-      return <Centralizada>{<StatusArtWindow />}</Centralizada>;
-    case "friends":
-      return <Centralizada>{<FriendsWindow />}</Centralizada>;
-    case "skills":
-      return <Centralizada>{<SkillsArtWindow />}</Centralizada>;
-    case "quests":
-      return <Centralizada>{<QuestsArtWindow />}</Centralizada>;
-    case "map":
-      return <Centralizada>{<MapArtWindow map={map} playerPos={playerPos} />}</Centralizada>;
-  }
-
-  const meta = TITLES[open];
-  const Content = CONTENT[open];
+  // ORDEM DE PILHA: a última é a de cima. Várias podem estar abertas ao mesmo
+  // tempo agora — abrir uma não fecha as outras, o problema era o formato do
+  // estado (um valor só), não o despacho (next-change-gamee.txt item 8).
+  const openWindows = useHudStore((s) => s.openWindows);
+  if (openWindows.length === 0) return null;
 
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-      <div style={{ pointerEvents: "auto" }}>
+    <>
+      {openWindows.map((key, i) => (
+        <DraggableWindow key={key} winKey={key} z={100 + i}>
+          {windowBody(key, map, playerPos)}
+        </DraggableWindow>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Inventário, Status, Amigos, Habilidades, Missões e Mapa têm arte PRÓPRIA —
+ * moldura, título e botão de fechar vêm no desenho —, então não entram no
+ * `Panel` genérico: a página pixel-art do TravelBook por baixo brigaria com a
+ * madeira pintada delas. Configurações é a única que ainda usa o Panel.
+ */
+function windowBody(open: WindowKey, map: GameMap, playerPos: React.MutableRefObject<THREE.Vector3>): ReactElement {
+  switch (open) {
+    case "inventory":
+      return <InventoryWindow />;
+    case "status":
+      return <StatusArtWindow />;
+    case "friends":
+      return <FriendsWindow />;
+    case "skills":
+      return <SkillsArtWindow />;
+    case "quests":
+      return <QuestsArtWindow />;
+    case "map":
+      return <MapArtWindow map={map} playerPos={playerPos} />;
+    case "settings": {
+      const meta = TITLES.settings;
+      return (
         <Panel style={{ width: `min(${meta.width}px, 92vw)`, maxHeight: "80vh", overflow: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
             <div style={{ font: "700 16px system-ui", color: "#493333" }}>{meta.title}</div>
             <div style={{ marginLeft: "auto" }}>
-              <RpgButton color="brown" onClick={close}>
+              <RpgButton color="brown" onClick={() => useHudStore.getState().closeWindow("settings")}>
                 ✕
               </RpgButton>
             </div>
           </div>
-          <Content />
+          <SettingsWindow />
         </Panel>
-      </div>
-    </div>
-  );
+      );
+    }
+  }
 }
 
-/** casca comum das janelas com arte própria: centraliza sem comer o clique */
-function Centralizada({ children }: { children: ReactElement }) {
+/** fração de cima da janela que arrasta — o resto é só "traz pra frente" */
+const FAIXA_ARRASTAVEL = 0.16;
+
+/**
+ * Casca de toda janela: centraliza (posição padrão), deixa arrastar pela
+ * FAIXA DE CIMA e traz para a frente com um clique em qualquer parte dela.
+ *
+ * Nunca chama `stopPropagation`/`preventDefault` no `pointerdown`: um clique
+ * sem arrasto (mousedown+mouseup no mesmo lugar, o caso comum de apertar o
+ * "x" ou um slot de item) continua chegando ao filho normalmente — só
+ * MOVIMENTO de verdade é interceptado, pelos listeners de `pointermove` no
+ * `window`, que só existem enquanto o botão está pressionado.
+ */
+function DraggableWindow({ winKey, z, children }: { winKey: WindowKey; z: number; children: ReactElement }) {
+  const pos = useHudStore((s) => s.positions[winKey]);
+  const caixa = useRef<HTMLDivElement>(null);
+  const arrastando = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
+
+  useEffect(() => {
+    const mover = (e: PointerEvent) => {
+      const a = arrastando.current;
+      if (!a) return;
+      // clamp generoso: a janela pode sair quase toda da tela, mas nunca a
+      // ponto de não ter mais como pegá-la de volta pela faixa de cima
+      const margem = 80;
+      const x = Math.max(-window.innerWidth / 2 + margem, Math.min(window.innerWidth / 2 - margem, a.ox + (e.clientX - a.px)));
+      const y = Math.max(-window.innerHeight / 2 + margem, Math.min(window.innerHeight / 2 - margem, a.oy + (e.clientY - a.py)));
+      useHudStore.getState().moveWindow(winKey, { x, y });
+    };
+    const soltar = () => {
+      if (!arrastando.current) return;
+      arrastando.current = null;
+      if (caixa.current) caixa.current.style.cursor = "";
+    };
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", soltar);
+    return () => {
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", soltar);
+    };
+  }, [winKey]);
+
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-      <div style={{ pointerEvents: "auto" }}>{children}</div>
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", zIndex: z }}>
+      <div
+        ref={caixa}
+        onPointerDown={(e) => {
+          // qualquer clique na janela a traz pra frente — é o "clico no canvas
+          // do menu de baixo, ele vai pra frente" do pedido
+          useHudStore.getState().bringToFront(winKey);
+          const el = caixa.current;
+          if (!el || e.button !== 0) return;
+          const topo = e.clientY - el.getBoundingClientRect().top;
+          if (topo > el.getBoundingClientRect().height * FAIXA_ARRASTAVEL) return;
+          const atual = pos ?? { x: 0, y: 0 };
+          arrastando.current = { px: e.clientX, py: e.clientY, ox: atual.x, oy: atual.y };
+          el.style.cursor = "grabbing";
+        }}
+        style={{
+          pointerEvents: "auto",
+          transform: pos ? `translate(${pos.x}px, ${pos.y}px)` : undefined,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

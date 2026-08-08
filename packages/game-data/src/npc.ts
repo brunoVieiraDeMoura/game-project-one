@@ -100,6 +100,24 @@ export const QuestDefSchema = z.object({
 });
 export type QuestDef = z.infer<typeof QuestDefSchema>;
 
+/**
+ * Um ponto de entrada de EVENTO do NPC — `OnTouch`/`OnInit`/`OnTimerNNNN`/
+ * `OnEnable`/etc. (achado da auditoria de NPCs, leia1.txt 2026-08-07: o
+ * corpus real tem 11.649 rótulos assim em 9.206 scripts — mais de um por
+ * NPC em média — e nenhum era representável antes; o script inteiro caía
+ * em `legacyScript` no primeiro que aparecesse). Mesma FORMA do diálogo
+ * principal (`dialogueEntry`+`dialogue`), só que indexado por rótulo — não
+ * é achatado nem mesclado no diálogo principal, cada handler é a própria
+ * árvore.
+ */
+export const NpcEventHandlerSchema = z.object({
+  /** nome do rótulo tal como aparece no script, sem o `:` final ("OnTouch", "OnTimer5000") */
+  label: z.string().min(1),
+  entry: z.string().nullable().default(null),
+  dialogue: z.array(DialogueNodeSchema).default([]),
+});
+export type NpcEventHandler = z.infer<typeof NpcEventHandlerSchema>;
+
 export const NpcSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
@@ -109,9 +127,13 @@ export const NpcSchema = z.object({
   /** 0-7 canônico; scripts legados usam valores maiores (tolerados pelo rAthena) */
   direction: z.number().int().nonnegative().default(0),
 
-  /** entry node id into dialogue tree; null = non-interactive */
+  /** entry node id into dialogue tree; null = non-interactive. Corpo
+   * PRINCIPAL (disparado por clique) — os `On*:` do script viram
+   * `eventHandlers`, nunca são achatados aqui dentro. */
   dialogueEntry: z.string().nullable().default(null),
   dialogue: z.array(DialogueNodeSchema).default([]),
+  /** handlers de evento (OnTouch/OnInit/OnTimer.../OnEnable/...), cada um com sua própria árvore. */
+  eventHandlers: z.array(NpcEventHandlerSchema).default([]),
 
   questTriggers: z.array(z.string()).default([]),
   shop: NpcShopSchema.optional(),

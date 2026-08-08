@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useShallow } from "zustand/react/shallow";
 import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
+import type { TerrainQuery } from "@ragnarok/engine-core";
 import { CHARACTER_URLS, useCharacter } from "../assets";
 import { mobModel, NPC_MODEL } from "../entities/mobModels";
 import { gateway } from "./gateway";
@@ -18,6 +19,8 @@ import { useSoftLockStore } from "../play/softLockStore";
 import { useAttackStore } from "./attackStore";
 import { atacar, castarEmAlvo } from "./acoes";
 import { pulsoDe } from "./combatAnim";
+import { PROPS_GROUP } from "../play/GroundInteract";
+import { TERRAIN_GROUP, temLinhaDeVisada } from "../play/pickGround";
 
 /** de quanto em quanto tempo o `__netEntities` do DEV é atualizado */
 const DBG_INTERVALO_MS = 500;
@@ -64,6 +67,7 @@ export function NetEntityView({
   animationSpeed,
   cellSize,
   fogFar,
+  terrain,
 }: {
   gid: number;
   map: GameMap;
@@ -74,6 +78,8 @@ export function NetEntityView({
   cellSize: number;
   /** onde a névoa fica opaca — além disto não há o que ver (ver play/viewRadius) */
   fogFar: number;
+  /** para o `GlowChao` inclinar pelo relevo sob o mob (item "moldar o alvo") */
+  terrain?: TerrainQuery;
 }) {
   /**
    * Assina só o que MUDA O DESENHO — nunca a entidade inteira.
@@ -101,6 +107,22 @@ export function NetEntityView({
    */
   const aVista = useRef(true);
   const { scene, play, playOnce } = useCharacter(CHARACTER_URLS[modelInfo.character], animationSpeed, aVista);
+  /**
+   * Montanha/prop na frente barram o CLIQUE, não só a assistência de mira.
+   *
+   * Sem isto, a hitbox do mob (um cilindro invisível, sem handler nenhum entre
+   * ela e a câmera) era testada sozinha — o R3F só raycasta objeto com handler,
+   * então o terreno nem entrava na conta e dava para "pegar o target no blind
+   * da montanha" clicando direto em cima do mob. Achado por nome uma vez (ver
+   * `views/PlayView`, mesmo padrão) e refeito quando o MAPA troca.
+   */
+  const cenaRaiz = useThree((s) => s.scene);
+  const obstaculos = useRef<THREE.Object3D[]>([]);
+  useEffect(() => {
+    const terreno = cenaRaiz.getObjectByName(TERRAIN_GROUP);
+    const props = cenaRaiz.getObjectByName(PROPS_GROUP);
+    obstaculos.current = [terreno, props].filter((o): o is THREE.Object3D => !!o);
+  }, [cenaRaiz, map]);
   const group = useRef<THREE.Group>(null);
   /** só o boneco gira; plaquinha e área de clique ficam paradas */
   const model = useRef<THREE.Group>(null);
@@ -318,6 +340,22 @@ export function NetEntityView({
          */
         if (cliqueVaiParaOChao(aiming)) return;
 
+        /**
+         * Montanha/prop no meio: o clique não é PARA esta entidade.
+         *
+         * A hitbox é um cilindro sem relação nenhuma com o que está desenhado
+         * na frente dela — sem isto, um monstro escondido atrás de uma
+         * montanha continuava clicável porque o R3F só testa objeto com
+         * handler, e o relevo não tem nenhum. Sem `stopPropagation`: o clique
+         * segue para o que estiver de fato na frente (o chão, via
+         * `GroundInteract`), como se este mob nem estivesse ali.
+         */
+        if (entity.kind === "mob" && obstaculos.current.length > 0 && group.current) {
+          const alvoVisada = group.current.position.clone();
+          alvoVisada.y += (height * HITBOX_ALTURA) / 2;
+          if (!temLinhaDeVisada(e.camera.position, alvoVisada, obstaculos.current)) return;
+        }
+
         e.stopPropagation();
         useWorldStore.getState().setTarget(gid);
 
@@ -394,6 +432,7 @@ export function NetEntityView({
         aceso={realce || travado || alvo}
         forca={realce ? 0.78 : travado ? 0.62 : alvo ? 0.5 : 0}
         aro={alvo ? 0.95 : 0}
+        terrain={terrain}
       />
 
       <group ref={model} scale={charScale * modelInfo.scale}>
@@ -423,6 +462,7 @@ export function NetEntities({
   animationSpeed,
   cellSize,
   fogFar,
+  terrain,
 }: {
   map: GameMap;
   mapping: LegacyMapping;
@@ -431,6 +471,8 @@ export function NetEntities({
   cellSize: number;
   /** onde a névoa fecha; entidade além disso não é desenhada */
   fogFar: number;
+  /** para o `GlowChao` de cada mob inclinar pelo relevo sob ele */
+  terrain?: TerrainQuery;
 }) {
   const selfGid = useWorldStore((s) => s.selfGid);
   /**
@@ -467,6 +509,7 @@ export function NetEntities({
             animationSpeed={animationSpeed}
             cellSize={cellSize}
             fogFar={fogFar}
+            terrain={terrain}
           />
         ))}
     </group>

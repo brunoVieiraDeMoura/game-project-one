@@ -60,7 +60,7 @@ export function StatusWindow() {
   const stats = usePlayerStore((s) => s.stats);
   const charName = usePlayerStore((s) => s.charName);
   const data = useCharacterStore((s) => s.data);
-  const fechar = () => useHudStore.getState().setWindow(null);
+  const fechar = () => useHudStore.getState().closeWindow("status");
 
   const [pend, setPend] = useState<Pendentes>(ZERO);
   const [ajuda, setAjuda] = useState<(typeof ST_ATTRS)[number] | null>(null);

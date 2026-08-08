@@ -299,7 +299,7 @@ export function PlayerFrame() {
       hp={{ atual: p.hp, max: p.maxHp }}
       sp={{ atual: p.sp, max: p.maxSp }}
       jobLevel={online ? stats.jobLevel : localJobLevel}
-      onJobClick={() => useHudStore.getState().setWindow("skills")}
+      onJobClick={() => useHudStore.getState().openWindow("skills")}
       portrait={<CharacterPortrait dono="jogador" />}
     />
   );

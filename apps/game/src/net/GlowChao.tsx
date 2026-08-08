@@ -1,4 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import type { TerrainQuery } from "@ragnarok/engine-core";
 import { GEO_PLANO, materialDeBrilho } from "./recursosCompartilhados";
 
 /**
@@ -57,6 +60,9 @@ void main() {
 }
 `;
 
+/** metade da distância de amostra pra estimar a inclinação do terreno, em unidades de mundo */
+const AMOSTRA_INCLINACAO = 0.35;
+
 export function GlowChao({
   cor,
   raio,
@@ -71,12 +77,24 @@ export function GlowChao({
    * cada um tem o seu número em vez de disputarem o mesmo.
    */
   aro = 0,
+  /**
+   * Inclina o disco pela encosta sob a entidade — o "moldar" que a mira de
+   * skill e o marcador de destino já fazem, só que aqui é ROTAÇÃO, não malha
+   * por vértice: o disco é UNITÁRIO e compartilhado (`GEO_PLANO`) entre todo
+   * mob da tela, e remoldar vértice a vértice por instância desfaria essa
+   * economia com dezenas de mob em vista. Inclinar é três números por
+   * quadrado, não recalcular uma malha inteira.
+   *
+   * Opcional: sem `terrain`, o disco fica deitado reto, como sempre foi.
+   */
+  terrain,
 }: {
   cor: string;
   raio: number;
   aceso: boolean;
   forca?: number;
   aro?: number;
+  terrain?: TerrainQuery;
 }) {
   /**
    * COMPARTILHADO por combinação de cor/força/aro, não um por entidade.
@@ -92,6 +110,49 @@ export function GlowChao({
    */
   const material = useMemo(() => materialDeBrilho(cor, forca, aro, VERT, FRAG), [cor, forca, aro]);
 
+  const mesh = useRef<THREE.Mesh>(null);
+  /**
+   * Em que amostra (arredondada) a inclinação foi calculada pela última vez.
+   *
+   * `""` de propósito (nunca uma chave real nem "sem terreno"): o rotation
+   * agora é SÓ imperativo (sem prop declarativa concorrendo), então o
+   * primeiro quadro tem de aplicar alguma coisa — deitado reto ou inclinado —
+   * mesmo sem nenhuma amostra ter mudado ainda.
+   */
+  const inclinadoEm = useRef<string>("");
+
+  /**
+   * A inclinação só é recalculada quando a entidade muda de "amostra" de chão
+   * — não por quadro. `mesh.parent` é o grupo raiz da entidade, que o `useFrame`
+   * DELA já escreve em coordenada de MUNDO todo quadro; ler por aqui não custa
+   * um raycast nem uma segunda fonte de verdade, só o que já foi calculado.
+   */
+  useFrame(() => {
+    const m = mesh.current;
+    if (!m) return;
+    if (!terrain || !m.parent) {
+      if (inclinadoEm.current !== "flat") {
+        inclinadoEm.current = "flat";
+        m.rotation.set(-Math.PI / 2, 0, 0);
+      }
+      return;
+    }
+    const wp = m.parent.position;
+    const chave = `${Math.round(wp.x / AMOSTRA_INCLINACAO)},${Math.round(wp.z / AMOSTRA_INCLINACAO)}`;
+    if (inclinadoEm.current === chave) return;
+    inclinadoEm.current = chave;
+    const d = AMOSTRA_INCLINACAO;
+    const hL = terrain.getHeight(wp.x - d, wp.z);
+    const hR = terrain.getHeight(wp.x + d, wp.z);
+    const hD = terrain.getHeight(wp.x, wp.z - d);
+    const hU = terrain.getHeight(wp.x, wp.z + d);
+    // pequena aproximação de ângulo (a passagem é sempre suave sob quem anda
+    // nela): soma ao "deitado reto" de sempre, não substitui.
+    const tiltX = Math.atan2(hU - hD, 2 * d);
+    const tiltZ = Math.atan2(hL - hR, 2 * d);
+    m.rotation.set(-Math.PI / 2 + tiltX, 0, tiltZ);
+  });
+
   /**
    * `visible` em vez de desmontar: o hover entra e sai o tempo todo, e remontar
    * a cada passada de mouse é trabalho puro.
@@ -102,8 +163,11 @@ export function GlowChao({
    */
   return (
     <mesh
+      ref={mesh}
       position={[0, ALTURA, 0]}
-      rotation={[-Math.PI / 2, 0, 0]}
+      // sem `rotation` declarativa: o `useFrame` acima é quem manda nela,
+      // sempre — inclinada ou deitada reta — para uma prop concorrente não
+      // desfazer a inclinação no primeiro re-render depois de calculada.
       scale={[raio * 2, raio * 2, 1]}
       visible={aceso}
       material={material}

@@ -54,6 +54,8 @@ OnTimer2000:
 			// só pro rAthena: pc_readdb() releem os 5 juntos (pc.cpp:14612-14629),
 			// não existe "@reloadjobdb" separado.
 			atcommand "@reloadpcdb";
+		} else if (.@kind$[.@i] == "statusdb") {
+			atcommand "@reloadstatusdb";
 		} else {
 			debugmes "[game-project] reload desconhecido: " + .@kind$[.@i];
 		}

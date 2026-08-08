@@ -5,6 +5,7 @@ import { interpolatedCell, useWorldStore } from "./worldStore";
 import { dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
 import { useSkillTargetStore } from "./skillTargetStore";
 import { alcanceDaSkill } from "./skillCatalog";
+import { useAtaqueBasico } from "./ataqueBasico";
 
 /**
  * O que um clique MANDA fazer — num lugar só.
@@ -44,7 +45,12 @@ export function atacar(gid: number, x: number, y: number): void {
  * `pc_takeitem` e recusa em silêncio de longe. Quem anda é o `NetPlayer`.
  */
 export function pegar(gid: number, x: number, y: number): void {
+  // idem `castarEmAlvo`: pegar item é ordem nova, mata perseguição de ataque
+  // (senão o Ataque Básico rearma sozinho ao ver o alvo mudar, ver abaixo)
+  useAtaqueBasico.getState().desligar();
+  useAttackStore.getState().parar();
   useSkillWalkStore.getState().parar();
+  useSkillTargetStore.getState().parar();
   usePickupStore.getState().buscar({ gid, x, y });
 }
 
@@ -62,7 +68,12 @@ export function castarEmAlvo(skillId: number, level: number, name: string, gid: 
   if (!alvo) return;
 
   // ordem nova mata as outras três: quem manda castar num alvo desistiu de
-  // bater, de pegar item e de lançar noutra célula
+  // bater, de pegar item e de lançar noutra célula. O Ataque Básico tem que
+  // desligar ANTES do `setTarget`: ele reage a troca de alvo rearmando a
+  // perseguição de ataque (`ataqueBasico.ts`), e sem isto castar skill com o
+  // alvo mudando (Tab, novo clique) religava o combo corpo-a-corpo por baixo —
+  // era o "anda até o monstro morto pra atacar" depois de a skill matar.
+  useAtaqueBasico.getState().desligar();
   useAttackStore.getState().parar();
   usePickupStore.getState().parar();
   useSkillWalkStore.getState().parar();

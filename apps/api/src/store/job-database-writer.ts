@@ -26,21 +26,51 @@ import {
 import { queueReload } from "./mysql-item-repository.js";
 
 /**
- * Writer do domínio Classes (leia1.txt, aprovação 2026-08-07) — orquestra os
- * 5 arquivos (`job_stats`/`job_basepoints`/`job_exp`/`job_aspd`/`skill_tree`)
- * como UMA operação atômica: "todos os arquivos são gerados, validados,
- * passam por round-trip, diff e backup antes que qualquer substituição
- * ocorra. Não quero gravações parciais."
+ * Writer do domínio Classes (leia1.txt, aprovação 2026-08-07) — orquestra
+ * `job_stats.yml` + `skill_tree.yml` de `db/import/` como UMA operação
+ * atômica: "todos os arquivos são gerados, validados, passam por
+ * round-trip, diff e backup antes que qualquer substituição ocorra. Não
+ * quero gravações parciais."
+ *
+ * **Achado antes do primeiro write real** (checado direto em
+ * `rathena/db/job_stats.yml:87-119`, o DISPATCHER — não presumido): o
+ * domínio JOB_STATS tem QUATRO arquivos em `db/re/` (job_stats/
+ * job_basepoints/job_exp/job_aspd), mas o dispatcher só declara UM slot de
+ * import: `db/import/job_stats.yml` (linha 119). Não existe
+ * `db/import/job_basepoints.yml` nem os outros dois — escrever neles seria
+ * silenciosamente ignorado pelo `JobDatabase::load()` (`pc.cpp`), porque
+ * ele nunca é listado em `Footer.Imports`. `skill_tree.yml` é o loader
+ * separado de sempre, com o próprio slot (`db/skill_tree.yml:49`).
+ * Por isso só há DOIS arquivos físicos aqui, não cinco — as quatro
+ * categorias JOB_STATS continuam com Mapper PRÓPRIO cada uma
+ * (`job-class-mapper.ts`, requisito 2 do leia1.txt), só que os quatro
+ * `RawJobBodyEntry` parciais são MESCLADOS num só antes de gravar, porque é
+ * assim que o arquivo de override realmente existe no disco.
  *
  * Mesmo padrão de `yaml-skill-repository.ts` (Parser → Mapper → Validator →
  * Writer, nenhuma regra de serialização duplicada aqui — só orquestra +
- * I/O), estendido pra múltiplos arquivos com a garantia de tudo-ou-nada.
- *
- * `db/import/*.yml` não existem até o primeiro write (mesma situação de
- * `skill_db.yml` antes do gate de Skills) — arquivo ausente vira doc vazio.
+ * I/O), estendido pra dois arquivos com a garantia de tudo-ou-nada.
  */
 
 export interface JobDatabasePaths {
+  /** `db/import/job_stats.yml` — domínio JOB_STATS inteiro (as 4 categorias
+   * mescladas num arquivo só, porque é UM só o slot de import real). */
+  jobStats: string;
+  /** `db/import/skill_tree.yml` — loader separado, próprio slot de import. */
+  skillTree: string;
+}
+
+/** `db/re/*.yml` (ou `db/pre-re`) — os arquivos-base do rAthena, os
+ * VERDADEIROS 4+1 arquivos físicos do domínio (só o OVERRIDE é que tem 2).
+ * Servem SÓ pra validação cruzada enxergar o universo INTEIRO de classes
+ * (achado ao rodar o teste funcional: uma classe herdando de um job nunca
+ * tocado por nenhum override — ex. Ninja herda de Novice — é perfeitamente
+ * válida, porque Novice existe em db/re; sem isso o Validator rejeitava
+ * override de QUALQUER classe cujo ancestral não estivesse TAMBÉM no lote).
+ * NUNCA usadas como "base" de preservação de campo (requisito 4) — essa
+ * continua sendo só o `db/import` existente, porque o servidor já mescla
+ * db/re por baixo; copiar campo de lá pro override seria redundante. */
+export interface JobDatabaseBaselinePaths {
   jobStats: string;
   jobBasepoints: string;
   jobExp: string;
@@ -48,8 +78,12 @@ export interface JobDatabasePaths {
   skillTree: string;
 }
 
+/** Rótulo lógico da categoria dentro do domínio JOB_STATS — só pra diff ficar
+ * legível ("o que mudou"); as quatro caem no MESMO arquivo físico. */
+export type JobStatsCategory = "jobStats" | "jobBasepoints" | "jobExp" | "jobAspd";
+
 export interface JobDatabaseDiffEntry {
-  file: keyof JobDatabasePaths;
+  file: JobStatsCategory | "skillTree";
   job: string;
   changedFields: string[];
 }
@@ -90,7 +124,7 @@ function groupByJob(body: RawJobBodyEntry[]): Map<string, RawJobBodyEntry> {
 }
 
 function diffEntry(
-  file: keyof JobDatabasePaths,
+  file: JobStatsCategory,
   job: string,
   before: RawJobBodyEntry | undefined,
   after: RawJobBodyEntry,
@@ -113,7 +147,6 @@ function diffTreeEntry(job: string, before: RawSkillTreeEntry | undefined, after
   return changed.length > 0 ? [{ file: "skillTree", job, changedFields: changed }] : [];
 }
 
-/** Comentário + `Header` idênticos aos 4 arquivos JOB_STATS — mesmo schema/loader (achado da auditoria). */
 function renderJobStatsYaml(entries: RawJobBodyEntry[]): string {
   const sorted = [...entries].sort((a, b) => {
     const nameA = Object.keys(a.Jobs)[0] ?? "";
@@ -123,8 +156,9 @@ function renderJobStatsYaml(entries: RawJobBodyEntry[]): string {
   const doc = { Header: { Type: "JOB_STATS", Version: 4 }, Body: sorted };
   return (
     "# Gerado pelo painel admin (apps/api) — NÃO editar à mão.\n" +
-    "# Sobrepõe entradas do arquivo original por Job; o que não estiver aqui\n" +
-    "# continua valendo do arquivo original do rAthena.\n" +
+    "# Sobrepõe entradas do job_stats.yml original por Job (as quatro\n" +
+    "# categorias — peso/HP/SP/ASPD/exp — mescladas aqui, porque o dispatcher\n" +
+    "# só declara ESTE slot de import pro domínio JOB_STATS inteiro).\n" +
     stringifyYaml(doc, { lineWidth: 0 })
   );
 }
@@ -170,7 +204,10 @@ async function backupIfExists(path: string): Promise<void> {
 }
 
 export class JobDatabaseWriter {
-  constructor(private readonly paths: JobDatabasePaths) {}
+  constructor(
+    private readonly paths: JobDatabasePaths,
+    private readonly baseline?: JobDatabaseBaselinePaths,
+  ) {}
 
   async writeClasses(
     classes: JobClass[],
@@ -186,25 +223,49 @@ export class JobDatabaseWriter {
       throw Object.assign(new Error(`Classes: ${structuralIssues.join("; ")}`), { statusCode: 400 });
     }
 
-    // 2) lê os 5 arquivos existentes — é o "base" pra preservar campo sem
+    // 2) lê os 2 arquivos existentes — é o "base" pra preservar campo sem
     //    representação no dashboard (requisito 4) entre uma edição e outra.
-    const [jobStatsDoc, jobBasepointsDoc, jobExpDoc, jobAspdDoc, skillTreeDoc] = await Promise.all([
+    const [jobStatsDoc, skillTreeDoc] = await Promise.all([
       readJobStatsDoc(this.paths.jobStats),
-      readJobStatsDoc(this.paths.jobBasepoints),
-      readJobStatsDoc(this.paths.jobExp),
-      readJobStatsDoc(this.paths.jobAspd),
       readSkillTreeDoc(this.paths.skillTree),
     ]);
 
-    // 3) validação cruzada (requisito 3) — universo = o que já existe (fora
-    //    do lote) + o lote sendo escrito agora.
-    const { classes: existingAll } = rawDocsToJobClasses(
-      { jobStats: jobStatsDoc, jobBasepoints: jobBasepointsDoc, jobExp: jobExpDoc, jobAspd: jobAspdDoc, skillTree: skillTreeDoc },
+    // 3) validação cruzada (requisito 3) — universo = a base do rAthena
+    //    (db/re, se fornecida — pra classe não-tocada por override nenhum
+    //    continuar existindo pra fins de referência) + o que já existe em
+    //    db/import (fora do lote) + o lote sendo escrito agora, nessa ordem
+    //    de prioridade (o lote sempre vence, é a versão mais nova). As 4
+    //    categorias JOB_STATS do override vêm do MESMO doc (só há um
+    //    arquivo), então passam repetidas ao Mapper — ele já sabe mesclar
+    //    por Job.
+    const { classes: overrideAll } = rawDocsToJobClasses(
+      { jobStats: jobStatsDoc, jobBasepoints: jobStatsDoc, jobExp: jobStatsDoc, jobAspd: jobStatsDoc, skillTree: skillTreeDoc },
       jobs,
       skills,
     );
+    let baselineAll: JobClass[] = [];
+    if (this.baseline) {
+      const [baseJobStats, baseJobBasepoints, baseJobExp, baseJobAspd, baseSkillTree] = await Promise.all([
+        readJobStatsDoc(this.baseline.jobStats),
+        readJobStatsDoc(this.baseline.jobBasepoints),
+        readJobStatsDoc(this.baseline.jobExp),
+        readJobStatsDoc(this.baseline.jobAspd),
+        readSkillTreeDoc(this.baseline.skillTree),
+      ]);
+      baselineAll = rawDocsToJobClasses(
+        { jobStats: baseJobStats, jobBasepoints: baseJobBasepoints, jobExp: baseJobExp, jobAspd: baseJobAspd, skillTree: baseSkillTree },
+        jobs,
+        skills,
+      ).classes;
+    }
+
     const batchIds = new Set(classes.map((c) => c.id));
-    const allKnown = [...existingAll.filter((c) => !batchIds.has(c.id)), ...classes];
+    const overrideIds = new Set(overrideAll.map((c) => c.id));
+    const allKnown = [
+      ...baselineAll.filter((c) => !overrideIds.has(c.id) && !batchIds.has(c.id)),
+      ...overrideAll.filter((c) => !batchIds.has(c.id)),
+      ...classes,
+    ];
 
     const crossIssues = validateJobClassBatch(classes, allKnown, jobs, skills);
     if (crossIssues.length > 0) {
@@ -214,11 +275,10 @@ export class JobDatabaseWriter {
       );
     }
 
-    // 4) aplica o lote por cima dos mapas existentes (override esparso por Job).
-    const statsMap = groupByJob(jobStatsDoc.Body);
-    const basepointsMap = groupByJob(jobBasepointsDoc.Body);
-    const expMap = groupByJob(jobExpDoc.Body);
-    const aspdMap = groupByJob(jobAspdDoc.Body);
+    // 4) aplica o lote por cima do mapa existente (override esparso por Job).
+    //    UM mapa só pro domínio JOB_STATS — as 4 categorias se combinam no
+    //    mesmo RawJobBodyEntry, porque é isso que o arquivo físico é.
+    const jobStatsMap = groupByJob(jobStatsDoc.Body);
     const treeMap = new Map(skillTreeDoc.Body.map((e) => [e.Job, e]));
 
     const diff: JobDatabaseDiffEntry[] = [];
@@ -226,67 +286,71 @@ export class JobDatabaseWriter {
 
     for (const jc of classes) {
       const jobName = jc.name;
-      const statsOut = jobClassToJobStatsEntry(jc, jobName, statsMap.get(jobName));
-      const basepointsOut = jobClassToJobBasepointsEntry(jc, jobName, basepointsMap.get(jobName));
-      const expOut = jobClassToJobExpEntry(jc, jobName, expMap.get(jobName));
-      const aspdOut = jobClassToJobAspdEntry(jc, jobName, aspdMap.get(jobName));
+      const before = jobStatsMap.get(jobName);
+
+      const statsOut = jobClassToJobStatsEntry(jc, jobName, before);
+      const basepointsOut = jobClassToJobBasepointsEntry(jc, jobName, before);
+      const expOut = jobClassToJobExpEntry(jc, jobName, before);
+      const aspdOut = jobClassToJobAspdEntry(jc, jobName, before);
       const treeWarnings: string[] = [];
       const treeOut = jobClassToSkillTreeEntry(jc, jobName, jobs, skills, treeWarnings);
       for (const w of treeWarnings) warnings.push(`${jobName}: ${w}`);
 
-      diff.push(...diffEntry("jobStats", jobName, statsMap.get(jobName), statsOut));
-      diff.push(...diffEntry("jobBasepoints", jobName, basepointsMap.get(jobName), basepointsOut));
-      diff.push(...diffEntry("jobExp", jobName, expMap.get(jobName), expOut));
-      diff.push(...diffEntry("jobAspd", jobName, aspdMap.get(jobName), aspdOut));
+      diff.push(...diffEntry("jobStats", jobName, before, statsOut));
+      diff.push(...diffEntry("jobBasepoints", jobName, before, basepointsOut));
+      diff.push(...diffEntry("jobExp", jobName, before, expOut));
+      diff.push(...diffEntry("jobAspd", jobName, before, aspdOut));
       diff.push(...diffTreeEntry(jobName, treeMap.get(jobName), treeOut));
 
-      statsMap.set(jobName, statsOut);
-      basepointsMap.set(jobName, basepointsOut);
-      expMap.set(jobName, expOut);
-      aspdMap.set(jobName, aspdOut);
+      // as 4 saídas parciais se combinam num RawJobBodyEntry só — cada
+      // Mapper só escreve os campos da SUA categoria (jobClassToJobStatsEntry
+      // nunca toca BaseHp, por exemplo), então spread em qualquer ordem é
+      // seguro; `Jobs` é idêntico nos quatro.
+      jobStatsMap.set(jobName, { ...statsOut, ...basepointsOut, ...expOut, ...aspdOut });
       treeMap.set(jobName, treeOut);
     }
 
-    // 5) re-renderiza os 5 documentos INTEIROS e prova round-trip — ainda
+    // 5) re-renderiza os 2 documentos INTEIROS e prova round-trip — ainda
     //    sem tocar em nenhum arquivo real.
-    const rendered: Record<keyof JobDatabasePaths, string> = {
-      jobStats: renderJobStatsYaml([...statsMap.values()]),
-      jobBasepoints: renderJobStatsYaml([...basepointsMap.values()]),
-      jobExp: renderJobStatsYaml([...expMap.values()]),
-      jobAspd: renderJobStatsYaml([...aspdMap.values()]),
-      skillTree: renderSkillTreeYaml([...treeMap.values()]),
-    };
+    const renderedJobStats = renderJobStatsYaml([...jobStatsMap.values()]);
+    const renderedSkillTree = renderSkillTreeYaml([...treeMap.values()]);
 
-    for (const key of Object.keys(rendered) as (keyof JobDatabasePaths)[]) {
-      const schema = key === "skillTree" ? SkillTreeDocSchema : JobStatsDocSchema;
-      const reparsed = schema.safeParse(parseYamlText(rendered[key]));
-      if (!reparsed.success) {
-        throw Object.assign(
-          new Error(`round-trip falhou em ${key}: ${JSON.stringify(reparsed.error.issues.slice(0, 3))}`),
-          { statusCode: 500 },
-        );
-      }
+    const reparsedStats = JobStatsDocSchema.safeParse(parseYamlText(renderedJobStats));
+    if (!reparsedStats.success) {
+      throw Object.assign(
+        new Error(`round-trip falhou em job_stats.yml: ${JSON.stringify(reparsedStats.error.issues.slice(0, 3))}`),
+        { statusCode: 500 },
+      );
+    }
+    const reparsedTree = SkillTreeDocSchema.safeParse(parseYamlText(renderedSkillTree));
+    if (!reparsedTree.success) {
+      throw Object.assign(
+        new Error(`round-trip falhou em skill_tree.yml: ${JSON.stringify(reparsedTree.error.issues.slice(0, 3))}`),
+        { statusCode: 500 },
+      );
     }
 
-    // 6) só agora: backup + escrita atômica (tmp + rename) dos 5 — todos ou nenhum.
-    //    `rename` é atômico por arquivo (mesmo volume); a garantia real de
-    //    "tudo ou nada" é que NENHUM passo acima toca em arquivo de verdade —
-    //    só a partir daqui, e qualquer falha aqui deixa os 5 originais
-    //    intocados (o que já foi renomeado fica; Node não tem transação
-    //    entre arquivos — documentado, não escondido).
-    const keys = Object.keys(rendered) as (keyof JobDatabasePaths)[];
+    // 6) só agora: backup + escrita atômica (tmp + rename) dos 2 — todos ou
+    //    nenhum. `rename` é atômico por arquivo (mesmo volume); a garantia
+    //    real de "tudo ou nada" é que NENHUM passo acima toca em arquivo de
+    //    verdade — só a partir daqui, e qualquer falha aqui deixa os
+    //    originais intocados (Node não tem transação entre arquivos —
+    //    documentado, não escondido).
+    const targets: { path: string; text: string }[] = [
+      { path: this.paths.jobStats, text: renderedJobStats },
+      { path: this.paths.skillTree, text: renderedSkillTree },
+    ];
     const tmpPaths: string[] = [];
     try {
-      for (const key of keys) {
-        const path = this.paths[key];
+      for (const { path, text } of targets) {
         await mkdir(dirname(path), { recursive: true });
         await backupIfExists(path);
         const tmp = `${path}.tmp`;
-        await writeFile(tmp, rendered[key], "utf8");
+        await writeFile(tmp, text, "utf8");
         tmpPaths.push(tmp);
       }
-      for (const key of keys) {
-        await rename(`${this.paths[key]}.tmp`, this.paths[key]);
+      for (const { path } of targets) {
+        await rename(`${path}.tmp`, path);
       }
     } catch (err) {
       await Promise.allSettled(tmpPaths.map((p) => rm(p, { force: true })));

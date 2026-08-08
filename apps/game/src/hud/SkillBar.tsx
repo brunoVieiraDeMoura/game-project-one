@@ -6,6 +6,7 @@ import { useAttackStore } from "../net/attackStore";
 import { usePlayerStore } from "../net/playerStore";
 import { useWorldStore } from "../net/worldStore";
 import { useAimStore } from "../net/aimStore";
+import { castarEmAlvo } from "../net/acoes";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { useCooldownStore } from "../net/cooldownStore";
 import { gateway } from "../net/gateway";
@@ -134,6 +135,22 @@ export function SkillBar() {
     const world = useWorldStore.getState();
     if (info?.target === "enemy" && !world.target) {
       useAimStore.getState().aim({ id: skill.id, level: skill.level, name: label, mode: "entity" });
+      return;
+    }
+
+    /**
+     * Skill de inimigo COM alvo já selecionado: mesma regra do ataque básico,
+     * "vai até o alcance e lança nele" (`net/acoes.castarEmAlvo`) — nunca um
+     * `skill:use` cru.
+     *
+     * Emitir direto era o bug: fora do alcance o rAthena recusa em SILÊNCIO
+     * (`battle_check_range`), e o clique na barra simplesmente não fazia nada
+     * — "tenho que estar no range para castar". `castarEmAlvo` já sabia lançar
+     * na hora quando já dá, e andar até dar quando não dá; só faltava este
+     * caminho chamar ela.
+     */
+    if (info?.target === "enemy" && world.target) {
+      castarEmAlvo(skill.id, skill.level, label, world.target);
       return;
     }
 

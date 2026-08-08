@@ -1,26 +1,262 @@
-Não implemente imediatamente.
 
-Primeiro execute uma fase de arquitetura e auditoria para cada um dos quatro módulos (Skills, Classes, Status e NPCs).
+# Objetivo
 
-Para cada módulo:
+Quero publicar **apenas o cliente** do meu MMORPG no Vercel para que um amigo consiga acessar pela internet e jogar comigo, enquanto **todo o backend continua rodando no meu computador**.
 
-Estude a especificação oficial da versão do rAthena utilizada pelo projeto.
-Identifique todos os campos, tipos, enums, estruturas e regras do formato oficial.
-Crie um schema TypeScript/Zod que represente fielmente esse formato.
-Compare o schema oficial com o modelo atual da dashboard/Supabase.
-Gere uma tabela indicando:
-Campos compatíveis;
-Campos que exigem conversão;
-Campos sem equivalente;
-Informações que podem ser perdidas;
-Riscos de compatibilidade.
-Proponha a arquitetura do Parser, Mapper, Validator e Writer para esse formato.
-Aguarde minha aprovação.
+Não quero alterar a arquitetura do projeto além do necessário para isso funcionar.
 
-Somente após essa auditoria e aprovação implemente o Writer correspondente.
+---
 
-Não quero writers construídos por tentativa e erro. Quero uma implementação orientada pela especificação oficial do rAthena (schema-first), garantindo que o formato gerado seja compatível com a versão utilizada pelo projeto.
+# Arquitetura atual
 
-Após concluir um módulo e seus testes, passe para o próximo. Não implemente todos em paralelo.
+O projeto é um monorepo PNPM.
 
-o plano está em leia1.txt
+Serviços atualmente:
+
+* rAthena (WSL2)
+
+  * Login Server: 6901
+  * Char Server: 6122
+  * Map Server: 5122
+
+* API
+
+  * apps/api
+  * localhost:4000
+
+* Gateway Socket.IO
+
+  * apps/gateway
+  * localhost:4100
+
+* Cliente
+
+  * apps/game
+  * Vite
+  * localhost:3001
+
+Hoje tudo funciona localmente.
+
+Quero apenas permitir que um amigo acesse pela internet.
+
+---
+
+# Objetivo final
+
+Quero que o fluxo fique assim:
+
+Amigo
+
+↓
+
+https://meu-jogo.vercel.app
+
+↓
+
+Frontend hospedado no Vercel
+
+↓
+
+HTTPS/WSS
+
+↓
+
+Gateway e API rodando no meu computador
+
+↓
+
+Gateway TCP
+
+↓
+
+rAthena
+
+---
+
+# O que quero que você faça
+
+Analise todo o projeto e implemente tudo que for necessário para isso funcionar.
+
+Não quero apenas instruções.
+
+Quero que você faça as modificações no código, crie arquivos, ajuste configurações e valide tudo.
+
+---
+
+# Requisitos
+
+## 1. Remover dependência de localhost
+
+Procure todos os lugares onde exista algo como:
+
+* localhost:4000
+* localhost:4100
+* http://localhost
+* ws://localhost
+
+Substitua por variáveis de ambiente.
+
+Não quero nenhum fallback para localhost em produção.
+
+Se a variável não existir, o projeto deve falhar com erro explícito.
+
+---
+
+## 2. Centralizar URLs
+
+Se atualmente existir:
+
+VITE_API_URL
+
+e
+
+VITE_GATEWAY_URL
+
+avalie se é possível centralizar em:
+
+VITE_SERVER_URL
+
+de forma que:
+
+fetch()
+
+e
+
+Socket.IO
+
+utilizem a mesma origem.
+
+Caso isso seja inviável pela arquitetura atual, explique por que e mantenha duas variáveis.
+
+---
+
+## 3. Preparar Vercel
+
+Crie tudo que for necessário para hospedar apenas apps/game.
+
+Incluindo:
+
+* vercel.json
+* rewrites
+* SPA fallback
+* configuração correta para Vite
+* monorepo PNPM
+* Include files outside root
+* qualquer ajuste necessário
+
+---
+
+## 4. Garantir HTTPS
+
+O cliente ficará hospedado em HTTPS.
+
+Verifique todo o código para garantir que:
+
+* nenhum fetch utilize http://
+* nenhum Socket.IO utilize ws://
+* tudo utilize automaticamente HTTPS/WSS.
+
+---
+
+## 5. Revisar CORS
+
+Revise API e Gateway.
+
+Confirme se realmente estão preparados para aceitar chamadas vindas do domínio do Vercel.
+
+Se encontrar qualquer problema, corrija.
+
+---
+
+## 6. Revisar Build
+
+Quero que o build do cliente seja totalmente compatível com Vercel.
+
+Faça uma revisão completa de:
+
+* import.meta.env
+* Vite
+* paths
+* assets
+* public
+* base path
+* lazy loading
+* router
+
+---
+
+## 7. Revisar Router
+
+Como usamos createBrowserRouter, confirme que:
+
+/login
+
+/char-select
+
+/play
+
+e qualquer outra rota continuem funcionando após atualizar a página.
+
+Se necessário, configure rewrites.
+
+---
+
+## 8. Revisar Socket.IO
+
+Verifique:
+
+* reconexão
+* heartbeat
+* timeout
+* transporte websocket
+* fallback polling
+
+Quero garantir que funcione normalmente através de HTTPS.
+
+---
+
+## 9. Procurar problemas escondidos
+
+Faça uma auditoria procurando tudo que possa impedir um deploy.
+
+Por exemplo:
+
+* caminhos absolutos
+* localhost escondido
+* imports quebrados
+* dependências incompatíveis
+* problemas de build
+* mixed content
+* CORS
+* MIME
+* assets
+* variáveis de ambiente
+* código dependente de desenvolvimento
+
+---
+
+## 10. Validar tudo
+
+Antes de considerar concluído:
+
+* execute typecheck
+* execute build
+* corrija todos os erros encontrados
+
+Não quero deixar nenhum erro pendente.
+
+---
+
+# Importante
+
+Não quero uma resposta teórica.
+
+Quero que você:
+
+* procure os arquivos necessários;
+* implemente todas as alterações;
+* explique rapidamente cada mudança realizada;
+* execute as validações;
+* só finalize quando tudo estiver pronto para eu executar o deploy no Vercel.
+
+Caso encontre algum bloqueio técnico, explique exatamente qual é, por que ocorre e apresente a melhor solução possível sem alterar a arquitetura geral do projeto.

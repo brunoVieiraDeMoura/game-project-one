@@ -93,6 +93,17 @@ function useMaterialDeMira(anel: boolean) {
         fragmentShader: FRAG,
         transparent: true,
         depthWrite: false,
+        // A malha veste o terreno via `terrain.getHeight`, mas essa amostra não
+        // é byte a byte igual à altura que a malha REAL do chão desenha
+        // (`cornerLevel`, chunk a chunk) — a diferença é minúscula, mas
+        // `depthTest` padrão é `true`, e minúsculo já basta para brigar em z: o
+        // disco piscava/sumia quadro sim, quadro não. `polygonOffset` empurra o
+        // fragmento um pouco mais perto da câmera SEM desligar o teste — ainda
+        // perde para o personagem em cima dele (ver `net/GlowChao`, mesma
+        // conta), só não briga mais com o chão que ele copia.
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
         side: THREE.DoubleSide,
       }),
     [anel],
@@ -153,7 +164,7 @@ export function AimPreview({
      * quando a mira abrir, ele recomeça de onde parou e ninguém vê diferença
      * numa animação cíclica.
      */
-    if (!mirando || mirando.mode !== "ground") return;
+    if (!mirando) return;
     matArea.uniforms.uTempo!.value += dt;
     matAlcance.uniforms.uTempo!.value += dt;
     const p = playerPos.current;
@@ -178,6 +189,17 @@ export function AimPreview({
         );
       }
     }
+
+    /**
+     * A MANCHA de área é só de skill de CHÃO.
+     *
+     * Skill de alvo (Firebolt, Double Strafe…) mira uma CRIATURA, não uma
+     * célula sob o mouse — não há "onde a magia cai" para desenhar aqui; quem
+     * mostra o alcance dela é só o anel acima, que já rodou. `alcanceEm` e
+     * `areaEm` continuam válidos: ela é remoldada de novo quando a mira voltar
+     * a ser de chão, e até lá `areaMesh.visible` já está falso.
+     */
+    if (mirando.mode !== "ground") return;
 
     const areaMesh = area.current;
     if (!areaMesh) return;
@@ -216,7 +238,14 @@ export function AimPreview({
     (matArea.uniforms.uCor!.value as THREE.Color).set(dentro ? COR_OK : COR_FORA);
   });
 
-  if (!mirando || mirando.mode !== "ground") return null;
+  /**
+   * A mira mostra o ANEL para os dois modos — chão e criatura — desde
+   * next-change-game.txt: skill de alvo (Firebolt, Double Strafe…) também
+   * precisa avisar "até aqui dá para lançar" ANTES do clique, e não só depois
+   * de andar até lá e o servidor recusar em silêncio. Só a MANCHA de área
+   * continua exclusiva do chão (ver o `return` de cima).
+   */
+  if (!mirando) return null;
 
   return (
     <group>
@@ -232,7 +261,7 @@ export function AimPreview({
           <planeGeometry args={[1, 1, MIRA_SEGS, MIRA_SEGS]} />
         </mesh>
       )}
-      {raioArea > 0 && (
+      {mirando.mode === "ground" && raioArea > 0 && (
         <mesh ref={area} material={matArea} renderOrder={-1} visible={false}>
           {/* +0,5 célula: a área do RO é contada em células INTEIRAS ("5x5"),
               então o raio 2 cobre do centro da célula até a borda da segunda */}

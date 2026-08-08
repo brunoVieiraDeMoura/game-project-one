@@ -348,6 +348,22 @@ export function GroundInteract({
      */
     const chao = plano.current;
     if (chao) {
+      /**
+       * `far` tem de voltar a INFINITO antes deste teste.
+       *
+       * `pontoDoRaio` (chamado logo abaixo, e também pelo `onClick`) estreita
+       * `raycaster.far` até a distância do que encontrou, para os sub-testes
+       * contra prop/terreno — e nunca desfaz isso. `setFromCamera` só escreve
+       * origem/direção do raio, não `near`/`far`; sem resetar aqui, o teste
+       * contra o PLANO (que precisa alcançar o mapa inteiro) herdava o `far`
+       * estreito do quadro anterior. Mover o mouse para um ponto mais LONGE
+       * que aquele passava a FALHAR — o raio "acabava" antes de chegar lá —,
+       * e como só acerto reescreve `far`, o erro EMPACAVA: o hover ficava
+       * `null` até o ponteiro (ou a câmera, seguindo o personagem) voltar a
+       * cair dentro do raio velho. Era o "mexo o mouse e o círculo da área
+       * some" — parado funcionava porque o `far` não precisava crescer.
+       */
+      raycaster.far = Infinity;
       raycaster.setFromCamera(state.pointer, state.camera);
       const noPlano = raycaster.intersectObject(chao, false)[0];
       hover.current = noPlano
@@ -434,6 +450,14 @@ export function GroundInteract({
           // a arte tem alpha duro; sem o corte o navegador desenha a borda
           // semitransparente por cima do chão e sobra um halo quadrado
           alphaTest={0.35}
+          // mesma briga em z do `play/AimPreview`: a malha veste
+          // `terrain.getHeight`, que não bate byte a byte com a altura que o
+          // chão de verdade desenha, e sem folga o marcador pisca/some quadro
+          // sim, quadro não — era o "square de indicação desaparece de vez em
+          // quando".
+          polygonOffset
+          polygonOffsetFactor={-4}
+          polygonOffsetUnits={-4}
         />
       </mesh>
     </group>

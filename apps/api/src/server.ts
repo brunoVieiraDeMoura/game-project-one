@@ -14,6 +14,7 @@ import { MysqlUserRepository } from "./store/mysql-user-repository.js";
 import { YamlSkillRepository } from "./store/yaml-skill-repository.js";
 import { YamlJobClassRepository } from "./store/yaml-job-class-repository.js";
 import { JobDatabaseWriter } from "./store/job-database-writer.js";
+import { YamlStatusRepository } from "./store/yaml-status-repository.js";
 import { hasRoDatabase } from "./store/mysql.js";
 import { serverControlRoutes } from "./routes/server-control.js";
 import type { ItemRepository } from "./store/item-repository.js";
@@ -96,16 +97,28 @@ function defaultJobClassRepository(skillRepository: SkillRepository): JobClassRe
   // job_stats/job_basepoints/job_exp/job_aspd/skill_tree não têm tabela SQL
   // no rAthena — mesma situação de Skills, resolvida do mesmo jeito: o
   // catálogo acima continua sendo a lista completa, e salvar no painel
-  // também escreve os 5 arquivos de db/import/ (JobDatabaseWriter) e pede
-  // @reloadpcdb (scripts/wsl-setup.sh symlinka rathena-db-import/).
+  // também escreve em db/import/ (JobDatabaseWriter) e pede @reloadpcdb
+  // (scripts/wsl-setup.sh symlinka rathena-db-import/). Só DOIS arquivos
+  // físicos, não cinco: o dispatcher (rathena/db/job_stats.yml:87-119) só
+  // declara UM slot de import pro domínio JOB_STATS inteiro — as 4
+  // categorias (peso/HP-SP/exp/ASPD) mescladas em job_stats.yml; skill_tree
+  // é o loader separado de sempre, com o próprio slot.
   if (hasRoDatabase()) {
-    const writer = new JobDatabaseWriter({
-      jobStats: join(REPO_ROOT, "rathena-db-import", "job_stats.yml"),
-      jobBasepoints: join(REPO_ROOT, "rathena-db-import", "job_basepoints.yml"),
-      jobExp: join(REPO_ROOT, "rathena-db-import", "job_exp.yml"),
-      jobAspd: join(REPO_ROOT, "rathena-db-import", "job_aspd.yml"),
-      skillTree: join(REPO_ROOT, "rathena-db-import", "skill_tree.yml"),
-    });
+    const writer = new JobDatabaseWriter(
+      {
+        jobStats: join(REPO_ROOT, "rathena-db-import", "job_stats.yml"),
+        skillTree: join(REPO_ROOT, "rathena-db-import", "skill_tree.yml"),
+      },
+      {
+        // db/re — só pra validação cruzada enxergar classes NUNCA editadas
+        // pelo painel (ex.: Ninja herda de Novice, que ninguém tocou ainda).
+        jobStats: join(REPO_ROOT, "rathena", "db", "re", "job_stats.yml"),
+        jobBasepoints: join(REPO_ROOT, "rathena", "db", "re", "job_basepoints.yml"),
+        jobExp: join(REPO_ROOT, "rathena", "db", "re", "job_exp.yml"),
+        jobAspd: join(REPO_ROOT, "rathena", "db", "re", "job_aspd.yml"),
+        skillTree: join(REPO_ROOT, "rathena", "db", "re", "skill_tree.yml"),
+      },
+    );
     return new YamlJobClassRepository(catalog, skillRepository, writer);
   }
   return catalog;
@@ -130,14 +143,24 @@ function defaultSkillRepository(): SkillRepository {
   return catalog;
 }
 
-function defaultStatusRepository(): StatusRepository {
-  if (env.supabaseUrl && env.supabaseServiceRoleKey) {
-    return new SupabaseStatusRepository(env.supabaseUrl, env.supabaseServiceRoleKey);
+function defaultStatusRepository(skillRepository: SkillRepository): StatusRepository {
+  const catalog: StatusRepository =
+    env.supabaseUrl && env.supabaseServiceRoleKey
+      ? new SupabaseStatusRepository(env.supabaseUrl, env.supabaseServiceRoleKey)
+      : new JsonStatusRepository(
+          process.env.STATUSES_DATA_PATH ?? join(__dirname, "..", "data", "statuses.json"),
+          join(REPO_ROOT, "tools", "legacy-migration", "output", "statuses.json"),
+        );
+
+  // status.yml não tem tabela SQL no rAthena — mesma situação de Skills,
+  // resolvida do mesmo jeito: o catálogo acima continua sendo a lista
+  // completa, e salvar no painel também escreve em db/import/status.yml
+  // (slot de import único, sem a divisão multi-arquivo de Classes) e pede
+  // @reloadstatusdb.
+  if (hasRoDatabase()) {
+    return new YamlStatusRepository(catalog, skillRepository, join(REPO_ROOT, "rathena-db-import", "status.yml"));
   }
-  return new JsonStatusRepository(
-    process.env.STATUSES_DATA_PATH ?? join(__dirname, "..", "data", "statuses.json"),
-    join(REPO_ROOT, "tools", "legacy-migration", "output", "statuses.json"),
-  );
+  return catalog;
 }
 
 function defaultMonsterRepository(): MonsterRepository {
@@ -229,7 +252,7 @@ export async function buildServer(deps: ServerDeps = {}) {
 
   const skillRepository = deps.skillRepository ?? defaultSkillRepository();
   const jobClassRepository = deps.jobClassRepository ?? defaultJobClassRepository(skillRepository);
-  const statusRepository = deps.statusRepository ?? defaultStatusRepository();
+  const statusRepository = deps.statusRepository ?? defaultStatusRepository(skillRepository);
 
   app.get("/health", async () => ({ ok: true }));
   await app.register(itemRoutes(itemRepository, security), { prefix: "/items" });
