@@ -190,6 +190,12 @@ interface PlayerState {
   removeItem: (index: number, amount: number) => void;
   /** aplica o resultado autoritativo de um ACK de equip/unequip (ver net/useWorldEvents.onEquipResult) */
   updateItemEquip: (index: number, equipped: boolean, location: number) => void;
+  /**
+   * Aplica o array de cartas que o GATEWAY já computou (ver
+   * `RoSession.insertCard`/`ACK_ITEMCOMPOSITION` — o rAthena não reenvia o
+   * item, só um ACK fino, então quem manda o array pronto é o gateway).
+   */
+  updateItemCards: (index: number, cards: number[]) => void;
   reset: () => void;
 }
 
@@ -296,6 +302,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   updateItemEquip: (index, equipped, location) =>
     set((s) => ({
       inventory: s.inventory.map((i) => (i.index === index ? { ...i, equipped, location } : i)),
+    })),
+
+  updateItemCards: (index, cards) =>
+    set((s) => ({
+      inventory: s.inventory.map((i) => (i.index === index ? { ...i, cards } : i)),
     })),
 
   // charName sobrevive ao reset: ele vem da seleção de personagem, ANTES de a

@@ -83,6 +83,20 @@ export interface ServerEvents {
 	"inv:list": (payload: InventoryItem[]) => void;
 	"inv:add": (payload: InventoryItem) => void;
 	"inv:remove": (payload: { index: number; amount: number }) => void;
+	/**
+	 * Resposta a `card:list` (ZC.ITEMCOMPOSITION_LIST, 0x17b) — os índices de
+	 * inventário que aceitam a carta. O rAthena NÃO manda nada (nem lista
+	 * vazia) quando não há nenhum compatível (clif.cpp: `if(!c) return;`) —
+	 * quem pede trata "nunca chegou" como "zero opções", não como erro.
+	 */
+	"card:options": (payload: { cardIndex: number; equipIndexes: number[] }) => void;
+	/**
+	 * Resposta a `card:insert` (ZC.ACK_ITEMCOMPOSITION, 0x17d). `cards` já vem
+	 * pronto (o array do item depois da composição) — o rAthena não reenvia o
+	 * item completo, só este ACK, então quem muta é o PRÓPRIO gateway
+	 * (`RoSession`, ver comentário em `insertCard`).
+	 */
+	"card:result": (payload: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => void;
 	"skill:list": (payload: PlayerSkill[]) => void;
 	"skill:cast": (payload: SkillCast) => void;
 	"skill:casting": (payload: SkillCasting) => void;
@@ -325,6 +339,10 @@ export interface ClientEvents {
 	"item:unequip": (payload: { index: number }) => void;
 	"item:pickup": (payload: { gid: number }) => void;
 	"item:drop": (payload: { index: number; amount: number }) => void;
+	/** duplo clique na carta: pede ao servidor QUAIS equipamentos ela aceita (CZ.REQ_ITEMCOMPOSITION_LIST, 0x17a) */
+	"card:list": (payload: { index: number }) => void;
+	/** escolheu o equipamento: pede a composição de verdade (CZ.REQ_ITEMCOMPOSITION, 0x17c) */
+	"card:insert": (payload: { cardIndex: number; equipIndex: number }) => void;
 	"stat:raise": (payload: { stat: RaisableStat }) => void;
 	"skill:use": (payload: { skillId: number; level: number; targetGid: number }) => void;
 	"skill:use-ground": (payload: { skillId: number; level: number; x: number; y: number }) => void;

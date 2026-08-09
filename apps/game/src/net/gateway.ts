@@ -133,6 +133,10 @@ export interface ServerEvents {
   "inv:add": (p: InventoryItemPayload) => void;
   "inv:remove": (p: { index: number; amount: number }) => void;
   "item:equip-result": (p: { index: number; success: boolean; equipped: boolean; location: number }) => void;
+  /** resposta a `card:list` — silêncio do servidor (sem pacote nenhum) já quer dizer "zero opções" */
+  "card:options": (p: { cardIndex: number; equipIndexes: number[] }) => void;
+  /** resposta a `card:insert`; `cards` já vem pronto, calculado pelo gateway */
+  "card:result": (p: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => void;
   "skill:list": (p: SkillPayload[]) => void;
   "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff"; action: number }) => void;
   "skill:casting": (p: { skillId: number; sourceGid: number; targetGid: number; x: number; y: number; durationMs: number }) => void;
@@ -205,6 +209,8 @@ export interface ClientEvents {
   "item:unequip": (p: { index: number }) => void;
   "item:pickup": (p: { gid: number }) => void;
   "item:drop": (p: { index: number; amount: number }) => void;
+  "card:list": (p: { index: number }) => void;
+  "card:insert": (p: { cardIndex: number; equipIndex: number }) => void;
   "stat:raise": (p: { stat: "str" | "agi" | "vit" | "int" | "dex" | "luk" }) => void;
   "skill:use": (p: { skillId: number; level: number; targetGid: number }) => void;
   "skill:use-ground": (p: { skillId: number; level: number; x: number; y: number }) => void;

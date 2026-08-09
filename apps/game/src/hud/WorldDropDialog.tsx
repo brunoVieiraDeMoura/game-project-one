@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
 import { useItemCatalog } from "../net/itemCatalog";
 import { useWorldDropStore } from "../net/worldDropStore";
@@ -43,14 +43,52 @@ export function WorldDropDialog() {
     setQuantidade(1);
   }, [item?.index]);
 
-  if (!item) return null;
+  const quantidadeValida = item ? Math.min(quantidade, item.amount) : 0;
 
-  const nome = nomes[item.itemId]?.name ?? `#${item.itemId}`;
-  const quantidadeValida = Math.min(quantidade, item.amount);
-  const confirmar = () => {
+  /**
+   * `confirmar` mora numa REF, não numa closure comum, porque o atalho de
+   * Enter (efeito logo abaixo) precisa dela e os hooks têm de vir ANTES do
+   * `if (!item) return null` — e `confirmar` depende do `item`. A ref é
+   * reatribuída em TODO render, então nunca fica com um `item`/quantidade
+   * velhos; é a MESMA função que o botão "Jogar" chama, só isso evita que a
+   * lógica exista em dois lugares.
+   */
+  const confirmarRef = useRef<() => void>(() => {});
+  confirmarRef.current = () => {
+    if (!item) return;
     gateway().emit("item:drop", { index: item.index, amount: quantidadeValida });
     fechar();
   };
+
+  /**
+   * Enter confirma, Esc fecha — só enquanto ESTE popup está aberto.
+   *
+   * CAPTURA, não bolha: o atalho global de Esc (`hud/hotkeys.ts`) escuta na
+   * bolha, e captura sempre roda primeiro no MESMO alvo (`window`) — então
+   * `stopPropagation` aqui impede o evento de sequer chegar lá. Sem isso um
+   * Esc só fechava este popup E a janela por trás dele no mesmo aperto de
+   * tecla, porque os dois ouvintes veriam o mesmo evento.
+   */
+  useEffect(() => {
+    if (!item) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        fechar();
+      } else if (e.code === "Enter" || e.code === "NumpadEnter") {
+        e.stopPropagation();
+        e.preventDefault();
+        confirmarRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [item, fechar]);
+
+  if (!item) return null;
+
+  const nome = nomes[item.itemId]?.name ?? `#${item.itemId}`;
 
   return (
     <div
@@ -188,7 +226,7 @@ export function WorldDropDialog() {
 
         <div style={{ display: "flex", gap: px(6) }}>
           <Botao onClick={fechar}>Cancelar</Botao>
-          <Botao onClick={confirmar} destaque>
+          <Botao onClick={() => confirmarRef.current()} destaque>
             Jogar {item.amount > 1 ? `×${quantidadeValida}` : ""}
           </Botao>
         </div>

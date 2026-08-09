@@ -39,6 +39,19 @@ export interface ItemInfo {
   magicAttack: number;
   defense: number;
   locations: string[];
+  /** venda da loja padrão do rAthena — 0 é comum (item que não se compra) */
+  buyPrice: number;
+  sellPrice: number;
+  /** alcance de ataque, só relevante em arma */
+  range: number;
+  /** "male" | "female" | "both" */
+  gender: string;
+  /**
+   * Script CRU do rAthena (`bonus bStr,2;`…) — não há parser de efeito de item
+   * no cliente (só existe pro skill_db), então a janela de informação mostra
+   * o texto tal como veio em vez de inventar uma tradução.
+   */
+  rawScript?: string;
 }
 
 interface CatalogState {
@@ -94,6 +107,11 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
               magicAttack: Number(cru.magicAttack ?? 0),
               defense: Number(cru.defense ?? 0),
               locations: Array.isArray(cru.locations) ? cru.locations.map(String) : [],
+              buyPrice: Number(cru.buyPrice ?? 0),
+              sellPrice: Number(cru.sellPrice ?? 0),
+              range: Number(cru.range ?? 0),
+              gender: String(cru.gender ?? "both"),
+              rawScript: cru.rawScript ? String(cru.rawScript) : undefined,
             };
           }
           return { byId };

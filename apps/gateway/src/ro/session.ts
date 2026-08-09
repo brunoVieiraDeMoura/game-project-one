@@ -114,6 +114,11 @@ export declare interface RoSession {
 		event: "item-equip-result",
 		listener: (payload: { index: number; success: boolean; equipped: boolean; location: number }) => void,
 	): this;
+	on(event: "card-options", listener: (payload: { cardIndex: number; equipIndexes: number[] }) => void): this;
+	on(
+		event: "card-result",
+		listener: (payload: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => void,
+	): this;
 	on(event: "skills", listener: (payload: PlayerSkill[]) => void): this;
 	on(event: "skill-cast", listener: (payload: SkillCast) => void): this;
 	on(event: "skill-casting", listener: (payload: SkillCasting) => void): this;
@@ -168,6 +173,10 @@ export class RoSession extends EventEmitter {
 	private readonly stats = new Map<string, { id: number; value: number; bonus?: number }>();
 	private statusBlock: StatusBlock | null = null;
 	private inventory: InventoryItem[] = [];
+	/** índice da carta do pedido de LISTA em voo — o ACK (0x17b) não ecoa esse índice de volta */
+	private cardListRequested: number | null = null;
+	/** pedido de composição em voo — o ACK (0x17d) não traz o itemId da carta, só índices */
+	private pendingCardInsert: { cardIndex: number; equipIndex: number; itemId: number } | null = null;
 	private readonly skills = new Map<number, PlayerSkill>();
 	/**
 	 * Entidades já vistas neste mapa.
@@ -949,6 +958,55 @@ export class RoSession extends EventEmitter {
 			});
 		}
 
+		/**
+		 * Cartas (clif.cpp:7070-7142): duplo clique pede a LISTA de equipamentos
+		 * compatíveis (0x17a→0x17b) — o rAthena escreve os índices já em
+		 * formato de FIO (`i+2`, o mesmo de `this.inventory[].index` em todo o
+		 * resto deste arquivo), então `ITIDList` sai direto, sem conta nenhuma.
+		 * Quando NÃO há nenhum compatível o servidor não manda nada (nem lista
+		 * vazia) — `card:options` simplesmente não chega, e quem pediu trata
+		 * isso como zero opções (ver `net/cardStore` no cliente).
+		 */
+		if (PACKET.ZC.ITEMCOMPOSITION_LIST) {
+			conn.hook(PACKET.ZC.ITEMCOMPOSITION_LIST, (pkt: any) => {
+				this.emit("card-options", { cardIndex: this.cardListRequested ?? 0, equipIndexes: pkt.ITIDList ?? [] });
+			});
+		}
+		/**
+		 * Composição de verdade (0x17c→0x17d). O ACK só traz {equipIndex,
+		 * cardIndex, result} — NUNCA o item atualizado —, então é ESTE hook
+		 * que muta `this.inventory` (mesmo padrão de equipar/desequipar, duas
+		 * dezenas de linhas acima). O itemId da carta precisa vir de ANTES:
+		 * por essa altura o `DELETE_ITEM_FROM_BODY` que consome a carta
+		 * (clif_delitem, disparado por `pc_delitem` dentro de
+		 * `pc_insert_card`, ANTES do próprio ACK) já rodou e já tirou a carta
+		 * de `this.inventory` — `insertCard()` guarda o itemId antes de
+		 * mandar o pedido exatamente por isso.
+		 */
+		if (PACKET.ZC.ACK_ITEMCOMPOSITION) {
+			conn.hook(PACKET.ZC.ACK_ITEMCOMPOSITION, (pkt: any) => {
+				// 0 = sucesso, 1 = falha — ao CONTRÁRIO do `Boolean(pkt.result)`
+				// que os ACKs de equipar usam acima; aqui é o próprio comentário
+				// do rAthena (clif.cpp:7130-7132) que manda.
+				const success = !pkt.result;
+				const pending = this.pendingCardInsert;
+				this.pendingCardInsert = null;
+				if (success && pending && pending.equipIndex === pkt.equipIndex && pending.cardIndex === pkt.cardIndex) {
+					const equip = this.inventory.find((i) => i.index === pkt.equipIndex);
+					if (equip) {
+						const slot = equip.cards.findIndex((c) => c === 0);
+						if (slot !== -1) equip.cards[slot] = pending.itemId;
+					}
+				}
+				this.emit("card-result", {
+					equipIndex: pkt.equipIndex,
+					cardIndex: pkt.cardIndex,
+					success,
+					cards: this.inventory.find((i) => i.index === pkt.equipIndex)?.cards ?? [],
+				});
+			});
+		}
+
 		// Árvore de habilidades: a lista chega inteira ao entrar; ADD_SKILL avisa
 		// quando uma nova é aprendida e SKILLINFO_UPDATE quando muda de nível.
 		for (const key of Object.keys(PACKET.ZC)) {
@@ -1459,6 +1517,32 @@ export class RoSession extends EventEmitter {
 			PACKETVER.value >= 20180307 && PACKET.CZ.ITEM_PICKUP2 ? PACKET.CZ.ITEM_PICKUP2 : PACKET.CZ.ITEM_PICKUP;
 		const pkt = new Pick();
 		pkt.ITAID = gid;
+		this.sendMap(pkt);
+	}
+
+	/** Pede ao servidor quais equipamentos esta carta aceita (CZ.REQ_ITEMCOMPOSITION_LIST). */
+	requestCardOptions(cardIndex: number): void {
+		this.cardListRequested = cardIndex;
+		const pkt = new PACKET.CZ.REQ_ITEMCOMPOSITION_LIST();
+		pkt.cardIndex = cardIndex;
+		this.sendMap(pkt);
+	}
+
+	/**
+	 * Compõe a carta no equipamento escolhido (CZ.REQ_ITEMCOMPOSITION).
+	 *
+	 * Guarda o itemId da carta ANTES de mandar: o `DELETE_ITEM_FROM_BODY` que
+	 * consome a carta chega ANTES do ACK de composição (`pc_insert_card`
+	 * chama `pc_delitem` primeiro), então por ocasião do ACK a carta já
+	 * sumiu de `this.inventory` — sem guardar aqui, o hook do ACK não saberia
+	 * MAIS qual carta foi inserida.
+	 */
+	insertCard(cardIndex: number, equipIndex: number): void {
+		const carta = this.inventory.find((i) => i.index === cardIndex);
+		this.pendingCardInsert = carta ? { cardIndex, equipIndex, itemId: carta.itemId } : null;
+		const pkt = new PACKET.CZ.REQ_ITEMCOMPOSITION();
+		pkt.cardIndex = cardIndex;
+		pkt.equipIndex = equipIndex;
 		this.sendMap(pkt);
 	}
 

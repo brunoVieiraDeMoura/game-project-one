@@ -7,6 +7,8 @@ import { useHudStore } from "./hudStore";
 import { IconSquare } from "../ui/rpg";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { dragImagemNormal } from "../ui/cursors";
+import { useItemInfoStore } from "../net/itemInfoStore";
+import { useCardStore } from "../net/cardStore";
 import { CHAT_ART } from "../ui/chatFrame";
 import { CurvedBox } from "../ui/CurvedBox";
 import { useNineSlice } from "../ui/nineSlice";
@@ -45,6 +47,8 @@ const caixa = (r: { x: number; y: number; w: number; h: number }) => ({
  */
 const CONSUMABLE_TYPES = new Set([0, 2, 11, 18]);
 const EQUIP_TYPES = new Set([4, 5, 8]);
+/** IT_CARD (rathena/src/common/mmo.hpp:230) — cai em Outros, duplo clique compõe */
+const CARD_TYPE = 6;
 
 /**
  * Inventário vestido com a arte de `ui_definitiva/bag`.
@@ -204,16 +208,26 @@ export function InventoryWindow() {
               equipado={it?.equipped}
               titulo={
                 it
-                  ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — ${EQUIP_TYPES.has(it.type) ? "duplo clique equipa" : "clique usa"}, botão direito joga no chão`
+                  ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — ${
+                      EQUIP_TYPES.has(it.type)
+                        ? "duplo clique equipa"
+                        : it.type === CARD_TYPE
+                          ? "duplo clique compõe num equipamento"
+                          : "clique usa"
+                    }, botão direito mostra informação, arraste pro mundo joga no chão`
                   : undefined
               }
               onClick={it && CONSUMABLE_TYPES.has(it.type) ? () => usar(it) : undefined}
-              onDoubleClick={it && EQUIP_TYPES.has(it.type) ? () => equipar(it) : undefined}
-              onDrop={
+              onDoubleClick={
                 it
-                  ? () => gateway().emit("item:drop", { index: it.index, amount: 1 })
+                  ? EQUIP_TYPES.has(it.type)
+                    ? () => equipar(it)
+                    : it.type === CARD_TYPE
+                      ? () => useCardStore.getState().abrir(it.index)
+                      : undefined
                   : undefined
               }
+              onInfo={it ? () => useItemInfoStore.getState().abrir(it.index) : undefined}
               indice={it?.index}
               lado={slotPx}
             />
@@ -327,7 +341,7 @@ function Slot({
   titulo,
   onClick,
   onDoubleClick,
-  onDrop,
+  onInfo,
   indice,
   lado,
 }: {
@@ -337,7 +351,7 @@ function Slot({
   titulo?: string;
   onClick?: () => void;
   onDoubleClick?: () => void;
-  onDrop?: () => void;
+  onInfo?: () => void;
   indice?: number;
   /** lado do slot em px de tela — moldura, ícone e número saem daqui */
   lado: number;
@@ -361,11 +375,14 @@ function Slot({
     <div
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      // Botão direito joga no chão, como no RO (lá é arrastar para fora da
-      // janela; aqui o menu de contexto do navegador atrapalharia).
+      // Botão direito abre a informação do item — jogar no chão agora é o
+      // ARRASTE pro mundo (`net/worldDropStore`), com confirmação e escolha
+      // de quantidade. O botão direito nunca teve confirmação nenhuma (jogava
+      // 1 na hora), e reaproveitá-lo pra abrir só um popup de leitura, sem
+      // pedido nenhum ao servidor, é o que tira esse risco de vez.
       onContextMenu={(e) => {
         e.preventDefault();
-        onDrop?.();
+        onInfo?.();
       }}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}

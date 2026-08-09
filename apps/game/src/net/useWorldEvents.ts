@@ -16,6 +16,7 @@ import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
 import { clearEquipPending, settleStatusWatch } from "./equipmentStore";
+import { useCardStore } from "./cardStore";
 
 /**
  * Entidades e movimento vindos do servidor → worldStore.
@@ -174,6 +175,13 @@ export function useWorldEvents(): void {
       }
     };
 
+    const onCardOptions = (p: { cardIndex: number; equipIndexes: number[] }) =>
+      useCardStore.getState().aplicarOpcoes(p.cardIndex, p.equipIndexes);
+    const onCardResult = (p: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => {
+      if (p.success) usePlayerStore.getState().updateItemCards(p.equipIndex, p.cards);
+      useCardStore.getState().aplicarResultado(p);
+    };
+
     const onSkills = (p: SkillPayload[]) => usePlayerStore.getState().setSkills(p);
 
     // VFX: 600ms é a duração dos efeitos pontuais (impacto/buff); área vive
@@ -284,6 +292,8 @@ export function useWorldEvents(): void {
     socket.on("inv:add", onInvAdd);
     socket.on("inv:remove", onInvRemove);
     socket.on("item:equip-result", onEquipResult);
+    socket.on("card:options", onCardOptions);
+    socket.on("card:result", onCardResult);
     socket.on("entity:spawn", onSpawn);
     socket.on("entity:move", onMove);
     socket.on("entity:stop", onStop);
@@ -326,6 +336,8 @@ export function useWorldEvents(): void {
       socket.off("inv:add", onInvAdd);
       socket.off("inv:remove", onInvRemove);
       socket.off("item:equip-result", onEquipResult);
+      socket.off("card:options", onCardOptions);
+      socket.off("card:result", onCardResult);
       socket.off("entity:spawn", onSpawn);
       socket.off("entity:move", onMove);
       socket.off("entity:stop", onStop);

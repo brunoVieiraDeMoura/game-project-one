@@ -114,7 +114,44 @@ export function CursorGlobalStyle() {
     return aoMontarCursor(() => repintar((v) => v + 1));
   }, []);
 
-  return <style>{regraDeCursor(cursorCss(cursorAtivo(pedidos), pressionado))}</style>;
+  return (
+    <style id={CURSOR_STYLE_ID}>{regraDeCursor(cursorCss(cursorAtivo(pedidos), pressionado))}</style>
+  );
+}
+
+/** id estável — é por ele que `forcarRepaintDoCursor` acha a regra sem precisar de ref/contexto */
+const CURSOR_STYLE_ID = "cursor-global-style";
+
+/**
+ * Força o navegador a repintar o cursor depois de um arraste nativo (HTML5
+ * drag-and-drop).
+ *
+ * O `dragend` já reseta o ESTADO certo (`pressionado`, e por tabela a regra
+ * de CSS que `CursorGlobalStyle` escreve) — mas o que fica preso na tela não
+ * é esse CSS, é o "fantasma" que o Windows/Chromium desenha por CIMA da
+ * página enquanto o arraste está ativo. Esse desenho vive numa camada de
+ * composição PRÓPRIA do sistema operacional, fora do pipeline normal de
+ * pintura da página, e só é invalidado no PRÓXIMO evento de entrada real que
+ * chegar ao SO (um clique, por exemplo — é por isso que clicar "conserta":
+ * não é o clique corrigindo nosso estado, que já estava certo, é o clique
+ * sendo o primeiro evento real depois do drag).
+ *
+ * A troca dupla (`none` → o valor certo, no quadro seguinte) é o jeito
+ * conhecido de forçar essa camada a repintar sem esperar por um clique de
+ * verdade: `body.style.cursor` sozinho NÃO bastaria (a regra `*{cursor:...
+ * !important}` de `regraDeCursor` sempre venceria um `style` inline sem
+ * `!important` — o mesmo motivo que fez o projeto abandonar `body.style.
+ * cursor` da primeira vez, ver comentário de `CursorGlobalStyle` acima), então
+ * quem é mexido aqui é a PRÓPRIA regra do `<style>` que já manda no cursor.
+ */
+function forcarRepaintDoCursor(): void {
+  const el = document.getElementById(CURSOR_STYLE_ID);
+  if (!el) return;
+  el.textContent = regraDeCursor("none");
+  requestAnimationFrame(() => {
+    const s = useCursorStore.getState();
+    el.textContent = regraDeCursor(cursorCss(cursorAtivo(s.pedidos), s.pressionado));
+  });
 }
 
 /**
@@ -139,18 +176,24 @@ export function useCursorGlobal(): void {
     const setPressionado = useCursorStore.getState().setPressionado;
     const down = () => setPressionado(true);
     const up = () => setPressionado(false);
+    // só o FIM de um arraste nativo precisa do empurrão de repintura — o
+    // "fantasma" do SO só existe enquanto um `drag` HTML5 está em andamento
+    const dragend = () => {
+      setPressionado(false);
+      forcarRepaintDoCursor();
+    };
     window.addEventListener("pointerdown", down, true);
     window.addEventListener("pointerup", up, true);
     window.addEventListener("pointercancel", up, true);
     // arrastar texto de dentro de um input termina em `dragend`, não em
     // `pointerup` — sem isto, selecionar e arrastar deixava o cursor afundado
-    window.addEventListener("dragend", up, true);
+    window.addEventListener("dragend", dragend, true);
     window.addEventListener("blur", up);
     return () => {
       window.removeEventListener("pointerdown", down, true);
       window.removeEventListener("pointerup", up, true);
       window.removeEventListener("pointercancel", up, true);
-      window.removeEventListener("dragend", up, true);
+      window.removeEventListener("dragend", dragend, true);
       window.removeEventListener("blur", up);
     };
   }, []);

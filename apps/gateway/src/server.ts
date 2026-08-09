@@ -83,6 +83,8 @@ io.on("connection", (socket) => {
 		ro.on("item-add", (payload) => socket.emit("inv:add", payload));
 		ro.on("item-remove", (payload) => socket.emit("inv:remove", payload));
 		ro.on("item-equip-result", (payload) => socket.emit("item:equip-result", payload));
+		ro.on("card-options", (payload) => socket.emit("card:options", payload));
+		ro.on("card-result", (payload) => socket.emit("card:result", payload));
 		ro.on("skills", (payload) => socket.emit("skill:list", payload));
 		ro.on("skill-cast", (payload) => socket.emit("skill:cast", payload));
 		ro.on("skill-casting", (payload) => socket.emit("skill:casting", payload));
@@ -212,6 +214,14 @@ io.on("connection", (socket) => {
 
 	socket.on("item:drop", (payload: { index?: number; amount?: number }) => {
 		withSession((ro) => ro.dropItem(Number(payload?.index ?? 0), Number(payload?.amount ?? 1)));
+	});
+
+	socket.on("card:list", (payload: { index?: number }) => {
+		withSession((ro) => ro.requestCardOptions(Number(payload?.index ?? 0)));
+	});
+
+	socket.on("card:insert", (payload: { cardIndex?: number; equipIndex?: number }) => {
+		withSession((ro) => ro.insertCard(Number(payload?.cardIndex ?? 0), Number(payload?.equipIndex ?? 0)));
 	});
 
 	socket.on("entity:info", (payload: { gid?: number }) => {

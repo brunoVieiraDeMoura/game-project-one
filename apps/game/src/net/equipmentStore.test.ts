@@ -83,6 +83,10 @@ describe("precheckEquip — checagem RASA, só nível", () => {
     attack: 10,
     magicAttack: 0,
     defense: 0,
+    buyPrice: 0,
+    sellPrice: 0,
+    range: 1,
+    gender: "both",
     locations: ["right_hand"],
   };
 
