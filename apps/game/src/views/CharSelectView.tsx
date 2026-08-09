@@ -5,15 +5,38 @@ import { useSessionStore } from "../net/sessionStore";
 import { usePlayerStore } from "../net/playerStore";
 import { JOB_NAMES } from "../character/jobNames";
 import { CharacterPortrait } from "../hud/CharacterPortrait";
+import { ChatFrame } from "../hud/ChatFrame";
+import { ChatScrollbar } from "../hud/ChatScrollbar";
+import { CHAT_ART_SIZE } from "../ui/chatFrame";
 import { CardFrame } from "../ui/CardFrame";
 import { CurvedBox } from "../ui/CurvedBox";
 import { Ribbon } from "../ui/Ribbon";
+import { ScrollbarHider } from "../ui/ScrollbarHider";
 import { IconSquare } from "../ui/rpg";
 import { escalaDoCanva, charSelectTrilhos } from "../ui/CanvaFrame";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { LOGIN_ART, LOGIN_COLORS, LOGIN_TITLE_FONT } from "../ui/login";
 import { LOGIN_FRAME_ART, LOGIN_FRAME_SIZE, RIBBON_BAND } from "../ui/loginFrameArt";
 import { LoginBackdrop, LoginError, useLarguraDoPalco } from "../ui/LoginChrome";
+
+/** madeira do fundo do painel direito — asset NOVO, só desta tela (não é
+ * reuso de nada do login) */
+const RIGHTSECTION_BACKGROUND = "/assets/ui/character-create/rightsection-background.png";
+
+/**
+ * Paleta dos botões do painel direito e do "Entrar no Mundo" — base escura
+ * comum (#222211) em vez das cores translúcidas ad-hoc que cada botão tinha.
+ * DUAS exceções de tom, as duas por SEMÂNTICA, não gosto: "Mudar de Canal"
+ * troca de SERVIDOR (#223344, azul-ardósia) e "Excluir Personagem" é
+ * destrutivo — vermelho é o aviso, não decoração, e não sai (correção do
+ * usuário: "excluir personagem é vermelho").
+ */
+const BOTAO_DIREITA_BASE = "#222211";
+const BOTAO_DIREITA_ESCURA = "#14140a";
+const BOTAO_CANAL_BASE = "#223344";
+const BOTAO_CANAL_ESCURA = "#15212c";
+const BOTAO_PERIGO_BASE = "#441515";
+const BOTAO_PERIGO_ESCURA = "#240a0a";
 
 /**
  * Seleção de personagem — refeita no formato da referência
@@ -82,6 +105,7 @@ export function CharSelectView() {
 
   return (
     <LoginBackdrop quadro="charSelect">
+      <ScrollbarHider />
       <TopoEsquerdaLogo />
       <MenuLateral />
       <HeroCentral
@@ -93,35 +117,49 @@ export function CharSelectView() {
       />
       <PainelDireita>
         <BotaoMudarCanal />
-        <ListaDePersonagens lista={lista} cursor={cursor} onSelect={(s) => (setCursor(s), setCreatingAt(null))} />
+        <SecaoListaDePersonagens
+          lista={lista}
+          cursor={cursor}
+          onSelect={(s) => (setCursor(s), setCreatingAt(null))}
+        />
 
-        {creatingAt !== null ? (
-          <FormularioCriar
-            slot={creatingAt}
-            nome={newName}
-            onNome={setNewName}
-            onConfirmar={create}
-            onCancelar={() => setCreatingAt(null)}
-          />
-        ) : (
-          <AcoesRodape
-            podeExcluir={Boolean(current)}
-            onCriar={() => {
-              const v = primeiroSlotVazio();
-              if (v !== null) {
-                setCursor(v);
-                setCreatingAt(v);
-              }
-            }}
-            onExcluir={() => current && gateway().emit("char:delete", { gid: current.gid, email: "" })}
-            onVoltar={() => {
-              useSessionStore.getState().reset();
-              navigate("/login");
-            }}
-            criarDesabilitado={primeiroSlotVazio() === null}
-          />
-        )}
-        {error && <LoginError>{error}</LoginError>}
+        {/**
+         * UM filho só pra essa faixa — `PainelDireita` virou grade de TRÊS
+         * linhas fixas (`grid-template-rows: auto 1fr auto`, item #2 do
+         * pedido: "mudar de canal" no topo, lista no meio [maior espaço],
+         * criar/excluir/voltar embaixo). Com `FormularioCriar`/`AcoesRodape`
+         * e o erro como filhos SEPARADOS, o quarto filho vazava pra uma
+         * quarta linha implícita, fora da moldura de baixo.
+         */}
+        <div style={{ display: "grid", gap: "0.5vw", alignContent: "end" }}>
+          {creatingAt !== null ? (
+            <FormularioCriar
+              slot={creatingAt}
+              nome={newName}
+              onNome={setNewName}
+              onConfirmar={create}
+              onCancelar={() => setCreatingAt(null)}
+            />
+          ) : (
+            <AcoesRodape
+              podeExcluir={Boolean(current)}
+              onCriar={() => {
+                const v = primeiroSlotVazio();
+                if (v !== null) {
+                  setCursor(v);
+                  setCreatingAt(v);
+                }
+              }}
+              onExcluir={() => current && gateway().emit("char:delete", { gid: current.gid, email: "" })}
+              onVoltar={() => {
+                useSessionStore.getState().reset();
+                navigate("/login");
+              }}
+              criarDesabilitado={primeiroSlotVazio() === null}
+            />
+          )}
+          {error && <LoginError>{error}</LoginError>}
+        </div>
       </PainelDireita>
     </LoginBackdrop>
   );
@@ -156,9 +194,11 @@ function TopoEsquerdaLogo() {
       style={{
         position: "absolute",
         // desvia do CANTO inteiro (a vinha), não só do trilho fino — perto
-        // dele o "Í" de "IMPÉRIO" ficava por baixo da folhagem
-        left: canto.w * 0.55,
-        top: canto.h * 0.32,
+        // dele o "Í" de "IMPÉRIO" ficava por baixo da folhagem. Mais perto do
+        // canto que antes (pedido: "logo mais pra esquerda em cima") — só o
+        // suficiente pra não entrar embaixo da vinha.
+        left: canto.w * 0.32,
+        top: canto.h * 0.21,
         pointerEvents: "none",
       }}
     >
@@ -249,8 +289,9 @@ function MenuLateral() {
     <div
       style={{
         position: "absolute",
-        left: canto.w * 0.5,
-        bottom: canto.h * 0.62,
+        // mais perto do canto (pedido: "botões mais pra esquerda e embaixo")
+        left: canto.w * 0.28,
+        bottom: canto.h * 0.22,
         display: "grid",
         gap: "0.6vw",
       }}
@@ -342,15 +383,34 @@ function HeroCentral({
         {current && (
           <CharacterPortrait dono="char-select" characterKey="mage" inteiro fundo={false} giroRef={giroRef} />
         )}
+        {/**
+         * As setas de girar SAÍRAM da fileira do botão (pedido #5: "nas
+         * laterais do char, no meio da tela") — flutuam encostadas nas bordas
+         * ESQUERDA/DIREITA desta mesma caixa (a do personagem), centralizadas
+         * na ALTURA dela, não na altura da tela inteira: a caixa já engloba o
+         * boneco do topo ao pé, então o centro dela É o centro visual dele.
+         */}
+        <SetaGirar lado="esq" onClick={() => (giroRef.current -= Math.PI / 4)} />
+        <SetaGirar lado="dir" onClick={() => (giroRef.current += Math.PI / 4)} />
       </div>
 
       <Ribbon
-        cap={LOGIN_FRAME_ART.headerCap}
-        ext={LOGIN_FRAME_ART.headerExt}
-        tam={{ cap: LOGIN_FRAME_SIZE.headerCap, ext: LOGIN_FRAME_SIZE.headerExt }}
-        banda={RIBBON_BAND.header}
+        // troca de PNG do usuário (`character-create/papel-nome-do-char.png`)
+        // conferida por hash: é byte a byte `lado-a-era-de-asterion.png`, a
+        // MESMA arte da fita "A ERA DE ASTERION" do login — não um arquivo
+        // novo pra copiar, e sim o par certo de constantes (`eraCap`/`eraExt`
+        // em vez de `headerCap`/`headerExt`). Usar as medidas do header antigo
+        // numa arte de proporção diferente é o que fazia o papel entortar pra
+        // um lado.
+        cap={LOGIN_FRAME_ART.eraCap}
+        ext={LOGIN_FRAME_ART.eraExt}
+        tam={{ cap: LOGIN_FRAME_SIZE.eraCap, ext: LOGIN_FRAME_SIZE.eraExt }}
+        banda={RIBBON_BAND.era}
         escala={escalaFita}
-        largura="16vw"
+        // medido contra o botão "Entrar no Mundo" renderizado — as duas
+        // BORDAS na mesma linha, não só o centro (pedido: "centralizar o
+        // papel... com o botão de entrar, tá muito pra direita").
+        largura="18.4vw"
       >
         <span
           style={{
@@ -372,8 +432,7 @@ function HeroCentral({
         </span>
       </Ribbon>
 
-      <div style={{ marginTop: "0.9vw", display: "flex", alignItems: "center", gap: "0.7vw" }}>
-        <SetaGirar lado="esq" onClick={() => (giroRef.current -= Math.PI / 4)} />
+      <div style={{ marginTop: "0.9vw" }}>
         <button
           type="button"
           onClick={onEntrar}
@@ -389,7 +448,7 @@ function HeroCentral({
         >
           <CardFrame
             border={bordaBtn}
-            background={`linear-gradient(180deg, ${LOGIN_COLORS.entrar} 0%, ${LOGIN_COLORS.entrarBorda} 100%)`}
+            background={`linear-gradient(180deg, ${BOTAO_DIREITA_BASE} 0%, ${BOTAO_DIREITA_ESCURA} 100%)`}
             inner={{
               padding: "0.75vw 2.2vw",
               fontFamily: FRAME_FONT,
@@ -403,15 +462,20 @@ function HeroCentral({
             {entrando ? "entrando…" : "Entrar no Mundo"}
           </CardFrame>
         </button>
-        <SetaGirar lado="dir" onClick={() => (giroRef.current += Math.PI / 4)} />
       </div>
     </div>
   );
 }
 
-/** `button-arrow-left.png` — mesma peça do "voltar" do login, aqui girando o boneco */
+/**
+ * `button-arrow-left.png` — mesma peça do "voltar" do login, aqui girando o
+ * boneco. Flutua ENCOSTADA na borda esquerda/direita da caixa do personagem
+ * (posição do pai: `HeroCentral`, `position:relative`), centralizada na
+ * ALTURA dela — pedido #5, saiu de perto do botão "Entrar no Mundo".
+ */
 function SetaGirar({ lado, onClick }: { lado: "esq" | "dir"; onClick: () => void }) {
   const [hover, setHover] = useState(false);
+  const espelho = lado === "dir" ? "scaleX(-1) " : "";
   return (
     <button
       type="button"
@@ -420,42 +484,99 @@ function SetaGirar({ lado, onClick }: { lado: "esq" | "dir"; onClick: () => void
       onMouseLeave={() => setHover(false)}
       title={lado === "esq" ? "Girar para a esquerda" : "Girar para a direita"}
       style={{
+        position: "absolute",
+        top: "50%",
+        [lado === "esq" ? "right" : "left"]: "100%",
         appearance: "none",
         border: "none",
         background: "transparent",
         padding: "0.4vw",
         cursor: "pointer",
-        transform: `${lado === "dir" ? "scaleX(-1) " : ""}${hover ? "scale(1.15)" : "scale(1)"}`,
+        transform: `translateY(-50%) ${espelho}${hover ? "scale(1.15)" : "scale(1)"}`,
         transition: "transform 120ms ease-out",
         filter: hover ? "brightness(1.3)" : "none",
+        zIndex: 2,
       }}
     >
-      <img src={LOGIN_ART.back} alt="" draggable={false} style={{ height: "1.8vw", display: "block" }} />
+      {/* maior que antes (1,8vw): flutuando sozinha ao lado do boneco, sem o
+          botão "Entrar" perto pra dar escala, precisa ler por si só */}
+      <img src={LOGIN_ART.back} alt="" draggable={false} style={{ height: "2.3vw", display: "block" }} />
     </button>
   );
 }
 
-/** o painel da direita — a MESMA moldura de vinha do login (`ChatFrame`, byte
- * a byte igual entre os dois pacotes), só que alto e estreito */
+/**
+ * O painel da direita — moldura PRÓPRIA (pedido #3: `top-rightsection-*` /
+ * `mid-*-rightsection-*`), não mais sem borda nenhuma. Conferido por hash: as
+ * 6 peças são byte a byte as do `ChatFrame` (chat/login) — mesma vinha, dá
+ * pra reusar o componente pronto em vez de remontar canto por canto.
+ *
+ * TRÊS linhas fixas (pedido #2 — "mudar de canal" no topo, lista no meio com
+ * o espaço maior, ações embaixo): `grid-template-rows: auto 1fr auto`, e o
+ * painel estica quase do canto de cima ao de baixo (perto da extremidade,
+ * pedido #1 — só a folga que evita entrar embaixo da vinha).
+ */
 function PainelDireita({ children }: { children: React.ReactNode }) {
-  const { canto } = useTrilho();
+  const { palco, canto } = useTrilho();
+  /**
+   * Escala PRÓPRIA, menor que a do quadro externo: a arte tem canto de
+   * ~171×132 px nativos, e usando a mesma escala do `CanvaFrame` (tunada pra
+   * um painel de ~500px) num painel de ~24vw/380px a vinha comeria quase um
+   * terço da largura. Mirando ~18% da largura do painel (como o `ChatFrame`
+   * lê no login), a conta é a mesma família de `escalaDoCanva`, só que
+   * calibrada pra esta largura.
+   */
+  const escalaBorda = Math.max(0.28, Math.min(0.42, palco * 0.00026));
+  const S = CHAT_ART_SIZE;
+  const padY = S.cornerTopLeft.h * escalaBorda * 0.55;
+  const padX = S.cornerTopLeft.w * escalaBorda * 0.5;
   return (
     <div
       style={{
         position: "absolute",
-        // desvia do CANTO (não só do trilho fino) nos quatro lados: o painel
-        // encosta tanto no canto de cima quanto no de baixo da direita, e os
-        // botões do rodapé ficavam por baixo da vinha sem essa folga.
-        right: canto.w * 0.5,
-        top: canto.h * 0.62,
-        bottom: canto.h * 0.62,
+        // mais perto da extremidade DIREITA (pedido #1): antes `canto.w*0.5`
+        right: canto.w * 0.22,
+        // estica quase do canto de cima ao de baixo (pedido #2 — "de cima a
+        // baixo"): antes 0.62 dos dois lados deixava o painel curto, metido
+        // no meio da tela em vez de tomar a altura do quadro
+        top: canto.h * 0.24,
+        bottom: canto.h * 0.24,
         width: "min(24vw, 380px)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.7vw",
       }}
     >
-      {children}
+      {/**
+       * Madeira de verdade (`rightsection-background.png`, ladrilhado — a
+       * textura já vem seamless) no lugar do véu de opacidade flat. O tom
+       * escuro do PNG já dá contraste sozinho; o véu ficava chapado e sem
+       * grão nenhum, destoando da moldura de vinha entalhada em volta.
+       */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `url(${RIGHTSECTION_BACKGROUND})`,
+          backgroundRepeat: "repeat",
+          // tamanho NATIVO do PNG (276×252) — é um ladrilho seamless pronto,
+          // esticar ou encolher só borraria o grão da madeira à toa
+          backgroundSize: "276px 252px",
+          boxShadow: "0 16px 44px rgba(0,0,0,0.55), inset 0 0 40px rgba(0,0,0,0.5)",
+        }}
+      />
+      <ChatFrame escala={escalaBorda} />
+      <div
+        style={{
+          position: "relative",
+          height: "100%",
+          boxSizing: "border-box",
+          padding: `${padY}px ${padX}px`,
+          display: "grid",
+          gridTemplateRows: "auto 1fr auto",
+          gap: "0.6vw",
+          minHeight: 0,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -463,15 +584,26 @@ function PainelDireita({ children }: { children: React.ReactNode }) {
 function BotaoMudarCanal() {
   const palco = useLarguraDoPalco();
   const borda = Math.max(8, palco * 0.008);
+  const hover = useHover();
   return (
     <button
       type="button"
       title="em breve"
-      style={{ appearance: "none", border: "none", background: "transparent", padding: 0, cursor: "default", flex: "0 0 auto" }}
+      style={{
+        appearance: "none",
+        border: "none",
+        background: "transparent",
+        padding: 0,
+        cursor: "default",
+        flex: "0 0 auto",
+        width: "100%",
+        ...hover.estilo,
+      }}
+      {...hover.props}
     >
       <CardFrame
         border={borda}
-        background="rgba(24,19,12,0.75)"
+        background={`linear-gradient(180deg, ${BOTAO_CANAL_BASE} 0%, ${BOTAO_CANAL_ESCURA} 100%)`}
         inner={{
           padding: "0.6vw 1vw",
           textAlign: "center",
@@ -488,7 +620,44 @@ function BotaoMudarCanal() {
   );
 }
 
-function ListaDePersonagens({
+/**
+ * O mesmo hover do rodapé do login (`ui/LoginDecor.tsx: useHover`) —
+ * `transform`/`filter` porque não empurram vizinho nenhum, e clarear o
+ * elemento inteiro acende moldura, ícone e texto de uma vez sem estado por
+ * peça. Cópia local: são 10 linhas, e a de lá não é exportada.
+ */
+function useHover() {
+  const [dentro, setDentro] = useState(false);
+  return {
+    dentro,
+    props: {
+      onMouseEnter: () => setDentro(true),
+      onMouseLeave: () => setDentro(false),
+    },
+    estilo: {
+      transform: dentro ? "translateY(-2px)" : "translateY(0)",
+      filter: dentro ? "brightness(1.25) drop-shadow(0 3px 8px rgba(0,0,0,0.6))" : "none",
+      transition: "transform 120ms ease-out, filter 120ms ease-out",
+    } as React.CSSProperties,
+  };
+}
+
+/**
+ * A SEÇÃO da lista de personagens — moldura própria (pedido: "uma section
+ * para conter apenas a lista"), separada do resto do painel direito.
+ *
+ * `shadow-section-characteres-curve-right`/`-extension` conferidas por hash:
+ * são byte a byte `bar-corner.png`/`bar-edge.png`, a MESMA moldura que
+ * `CurvedBox` já monta pras barras de HP/SP e pros campos de texto — reusa o
+ * componente pronto em vez de montar 9-slice de novo.
+ *
+ * A rolagem é a `ChatScrollbar` de sempre (as 4 peças de rolo — `arrow`,
+ * `background-rolling-bar`, `rolling-bar-and-start`, `rolling-bar-mid` —
+ * também batem por hash com as do chat), à DIREITA da seção, fora da
+ * moldura — por isso a barra NATIVA do `overflow:auto` precisa sumir
+ * (`.chat-scroll`, `ScrollbarHider`), senão apareceriam duas.
+ */
+function SecaoListaDePersonagens({
   lista,
   cursor,
   onSelect,
@@ -498,22 +667,52 @@ function ListaDePersonagens({
   onSelect: (slot: number) => void;
 }) {
   const palco = useLarguraDoPalco();
+  const borda = Math.max(5, palco * 0.005);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  return (
+    <div style={{ display: "flex", height: "100%", minHeight: 0, gap: "0.4vw" }}>
+      <CurvedBox
+        border={borda}
+        background="rgba(10,8,5,0.6)"
+        style={{ flex: "1 1 auto", minWidth: 0 }}
+        inner={{ height: "100%", minHeight: 0 }}
+      >
+        <ListaDePersonagens scrollRef={scrollRef} lista={lista} cursor={cursor} onSelect={onSelect} />
+      </CurvedBox>
+      <ChatScrollbar alvo={scrollRef} revisao={lista.length} largura={13} auto />
+    </div>
+  );
+}
+
+function ListaDePersonagens({
+  lista,
+  cursor,
+  onSelect,
+  scrollRef,
+}: {
+  lista: CharSummary[];
+  cursor: number;
+  onSelect: (slot: number) => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const palco = useLarguraDoPalco();
   const borda = Math.max(6, palco * 0.006);
   return (
     <div
+      ref={scrollRef}
+      className="chat-scroll"
       style={{
-        // NÃO "1 1 auto": esticar sempre deixava um vão vazio entre a lista
-        // e os botões de baixo quando há poucos personagens (o container
-        // inteiro tem altura FIXA, presa ao topo/base do painel). Encolhido
-        // ao conteúdo, com teto — só rola quando passa de verdade dos 9 slots.
-        flex: "0 1 auto",
-        maxHeight: "48vh",
+        // linha do MEIO do grid de `PainelDireita` (`1fr` — pedido #2, "maior
+        // espaço"): preenche a altura inteira que sobra entre "mudar de
+        // canal" e as ações de baixo, e só rola quando os personagens passam
+        // de verdade da altura disponível.
+        height: "100%",
         minHeight: 0,
         overflowY: "auto",
         display: "grid",
         gap: "0.5vw",
         alignContent: "start",
-        paddingRight: 2,
+        padding: "0.4vw",
       }}
     >
       {lista.length === 0 && (
@@ -602,61 +801,76 @@ function AcoesRodape({
   onVoltar: () => void;
   criarDesabilitado: boolean;
 }) {
-  const palco = useLarguraDoPalco();
-  const borda = Math.max(7, palco * 0.007);
-  const item = (
-    texto: string,
-    onClick: () => void,
-    opts?: { desabilitado?: boolean; tom?: "criar" | "excluir" | "neutro" },
-  ) => {
-    const cor =
-      opts?.tom === "excluir"
-        ? "rgba(122,32,26,0.55)"
-        : opts?.tom === "criar"
-          ? "rgba(46,66,32,0.6)"
-          : "rgba(24,19,12,0.75)";
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={opts?.desabilitado}
-        style={{
-          appearance: "none",
-          border: "none",
-          background: "transparent",
-          padding: 0,
-          cursor: opts?.desabilitado ? "default" : "pointer",
-          opacity: opts?.desabilitado ? 0.5 : 1,
-          flex: 1,
-        }}
-      >
-        <CardFrame
-          border={borda}
-          background={cor}
-          inner={{
-            padding: "0.55vw 0.4vw",
-            textAlign: "center",
-            fontFamily: FRAME_FONT,
-            fontSize: "0.8vw",
-            letterSpacing: "0.02vw",
-            textTransform: "uppercase",
-            color: LOGIN_COLORS.ink,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {texto}
-        </CardFrame>
-      </button>
-    );
-  };
   return (
     <div style={{ display: "grid", gap: "0.5vw", flex: "0 0 auto" }}>
-      {item("Criar Novo Personagem", onCriar, { desabilitado: criarDesabilitado, tom: "criar" })}
+      <BotaoAcao texto="Criar Novo Personagem" onClick={onCriar} desabilitado={criarDesabilitado} />
       <div style={{ display: "flex", gap: "0.5vw" }}>
-        {item("Excluir Personagem", onExcluir, { desabilitado: !podeExcluir, tom: "excluir" })}
-        {item("Voltar", onVoltar)}
+        <BotaoAcao texto="Excluir Personagem" onClick={onExcluir} desabilitado={!podeExcluir} perigo />
+        <BotaoAcao texto="Voltar" onClick={onVoltar} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Um botão de ação do painel direito — extraído de dentro de `AcoesRodape`
+ * (era um closure comum, `item(texto, onClick, opts)`, que RETORNAVA jsx mas
+ * não podia chamar hook nenhum). Virou componente pra cada botão ter o
+ * PRÓPRIO estado de hover — um `useState` só compartilhado entre os três
+ * acenderia todos juntos.
+ */
+function BotaoAcao({
+  texto,
+  onClick,
+  desabilitado,
+  perigo,
+}: {
+  texto: string;
+  onClick: () => void;
+  desabilitado?: boolean;
+  /** "Excluir Personagem" — a ÚNICA exceção da base #222211, de propósito */
+  perigo?: boolean;
+}) {
+  const palco = useLarguraDoPalco();
+  const borda = Math.max(7, palco * 0.007);
+  const hover = useHover();
+  const cor = perigo
+    ? `linear-gradient(180deg, ${BOTAO_PERIGO_BASE} 0%, ${BOTAO_PERIGO_ESCURA} 100%)`
+    : `linear-gradient(180deg, ${BOTAO_DIREITA_BASE} 0%, ${BOTAO_DIREITA_ESCURA} 100%)`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={desabilitado}
+      {...(desabilitado ? {} : hover.props)}
+      style={{
+        appearance: "none",
+        border: "none",
+        background: "transparent",
+        padding: 0,
+        cursor: desabilitado ? "default" : "pointer",
+        opacity: desabilitado ? 0.5 : 1,
+        flex: 1,
+        ...(desabilitado ? {} : hover.estilo),
+      }}
+    >
+      <CardFrame
+        border={borda}
+        background={cor}
+        inner={{
+          padding: "0.55vw 0.4vw",
+          textAlign: "center",
+          fontFamily: FRAME_FONT,
+          fontSize: "0.8vw",
+          letterSpacing: "0.02vw",
+          textTransform: "uppercase",
+          color: LOGIN_COLORS.ink,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {texto}
+      </CardFrame>
+    </button>
   );
 }
 

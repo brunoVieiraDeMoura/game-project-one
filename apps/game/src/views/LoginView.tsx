@@ -10,6 +10,7 @@ import {
   LoginBackdrop,
   LoginBotaoLargo,
   LoginCampo,
+  LoginCheckbox,
   LoginColuna,
   LoginError,
   LoginPainelOrnado,
@@ -160,25 +161,9 @@ export function LoginView() {
                 marginTop: u(0.1),
               }}
             >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: u(0.5),
-                  fontFamily: FRAME_FONT,
-                  fontSize: u(1.35),
-                  color: LOGIN_COLORS.inkDim,
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={lembrar}
-                  onChange={(e) => setLembrar(e.target.checked)}
-                  style={{ width: u(1.3), height: u(1.3), accentColor: LOGIN_COLORS.gold, cursor: "pointer" }}
-                />
+              <LoginCheckbox checked={lembrar} onChange={setLembrar}>
                 Lembrar de mim
-              </label>
+              </LoginCheckbox>
               {/**
                * O rAthena NÃO tem recuperação de senha pelo cliente — não há
                * pacote para isso, e a tabela `login` não tem fluxo de e-mail

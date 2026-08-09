@@ -198,12 +198,12 @@ function StatusWindow() {
   const derived: [string, string][] = online
     ? [
         ["ATK", `${stats.atk} + ${stats.atkBonus}`],
-        ["MATK", `${stats.matkMin} ~ ${stats.matkMax}`],
+        ["MATK", `${stats.matkMin} + ${stats.matkMax}`],
         ["HIT", `${stats.hit}`],
         ["CRITICAL", `${stats.critical}`],
         // ASPD do pacote é o valor interno (amotion); o RO mostra 200 - x/10.
         ["ASPD", `${(200 - stats.aspd / 10).toFixed(1)}`],
-        ["FLEE", `${stats.flee} + ${stats.fleeBonus}`],
+        ["FLEE", `${stats.flee}`],
         ["DEF", `${stats.def} + ${stats.defBonus}`],
         ["MDEF", `${stats.mdef} + ${stats.mdefBonus}`],
       ]

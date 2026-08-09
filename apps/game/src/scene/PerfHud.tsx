@@ -80,6 +80,42 @@ export function PerfProbe() {
   }, [gl, scene]);
 
   /**
+   * `dt` do `useFrame` é relógio de PAREDE entre dois quadros — inclui
+   * qualquer intervalo em que a aba ficou OCULTA (troca de janela,
+   * minimizada). Era o "frameLongo de 852 ms com render em 2 ms, GPU sem pico
+   * nenhum": não foi o quadro que demorou, foi o navegador que não chamou
+   * quadro NA HORA.
+   *
+   * Duas bandeiras, e as duas são necessárias — medido: uma aba oculta 2 s
+   * não vira UM quadro parado e um dt gigante na volta, vira uma RAJADA de
+   * quadros ~1 Hz (o throttle de aba em segundo plano do Chrome, que não
+   * PARA `requestAnimationFrame`, só o reduz), cada um com seu próprio dt de
+   * ~1 s — 4 `frameLongo` falsos numa janela de 2 s, não 1.
+   *
+   *  • `ocultoAgora` — espelha `document.hidden` o tempo todo, então TODO
+   *    quadro que ainda dispara durante o throttle (não só o primeiro) é
+   *    descartado;
+   *  • `pularProximo` — a transição de volta para visível não passa por
+   *    `ocultoAgora` (already `false` quando o quadro seguinte roda), então
+   *    ela pede a MAIS UMA descartada explicitamente: o quadro que fecha o
+   *    hiato ainda carrega o tempo do último tick jogado fora até agora.
+   */
+  const ocultoAgora = useRef(document.hidden);
+  const pularProximoQuadro = useRef(false);
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        ocultoAgora.current = true;
+      } else {
+        ocultoAgora.current = false;
+        pularProximoQuadro.current = true;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  /**
    * Prioridade −1000: primeiro do quadro.
    *
    * O flight recorder recebe as colunas de desenho AQUI e a linha é fechada
@@ -92,8 +128,17 @@ export function PerfProbe() {
    * que o overlay já mostra.
    */
   useFrame((_, dt) => {
+    /**
+     * Descarta os quadros de HIATO — não são medida, são o navegador não
+     * tendo chamado quadro nenhum na hora certa. `amostrarContadores`/
+     * `amostrarCena`/`avaliarMundoVazio` seguem rodando (não dependem de
+     * `dt`); o que some é `registrarQuadro`, `quadroMs` e o gatilho de
+     * `frameLongo`, que é quem lia o hiato como se fosse trabalho.
+     */
+    const veioDeAbaOculta = ocultoAgora.current || pularProximoQuadro.current;
+    pularProximoQuadro.current = false;
     const ms = dt * 1000;
-    registrarQuadro(ms);
+    if (!veioDeAbaOculta) registrarQuadro(ms);
     if (!import.meta.env.DEV) return;
     /**
      * Fecha a linha ANTERIOR quando ninguém a fechou.
@@ -117,7 +162,11 @@ export function PerfProbe() {
     const calls = gl.info.render.calls;
     if (ativo()) {
       const q = quadro();
-      q.quadroMs = ms;
+      // `quadroMs` NÃO é acumulador (não zera sozinho em `confirmarQuadro`),
+      // então pular a escrita aqui deixa o valor do quadro anterior valendo
+      // por mais uma linha — repetir o último número bom é menos errado que
+      // gravar o hiato como se fosse o custo deste quadro.
+      if (!veioDeAbaOculta) q.quadroMs = ms;
       q.drawCalls = calls;
       q.triangulos = gl.info.render.triangles;
     }
@@ -125,8 +174,11 @@ export function PerfProbe() {
     amostrarContadores(gl);
     // a árvore da cena: filhos, visibilidade, câmera, chunks, props, suspensão
     amostrarCena(scene, camera, calls);
-    // ninguém chamava este gatilho — ele estava declarado e nunca disparou
-    avaliarGatilho("frameLongo", ms);
+    // ninguém chamava este gatilho — ele estava declarado e nunca disparou.
+    // Não avalia no quadro de volta da aba oculta: `ms` ali é o hiato, não o
+    // custo do quadro, e dispararia um `frameLongo` falso toda vez que o
+    // jogador trocasse de janela.
+    if (!veioDeAbaOculta) avaliarGatilho("frameLongo", ms);
     /**
      * Por ÚLTIMO: o retrato do `mundoVazio` lê as colunas que acabaram de ser
      * escritas acima. Avaliado antes, ele descreveria o quadro anterior.

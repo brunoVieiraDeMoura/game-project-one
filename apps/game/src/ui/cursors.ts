@@ -179,3 +179,31 @@ export function precarregarCursores(): void {
     cursorCss(kind, true);
   }
 }
+
+/**
+ * A imagem CRUA (não a versão em canvas/`cursor:` do resto do arquivo) para
+ * `DataTransfer.setDragImage` — o navegador dono do arraste NATIVO (HTML5
+ * drag-and-drop) não lê `cursor: url(...)`: ele desenha o próprio "fantasma"
+ * por cima da página inteira, sem passar pelo CSS. `setDragImage` é a ÚNICA
+ * abertura que a API dá para escolher o que aparece ali — por isso o cursor
+ * do JOGO durante um arraste (`hud/InventoryWindow`) é este `<img>`, não a
+ * arte pintada por canvas que o resto do cursor usa.
+ *
+ * Carregada UMA vez, na primeira chamada — `setDragImage` só aceita uma
+ * imagem já decodificada; se o primeiro arraste da sessão pedir antes dela
+ * terminar de carregar, `dragImagemNormal()` devolve `null` e quem chama
+ * simplesmente não troca a imagem (o navegador cai no próprio "fantasma"
+ * padrão daquele arraste específico).
+ */
+let imagemDeArrasto: HTMLImageElement | null = null;
+if (typeof document !== "undefined") {
+  const img = new Image();
+  img.src = DEFS.normal.url;
+  img.onload = () => {
+    imagemDeArrasto = img;
+  };
+}
+
+export function dragImagemNormal(): { img: HTMLImageElement; hotspot: [number, number] } | null {
+  return imagemDeArrasto ? { img: imagemDeArrasto, hotspot: DEFS.normal.hotspot } : null;
+}

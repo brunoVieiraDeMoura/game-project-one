@@ -1,362 +1,138 @@
-# NPC Writer — definir requisitos e segurança antes da implementação
+## Próxima etapa — Integrar o Writer ao Admin/API
 
-O Validator terminou e encontrou um ponto crítico:
+O reseed do novo pipeline de NPCs foi concluído e validado.
 
-* 9.206 scripts analisados;
-* 95.676 `legacyScript`;
-* 91,2% dos NPCs possuem pelo menos um `legacyScript`;
-* comentários não estão representados no AST;
-* whitespace/formatação original não está representado;
-* function scripts ainda não fazem parte do `NpcSchema`;
-* o texto de `legacyScript` atualmente não é necessariamente byte-exato da origem;
-* 1.823 NPCs estão atualmente classificados como `safeToWrite`;
-* 7.383 estão bloqueados pela questão de fidelidade de conteúdo.
+### Estado confirmado
 
-Agora precisamos definir e implementar o **Writer de NPCs**, mas com uma regra fundamental:
+* 24.133 NPCs no banco.
+* 0 IDs perdidos.
+* `duplicateOf`, `warp`, `shop` e `legacyRef` preservados.
+* 4.074 NPCs com `eventHandlers`, totalizando 11.649 handlers.
+* 24.133/24.133 passam no `NpcSchema`.
+* Comparação campo a campo contra `output/npcs-v2-compare.json`: 0 divergências.
+* Writer no-op: 9.206/9.206 byte-identical.
+* 159/159 testes legacy-migration.
+* `pnpm -r typecheck`: 9/9.
+* Nenhum `.txt` do rAthena foi alterado pelo reseed.
+* O Writer já foi testado funcionalmente e aprovado.
 
-> O Writer não pode destruir, modificar ou reconstruir conteúdo que o dashboard não conhece.
+### Objetivo desta etapa
 
-## Objetivo
+Integrar o Writer existente ao fluxo real de edição de NPCs no Admin/API.
 
-Permitir que alterações feitas no dashboard sejam refletidas nos scripts `.txt` do rAthena, preservando integralmente tudo que não foi alterado.
+O objetivo é fazer uma edição realizada pelo painel chegar ao `planNpcWrite` e, quando aprovada pelo Writer, alterar o `.txt` correspondente no rAthena de forma segura.
 
-O resultado precisa ser seguro para um servidor rAthena real.
+### Regras obrigatórias
 
----
+1. **Não ampliar as capacidades do Writer nesta etapa.**
 
-# 1. Preserve conteúdo não alterado
+   * Não liberar edição direta de `legacyScript`.
+   * Não liberar adição, remoção ou reordenação de nós.
+   * Não liberar adição ou remoção de handlers inteiros.
+   * Não criar novas regras de reconstrução.
+   * Usar exatamente as capacidades que o Writer já possui e que já foram testadas.
 
-Quando um NPC é carregado e posteriormente salvo sem determinada parte ter sido modificada, essa parte deve permanecer exatamente como estava na origem.
+2. **Não fazer bypass do Writer.**
 
-Isso inclui, quando aplicável:
+   * Nenhuma edição deve escrever diretamente no `.txt`.
+   * Toda escrita deve passar pelas validações e recusas existentes do Writer.
 
-* comandos não reconhecidos;
-* `legacyScript`;
-* comentários;
-* whitespace;
-* formatação;
-* function scripts;
-* event handlers não modificados;
-* statements que o Mapper ainda não tipifica;
-* qualquer outro conteúdo que não pertença à alteração realizada.
+3. **Não quebrar o CRUD existente de NPCs.**
 
-Não é aceitável reconstruir indiscriminadamente um NPC inteiro apenas porque parte dele foi alterada.
+   * Antes de alterar qualquer fluxo, mapear exatamente como GET/PUT funcionam hoje.
+   * Identificar quais dados o Admin envia e quais dados o Writer precisa.
+   * Não assumir que `legacyRef` sozinho é suficiente sem verificar como o arquivo real pode ser localizado com segurança.
 
----
+4. **Preservar o banco como fonte dos dados editados pelo Admin**, mas garantir que a escrita no `.txt` e a atualização do banco não possam ficar silenciosamente inconsistentes.
 
-# 2. Alterações devem ser localizadas
+5. **Não escrever em rathena/ durante a implementação**, exceto nos testes funcionais explicitamente planejados para validar o fluxo.
 
-Quando o usuário alterar apenas uma parte do NPC, somente essa parte deve ser afetada.
+### O que investigar antes de alterar código
 
-Exemplo conceitual:
+Mapear o fluxo completo:
 
-```text
-NPC
- ├── diálogo principal
- ├── OnTouch
- ├── OnInit
- ├── OnTimer
- └── conteúdo não reconhecido
-```
+`NpcForm.tsx → Admin API client → PUT /npcs/:id → API route → repository → Supabase/JSON`
 
-Se o usuário alterar apenas o diálogo principal:
+e determinar:
 
-* `OnTouch` permanece;
-* `OnInit` permanece;
-* `OnTimer` permanece;
-* conteúdo não reconhecido permanece;
-* qualquer outro NPC permanece.
+* como o NPC é carregado no Admin;
+* qual representação é editada pelo formulário;
+* como o `before` deve ser obtido do `.txt` real;
+* como o `after` deve ser construído a partir da edição;
+* como o arquivo é identificado;
+* como impedir edição de um NPC caso o arquivo original tenha mudado desde o carregamento;
+* como lidar com Writer recusando uma edição;
+* como garantir que uma falha na escrita do `.txt` não seja apresentada ao usuário como sucesso;
+* como garantir que uma atualização do banco não ocorra quando a escrita necessária no `.txt` falhar;
+* como representar no Admin uma recusa do Writer e seu motivo.
 
-Se alterar apenas `OnTouch`, as demais partes permanecem intactas.
+### Concorrência / stale data
 
----
+Verificar explicitamente o risco de:
 
-# 3. Não perder informação
+1. Admin carrega NPC.
+2. Arquivo `.txt` muda externamente.
+3. Admin salva uma versão baseada no estado antigo.
 
-Faça uma auditoria completa do caminho:
+A integração não deve aplicar silenciosamente uma edição contra uma versão diferente daquela carregada pelo usuário.
 
-```text
-script original
-→ Parser
-→ AST
-→ Mapper
-→ NpcSchema
-→ edição
-→ Writer
-```
+Se o sistema atual não possui informação suficiente para detectar isso com segurança, **não inventar uma solução silenciosa**. Identificar o bloqueio e parar para aprovação.
 
-Para cada informação que existe no script original, determine:
+### Testes obrigatórios
 
-* se ela é representada;
-* se pode ser preservada;
-* se pode ser alterada;
-* se pode ser reconstruída;
-* se existe risco de perda.
+Antes de conectar ao fluxo real, criar testes que comprovem:
 
-Qualquer informação que possa ser perdida deve ser identificada explicitamente.
+* GET → edição válida → PUT → Writer aceita;
+* edição recusada pelo Writer não altera `.txt`;
+* erro ao localizar o `.txt` não altera o banco;
+* erro de validação não altera `.txt`;
+* edição válida altera somente o trecho permitido;
+* conteúdo não editado continua byte-identical;
+* `eventHandlers` não relacionados permanecem intactos;
+* `legacyScript` vizinho permanece intacto;
+* múltiplos NPCs não interferem entre si;
+* concorrência/stale source é tratada explicitamente;
+* resposta da API diferencia sucesso de recusa do Writer e erro operacional.
 
-Não esconda perda de informação atrás de `legacyScript`.
+### Teste funcional
 
----
+Depois dos testes unitários/integrados, usar **um NPC real em arquivo temporário**, não um `.txt` de produção do rAthena, para provar o fluxo completo:
 
-# 4. legacyScript
+`Admin/API → before real → after → Writer → arquivo → reparse → validação`
 
-`legacyScript` é conteúdo válido que ainda não possui representação semântica completa no dashboard.
+Somente depois dessa prova, e mediante aprovação separada, considerar um teste controlado contra um arquivo real do rAthena.
 
-Portanto:
+### Limites
 
-* não deve ser descartado;
-* não deve ser simplificado;
-* não deve ser convertido para outra forma sem necessidade;
-* não deve ser reformatado sem que tenha sido alterado;
-* não deve desaparecer porque outro trecho do NPC foi editado.
+Não fazer nesta etapa:
 
-Se o Writer não conseguir preservar determinado `legacyScript` com segurança, o NPC deve ser considerado **não gravável**, em vez de arriscar perda de conteúdo.
+* redesign do `NpcSchema`;
+* novo sistema de AST;
+* expansão do Mapper;
+* expansão do Validator;
+* novas capacidades de edição do Writer;
+* edição de `legacyScript`;
+* criação/remoção de nós;
+* criação/remoção de event handlers;
+* alteração de scripts de `function script`;
+* reload do servidor real;
+* alteração permanente de NPC real.
 
----
+### Critério de parada
 
-# 5. Event handlers
+Se existir qualquer decisão arquitetural não determinada pelo código existente — especialmente sobre atomicidade banco ↔ `.txt`, identificação do arquivo, concorrência ou comportamento do Admin — **não escolher arbitrariamente**.
 
-O sistema precisa preservar corretamente múltiplos entry points de um NPC.
+Mapear o problema, apresentar a decisão necessária e parar.
 
-Exemplos:
+Ao terminar, reportar:
 
-```text
-OnTouch
-OnInit
-OnStart
-OnEnable
-OnReset
-OnTimer...
-OnInstanceInit
-OnPCLoginEvent
-OnEvent
-```
+1. fluxo encontrado;
+2. arquivos alterados;
+3. testes adicionados;
+4. resultados dos testes;
+5. comportamento em caso de Writer rejection;
+6. comportamento em caso de falha de filesystem;
+7. comportamento em caso de stale data;
+8. qualquer risco ou decisão ainda pendente.
 
-Cada handler deve continuar associado ao NPC correto.
-
-Alterar um handler não pode alterar silenciosamente outro.
-
-Adicionar ou remover handlers também precisa preservar os handlers existentes que não fazem parte da alteração.
-
----
-
-# 6. Labels e fluxo
-
-O Writer precisa preservar corretamente:
-
-* labels;
-* `goto`;
-* `if/else`;
-* `switch`;
-* `while`;
-* `for`;
-* blocos;
-* chamadas;
-* expressões;
-* assignments;
-* demais estruturas presentes no AST.
-
-Nenhum salto ou estrutura de controle pode ser perdido durante uma edição.
-
-Referências inválidas detectadas pelo Validator devem impedir a gravação.
-
----
-
-# 7. Function scripts
-
-Os `function script` ainda não fazem parte da representação atual do dashboard.
-
-Portanto, até que exista suporte explícito:
-
-* não modificar;
-* não remover;
-* não reconstruir;
-* não mover;
-* não reformatar.
-
-Um NPC que dependa de um function script deve continuar funcionando exatamente como antes.
-
----
-
-# 8. Comentários e formatação
-
-O sistema deve preservar conteúdo que não pertence à edição realizada.
-
-Comentários e formatação original não podem desaparecer simplesmente porque o NPC foi salvo.
-
-Se o sistema não conseguir garantir essa preservação em determinado caso, esse caso deve ser identificado como não seguro para escrita.
-
----
-
-# 9. Segurança contra escrita parcial
-
-Antes de qualquer alteração definitiva:
-
-* todas as validações precisam passar;
-* todas as referências precisam estar válidas ou explicitamente classificadas como dinâmicas;
-* não pode haver perda de conteúdo conhecida;
-* o resultado precisa continuar sendo um script válido;
-* uma falha não pode deixar o arquivo parcialmente modificado.
-
-Se alguma etapa falhar, o arquivo original deve permanecer intacto.
-
----
-
-# 10. Não fazer alterações globais
-
-Salvar um NPC não pode:
-
-* reformatar outros NPCs;
-* alterar outros scripts;
-* reorganizar o arquivo inteiro;
-* modificar function scripts não relacionados;
-* alterar comentários não relacionados;
-* modificar event handlers não envolvidos;
-* alterar conteúdo que o usuário não editou.
-
-A alteração deve ficar restrita ao que realmente foi modificado.
-
----
-
-# 11. Validação do resultado
-
-Depois de gerar uma alteração, o resultado precisa ser analisado novamente pelo mesmo pipeline de parsing/validação.
-
-O objetivo é provar que:
-
-```text
-antes
-→ edição
-→ depois
-```
-
-continua estruturalmente correto.
-
-Também deve ser possível demonstrar quais regiões realmente mudaram.
-
----
-
-# 12. Testes obrigatórios
-
-Crie testes que comprovem pelo menos:
-
-### NPC sem alterações
-
-Salvar sem modificar nada deve preservar o conteúdo original.
-
-### Alteração simples
-
-Alterar somente um diálogo não pode modificar o restante do NPC.
-
-### Legacy script
-
-Alterar um diálogo ao lado de um `legacyScript` não pode apagar ou modificar o `legacyScript`.
-
-### Event handlers
-
-Alterar um handler não pode alterar os demais.
-
-### Múltiplos NPCs
-
-Alterar um NPC não pode modificar outros NPCs do mesmo arquivo.
-
-### Function script
-
-Um function script existente deve permanecer intacto.
-
-### Goto
-
-Referências válidas devem continuar funcionando e referências inválidas devem ser rejeitadas.
-
-### Falha de validação
-
-Uma alteração inválida não pode modificar o arquivo original.
-
-### Conteúdo desconhecido
-
-Conteúdo que o dashboard não entende deve continuar preservado.
-
----
-
-# 13. Corpus real
-
-Depois dos testes unitários, execute o Writer em modo de **simulação**, sem modificar os arquivos reais do rAthena.
-
-Use o corpus real disponível.
-
-Relate:
-
-* quantos NPCs podem ser escritos com segurança;
-* quantos são bloqueados;
-* por quais motivos;
-* quantos possuem `legacyScript`;
-* quantos possuem event handlers;
-* quantos possuem function scripts;
-* quantos possuem conteúdo que não pode ser preservado;
-* quantos passaram pela validação completa.
-
-Não classifique um NPC como seguro apenas porque o parser consegue lê-lo.
-
----
-
-# 14. Critério de segurança
-
-O Writer não deve buscar simplesmente:
-
-> "Consigo gerar um `.txt` válido?"
-
-O requisito é:
-
-> "Consigo aplicar a alteração solicitada sem perder ou modificar qualquer conteúdo que o usuário não alterou?"
-
-Esses são requisitos diferentes.
-
-Um script pode ser sintaticamente válido e ainda assim estar incorreto porque perdeu:
-
-* comentário;
-* comando;
-* label;
-* handler;
-* function script;
-* `legacyScript`;
-* configuração;
-* conteúdo desconhecido.
-
----
-
-# 15. Servidor real
-
-Nesta etapa, NÃO altere o servidor real.
-
-Não faça:
-
-* escrita em arquivos reais do rAthena;
-* reload de NPC;
-* substituição definitiva de arquivos;
-* testes destrutivos no servidor.
-
-Primeiro prove toda a segurança em arquivos temporários e no corpus de testes.
-
-O teste funcional no servidor será uma etapa posterior e separada.
-
----
-
-# 16. Relatório final obrigatório
-
-Ao terminar, apresente:
-
-1. o que foi implementado;
-2. quais informações são preservadas;
-3. quais informações ainda não podem ser preservadas;
-4. quantos NPCs são seguros para escrita;
-5. quantos são bloqueados;
-6. motivos dos bloqueios;
-7. resultado de todos os testes;
-8. resultado do corpus real;
-9. qualquer perda de informação encontrada;
-10. qualquer decisão arquitetural que ainda precise de aprovação.
-
-**Não avance automaticamente para testes destrutivos ou escrita no servidor real.**
-
-Pare após concluir o Writer e a validação em ambiente seguro.
+Não avançar além da integração do Writer sem nova aprovação.

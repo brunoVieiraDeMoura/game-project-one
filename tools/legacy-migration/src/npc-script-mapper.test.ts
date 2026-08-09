@@ -2,7 +2,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { mapNpcScript, DialogueNodeSchema, NpcEventHandlerSchema } from "@ragnarok/game-data";
-import { parseNpcScript } from "./npc-script/parser";
+import { parseNpcScript } from "@ragnarok/game-data";
 import { extractScriptBodies } from "./npc-script/extract-corpus";
 
 /**

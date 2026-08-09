@@ -45,7 +45,15 @@ export function itemRoutes(repo: ItemRepository, security: SecurityContext | nul
       const q = IdsQuerySchema.safeParse(req.query);
       if (!q.success) return reply.code(400).send({ error: q.error.issues });
       const found = await Promise.all(q.data.ids.map((id) => repo.get(id)));
-      return { items: found.filter((i) => i !== null) };
+      // `repo.get` devolve `undefined` (Mysql) OU `null` (outros backends) pra
+      // id inexistente — `!==` só pegava um dos dois, e o outro sobrevivia no
+      // array. JSON.stringify converte `undefined` de array em `null`, então
+      // um id desconhecido no meio do lote virava `{items:[null,...]}`: o
+      // parser do cliente (`itemCatalog.ensure`) lê `cru.id` sem checar null e
+      // quebra o `.then()` inteiro — o LOTE INTEIRO cai no `.catch()` silencioso,
+      // inclusive os itens que TINHAM sido encontrados. Um item de drop ainda
+      // não seedado no catálogo derrubava o nome de todo mundo na mesma leva.
+      return { items: found.filter((i) => i != null) };
     });
 
     app.get("/:id", async (req, reply) => {

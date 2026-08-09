@@ -48,11 +48,16 @@ export const LOGIN_FRAME_ART = {
 /** tamanho nativo (px) de cada peça — canvas inteiro, já = bounding box do alpha
  * pras retas; os cantos/fitas têm folga transparente, daí `LOGIN_FRAME_BAND` */
 export const LOGIN_FRAME_SIZE = {
-  canvaTop: { w: 158, h: 157 },
-  canvaBottom: { w: 275, h: 128 },
-  canvaEdgeTop: { w: 88, h: 15 },
-  canvaEdgeSide: { w: 17, h: 56 },
-  canvaEdgeBottom: { w: 50, h: 130 },
+  // remedido 2026-08-09: os 3 arquivos abaixo foram reenviados de novo (2ª
+  // vez) e as medidas antigas (158×157 etc) ficaram do envio ANTERIOR —
+  // ninguém tinha remedido depois do refresh. Era essa divergência que fazia
+  // o canto (esticado num box do tamanho errado) não bater com a grossura da
+  // barra extensora encostada nele.
+  canvaTop: { w: 284, h: 236 },
+  canvaBottom: { w: 335, h: 128 },
+  canvaEdgeTop: { w: 165, h: 13 },
+  canvaEdgeSide: { w: 16, h: 156 },
+  canvaEdgeBottom: { w: 69, h: 128 },
   cardCorner: { w: 32, h: 29 },
   cardEdgeH: { w: 20, h: 8 },
   cardEdgeV: { w: 7, h: 25 },
@@ -65,13 +70,14 @@ export const LOGIN_FRAME_SIZE = {
 } as const;
 
 /**
- * Trilho do canva principal, em px NATIVOS da arte (medido na coluna/linha de
- * fora de `borda-top-principal.png`: coluna direita opaca y0..14 → topo 15;
- * linha de baixo opaca x0..17 → lateral 18). A base é a exceção: ali quem
- * decide a espessura é a própria `borda-bot-principal` (129 — ver
+ * Trilho do canva principal, em px NATIVOS da arte (remedido 2026-08-09 na
+ * `borda-top-principal.png` atual: coluna direita opaca y0..13 → topo 14;
+ * linha de baixo opaca x0..16 → lateral 17 — é a mesma peça de sempre, a
+ * grossura do próprio desenho não mudou nos refreshes). A base é a exceção:
+ * ali quem decide a espessura é a própria `borda-bot-principal` (128 — ver
  * `CANVA_BOTTOM_LEAD_IN`), não um trilho fino escondido atrás do conteúdo.
  */
-export const CANVA_RAIL = { top: 15, side: 18, bottom: 128 } as const;
+export const CANVA_RAIL = { top: 14, side: 17, bottom: 128 } as const;
 
 /**
  * A peça `borda-bot-principal.png` reenviada (2026-08-07) é OPACA desde

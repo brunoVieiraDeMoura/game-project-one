@@ -54,6 +54,49 @@ done
 # Os arquivos *_equip/_etc/_usable NAO criam tabela propria: sao os DADOS
 # (REPLACE INTO) da mesma `item_db_re`. Sao tres arquivos porque o rAthena
 # tambem divide os YAML em tres.
+
+# --- Correcao: item sem "Classes:" no YAML fica INEQUIPAVEL vindo do banco ---
+#
+# E um bug de round-trip do PROPRIO yaml2sql/itemdb.cpp (rathena/, so leitura,
+# nao mexemos la), nao da nossa migracao. Cadeia confirmada no source:
+#
+#   yaml2sql.cpp:490 `if (classes) { ... }` — so escreve as colunas class_* no
+#   SQL quando o YAML TEM a chave "Classes:". Sem ela, as 8 colunas ficam
+#   ausentes do INSERT e caem no DEFAULT NULL da tabela.
+#
+#   itemdb.cpp:418-420 (carregamento DIRETO do YAML) — quando "Classes:" nao
+#   existe, aplica `item->class_upper = ITEMJ_ALL` (equipavel por qualquer
+#   classe). Esse e o comportamento certo, e SO roda por este caminho.
+#
+#   itemdb.cpp:4153-4154 (`itemdb_read_sqldb_sub`, carregamento via
+#   `use_sql_db: yes` — o modo deste projeto) — ao reconstruir o YAML a partir
+#   da linha do banco, SEMPRE cria o no "Classes" (`classes |= ryml::MAP`),
+#   mesmo com as 8 colunas nulas. Isso faz `nodeExists(node,"Classes")`
+#   (itemdb.cpp:376) dar TRUE mesmo sem nenhum dado — pula o fallback
+#   ITEMJ_ALL, o loop de classes roda 0 vezes, e `class_upper` fica em 0 pra
+#   sempre. Resultado: pc_isItemClass (pc.cpp:1804) recusa TODO mundo, pra
+#   TODO item assim, em QUALQUER classe — foi assim que a Fase 4 achou isto
+#   (equipar sempre recusado, mesmo item sem restricao nenhuma).
+#
+# A correcao NAO inventa "todo item = equipavel por todos": so grava
+# `class_all = 1` (o mesmo valor que o carregamento YAML direto ja aplicaria
+# sozinho) nas linhas em que as OITO colunas de classe vieram nulas — o que so
+# acontece quando o YAML de origem realmente nao tinha "Classes:". Item com
+# QUALQUER restricao real (mesmo parcial, tipo so Third+Fourth) sempre grava
+# pelo menos uma dessas colunas — conferido com Golden Rod Shoes (id 2467,
+# Classes: {All_Third, Fourth} no YAML -> class_third/class_fourth = 1 no
+# banco, os outros 6 ficam nulos DE PROPOSITO) — esses ficam intocados.
+#
+# Roda TODA VEZ que o script roda (nao so na primeira importacao): o yaml2sql
+# regenera os .sql do zero a cada vez, com a mesma lacuna, e o REPLACE INTO do
+# loop acima reintroduziria os NULL se essa correcao nao rodasse de novo por
+# cima.
+echo "==> corrigindo class_all ausente (bug de round-trip yaml2sql <-> itemdb_read_sqldb_sub)"
+ANTES=$(mariadb "$DB" -N -e "SELECT COUNT(*) FROM item_db_re WHERE class_all IS NULL AND class_normal IS NULL AND class_upper IS NULL AND class_baby IS NULL AND class_third IS NULL AND class_third_upper IS NULL AND class_third_baby IS NULL AND class_fourth IS NULL;")
+mariadb "$DB" -e "UPDATE item_db_re SET class_all = 1 WHERE class_all IS NULL AND class_normal IS NULL AND class_upper IS NULL AND class_baby IS NULL AND class_third IS NULL AND class_third_upper IS NULL AND class_third_baby IS NULL AND class_fourth IS NULL;"
+DEPOIS=$(mariadb "$DB" -N -e "SELECT COUNT(*) FROM item_db_re WHERE class_all IS NULL AND class_normal IS NULL AND class_upper IS NULL AND class_baby IS NULL AND class_third IS NULL AND class_third_upper IS NULL AND class_third_baby IS NULL AND class_fourth IS NULL;")
+echo "    class_* totalmente nulo (sem Classes: no YAML): $ANTES -> $DEPOIS"
+
 echo "==> conteudo no banco:"
 mariadb "$DB" -e "SELECT
 	(SELECT COUNT(*) FROM item_db_re) AS itens,

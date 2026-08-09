@@ -1,122 +1,591 @@
-Quero que você investigue e CORRIJA a falha de `frameLongo` que começou recentemente no jogo.
+O `next-change-game.txt` ainda contém a Fase 3 já concluída. Não repita a Fase 3.
 
-Existe um voo de diagnóstico em `voo-1786187612919.json`. Use esse arquivo como evidência principal e faça uma investigação causal no código/runtime antes de alterar qualquer coisa.
+Pode iniciar agora a **FASE 4 — EQUIPAMENTOS + STATUS**, conforme o escopo abaixo.
 
-### Evidência já observada
+Antes de modificar qualquer código, faça primeiro a auditoria do fluxo real de equipamentos e confirme os protocolos no source do rAthena.
 
-O voo registra um `frameLongo` de **851,9 ms** no `walkId=53`, quadro 3621. O gatilho está configurado para qualquer quadro acima de 200 ms.
+## Objetivo
 
-Pouco antes do frame longo existe:
+Implementar equipamento de forma realmente integrada:
 
-* `network/self:move`
-* `dtMs=5187.8`
-* reconciliação normal
-* fila de predição zerada
-* `filaDeChunks=0`
-* `msDeChunk=0`
-* `renderMs=2.2`
-* GPU sem indicação de um pico correspondente
-* renderer ainda é o mesmo (`renderer #1`)
-* cena continua visível e montada
+```text
+Inventário
+↓
+double click
+↓
+request equip
+↓
+gateway
+↓
+rAthena
+↓
+ACK
+↓
+equipmentStore
+↓
+UI
+↓
+status autoritativo
+```
 
-O próprio recorder classificou o evento como:
+E:
 
-`>>> FRAMELONGO 851.90 célula(s) causa=servidor`
+```text
+Alt+Q
+↓
+double click equipamento
+↓
+request unequip
+↓
+rAthena
+↓
+ACK
+↓
+equipmentStore
+↓
+inventário
+↓
+status
+```
 
-e o estado do renderer não indica que os ~852 ms tenham sido gastos efetivamente no render.
+## 1. Primeiro: investigar os ACKs
 
-Também existe outro caso anterior de `frameLongo` de **448,1 ms**, igualmente classificado como `causa=servidor`, enquanto o render CPU estava em apenas 1,9 ms e GPU em 3,1 ms.
+A auditoria anterior encontrou:
 
-### O que quero que você descubra
+```text
+CZ.REQ_WEAR_EQUIP
+CZ.REQ_TAKEOFF_EQUIP
+```
 
-Não quero que você simplesmente trate `frameLongo` como problema de GPU, Three.js ou renderização.
+e ausência de handlers para:
 
-Determine exatamente:
+```text
+ZC.WEAR_EQUIP_ACK 0xaa
+ZC.TAKEOFF_EQUIP_ACK 0xac
+```
 
-1. **O que o `quadroMs` está medindo atualmente.**
+Confirme isso diretamente no source do rAthena.
 
-   * Descubra de onde vem esse valor.
-   * Descubra quais timestamps são usados para calculá-lo.
-   * Verifique se ele representa realmente o tempo de execução de um frame ou se está sendo contaminado por alguma outra fonte de tempo.
+Descubra:
 
-2. **Por que um `quadroMs` de 851,9 ms aparece quando o custo real de renderização é ~2 ms.**
+* estrutura exata dos packets;
+* campos;
+* tamanho;
+* índice;
+* localização;
+* resultado;
+* sucesso/erro;
+* como o equipamento é identificado.
 
-3. **Qual é a relação entre `dtMs` dos eventos `self:move` e `quadroMs`.**
+Não invente o formato.
 
-   * O voo mostra `dtMs=5187,8` imediatamente antes do frame longo de 851,9 ms.
-   * Existe também um caso de 448,1 ms associado a `dtMs=1563,1`.
-   * Verifique se algum relógio, timestamp, delta ou fallback está usando o intervalo de rede/snapshot como se fosse duração de frame.
+Se os ACKs reais forem diferentes do que a auditoria encontrou, use o protocolo real.
 
-4. Verifique se alguma alteração recente em:
+### Regra
 
-   * snapshots/reconciliação;
-   * client-side prediction;
-   * atualização de posição;
-   * loop de animação;
-   * `requestAnimationFrame`;
-   * instrumentação do flight recorder;
-   * cálculo de `dt`;
-   * relógio monotônico;
-   * tratamento de servidor atrasado;
-   * ou eventos de movimento
+Se o protocolo não estiver suficientemente confirmado, **pare antes de implementar** e informe exatamente o que falta.
 
-   pode ter introduzido essa regressão.
+Não crie um protocolo fictício.
 
-5. Não confunda **tempo em que o browser ficou sem executar JS** com **tempo gasto executando o frame**. Determine qual dos dois está realmente acontecendo.
+---
 
-6. Verifique também se o recorder está atribuindo incorretamente o frame longo à causa `servidor` apenas porque o último evento relevante antes do frame foi um `self:move`/snapshot atrasado.
+# 2. equipmentStore
 
-### Critério para a correção
+Depois da confirmação do protocolo, crie um `equipmentStore` somente se for realmente necessário.
 
-A correção deve eliminar a causa real da regressão, não apenas:
+Ele deve ser uma projeção do estado autoritativo, não uma fonte de verdade paralela.
 
-* aumentar o limiar de 200 ms;
-* desativar o gatilho;
-* ignorar frames longos;
-* mascarar o valor no flight recorder;
-* ou reduzir a quantidade de diagnóstico.
+Quero algo conceitualmente equivalente a:
 
-Se o problema estiver no cálculo/medição de `quadroMs`, corrija a medição.
+```text
+rAthena
+↓
+gateway
+↓
+playerStore / equipmentStore
+↓
+UI
+```
 
-Se o problema estiver causando uma pausa real no main thread, encontre o código que está bloqueando o main thread e corrija a causa.
+Nunca:
 
-Se o problema estiver relacionado ao fluxo de rede/reconciliação, corrija o fluxo responsável sem degradar prediction, reconciliation ou movimentação.
+```text
+double click
+↓
+cliente decide "equipado"
+↓
+UI mostra
+```
 
-### Investigação obrigatória
+antes da confirmação do servidor.
 
-Antes de modificar código:
+---
 
-* localize todas as origens de `quadroMs`;
-* localize o código que gera `frameLongo`;
-* localize como `causa=servidor` é determinado;
-* rastreie o caminho completo entre `requestAnimationFrame`/loop de render e o recorder;
-* compare os timestamps usados pelo render loop com os timestamps usados nos eventos de rede;
-* compare os casos normais com os casos de 448,1 ms e 851,9 ms;
-* procure a regressão recente no histórico/diff do código, se disponível.
+# 3. Metadata
 
-Não faça uma refatoração ampla. Identifique a menor causa responsável e corrija-a.
+O catálogo já possui:
 
-### Validação
+```text
+type
+subType
+locations
+jobs/classes
+slots
+onEquip
+onUnequip
+onUse
+```
 
-Depois da correção:
+Enquanto `InventoryItem` é muito menor.
 
-1. rode typecheck;
-2. rode os testes existentes;
-3. reproduza o cenário de caminhada que gera o `frameLongo`;
-4. gere novamente o flight recorder;
-5. confirme que `quadroMs` representa o tempo correto;
-6. confirme que não aparecem falsos `frameLongo` causados por `dtMs` de snapshot/rede;
-7. confirme que frames realmente longos continuam sendo detectados;
-8. confirme que prediction, reconciliation, snapshots e movimentação continuam funcionando normalmente.
+Não copie o catálogo inteiro para cada item.
 
-No final, apresente:
+Use:
 
-* causa raiz exata;
-* evidência no voo que prova a causa;
-* arquivo(s) e trecho(s) responsáveis;
-* correção aplicada;
-* por que a correção elimina a regressão;
-* resultados dos testes;
-* e, se possível, comparação do comportamento antes/depois.
+```text
+InventoryItem.itemId
++
+ItemCatalog[itemId]
+↓
+resolved metadata
+```
 
-Não altere arquitetura ou implemente uma solução alternativa antes de provar a causa raiz.
+Precisamos conseguir determinar corretamente:
+
+* tipo;
+* subtipo;
+* localização;
+* classe/job;
+* slots;
+* requisitos;
+* stats;
+* cards;
+* refine.
+
+Evite duplicação de dados estáticos.
+
+---
+
+# 4. Equipar
+
+Manter a regra já implementada:
+
+```text
+clique único → consumível usa
+double click → equipamento tenta equipar
+```
+
+Double click deve:
+
+1. localizar item;
+2. verificar se é equipamento;
+3. resolver metadata;
+4. verificar compatibilidade básica;
+5. enviar request;
+6. esperar ACK;
+7. refletir resultado autoritativo.
+
+O cliente pode bloquear requests obviamente inválidos, mas o servidor continua sendo a autoridade final.
+
+---
+
+# 5. Desequipar
+
+No `alt+Q`:
+
+```text
+double click equipamento
+```
+
+deve enviar o request real.
+
+Após ACK:
+
+```text
+equipamento removido
+item retorna ao inventário
+status atualizado
+UI atualizada
+```
+
+Se o servidor rejeitar:
+
+```text
+equipamento permanece equipado
+```
+
+Não remover otimisticamente.
+
+Não duplicar item.
+
+Não perder item.
+
+---
+
+# 6. Slots
+
+Mapear os slots reais existentes.
+
+Suportar a arquitetura para:
+
+* weapon;
+* shield;
+* head;
+* armor;
+* garment;
+* shoes;
+* accessory 1;
+* accessory 2;
+* ETC;
+* futuro ammo/arrow.
+
+**Não implementar calças agora.**
+
+A arquitetura deve permitir adicioná-las depois sem reescrever o sistema.
+
+---
+
+# 7. Alt+Q
+
+Os slots atuais são predominantemente decorativos.
+
+Transformá-los em slots reais ligados ao estado de equipamento.
+
+O slot deve conseguir:
+
+* mostrar equipamento;
+* resolver imagem;
+* identificar item;
+* receber interação;
+* double click → desequipar.
+
+Preserve a aparência atual do Ragnarok.
+
+Não faça uma reformulação visual desnecessária.
+
+---
+
+# 8. STATUS — prioridade máxima
+
+Precisamos provar que equipamento afeta o estado real do personagem.
+
+Teste:
+
+```text
+ATK antes = 100
+↓
+equipar espada +20
+↓
+ACK
+↓
+status autoritativo
+↓
+ATK depois = 120
+```
+
+Depois:
+
+```text
+desequipar
+↓
+ACK
+↓
+ATK = 100
+```
+
+Não basta mudar texto da UI.
+
+Não calcule o status final apenas no cliente.
+
+O valor real deve continuar vindo do servidor.
+
+---
+
+# 9. Indicador temporário de status
+
+Implementar o requisito:
+
+Quando equipar/desequipar um item, mostrar durante aproximadamente 10 segundos o que mudou.
+
+Exemplo:
+
+```text
+ATK 120   ↑ +20
+```
+
+ou:
+
+```text
+ATK 100   ↓ -20
+```
+
+O fluxo correto é:
+
+```text
+status antes
+↓
+request
+↓
+ACK
+↓
+novo estado autoritativo
+↓
+diff
+↓
+indicador visual
+```
+
+Não mostrar o indicador como confirmado antes do ACK.
+
+---
+
+# 10. Delta
+
+O delta deve ser calculado entre os valores autoritativos:
+
+```text
+delta = after - before
+```
+
+Exemplo:
+
+```text
+antes:
+ATK = 100
+
+depois:
+ATK = 120
+
+delta:
++20
+```
+
+O cálculo do delta serve apenas para o indicador visual.
+
+Não use:
+
+```ts
+newAtk = oldAtk + item.atk
+```
+
+como fonte do status real.
+
+---
+
+# 11. Vários status
+
+Se o equipamento modificar vários atributos:
+
+```text
+ATK 120   ↑ +20
+DEF 80    ↑ +10
+HP 1500   ↑ +200
+```
+
+mostrar todos os que realmente mudaram.
+
+Não mostrar:
+
+```text
++0
+```
+
+nem valores que não mudaram.
+
+O indicador dura ~10 segundos e desaparece.
+
+Se outra troca acontecer antes do timer terminar, atualizar/reiniciar o indicador de forma consistente.
+
+---
+
+# 12. Requisitos e incompatibilidade
+
+Testar:
+
+* classe incompatível;
+* item que não é equipamento;
+* localização incompatível;
+* requisito não atendido;
+* slot ocupado;
+* resposta negativa do servidor.
+
+Não tentar reproduzir toda a lógica do rAthena no React.
+
+Validações simples no cliente são aceitáveis para UX, mas:
+
+**rAthena continua sendo a autoridade.**
+
+---
+
+# 13. Concorrência / double click
+
+Evitar spam de requests:
+
+```text
+double click
+double click
+double click
+```
+
+durante uma operação pendente.
+
+Investigue o padrão existente no projeto e implemente a solução mais simples compatível:
+
+* pending por slot;
+* bloqueio temporário;
+* debounce;
+* ou outro mecanismo já utilizado.
+
+Não criar infraestrutura complexa sem necessidade.
+
+---
+
+# 14. Testes
+
+Executar:
+
+```bash
+pnpm --filter @ragnarok/game typecheck
+pnpm --filter @ragnarok/game test
+```
+
+Esperado:
+
+```text
+0 erros de typecheck
+todos os testes verdes
+```
+
+Além disso, verificar regressão em:
+
+* consumível por clique;
+* equipamento por double click;
+* hotbar;
+* skill bar;
+* inventário;
+* drag existente.
+
+---
+
+# 15. Browser
+
+Se rAthena estiver disponível, fazer teste real no navegador.
+
+Testar obrigatoriamente:
+
+### Equipar
+
+```text
+inventário
+→ double click arma
+→ request
+→ ACK
+→ arma aparece no Alt+Q
+→ status muda
+```
+
+### Desequipar
+
+```text
+Alt+Q
+→ double click
+→ request
+→ ACK
+→ volta para inventário
+→ status retorna
+```
+
+### Rejeição
+
+```text
+equipamento incompatível
+→ servidor rejeita
+→ equipamento não muda
+```
+
+### Indicador
+
+Confirmar visualmente:
+
+```text
+ATK 120 ↑ +20
+```
+
+e depois o desaparecimento após ~10 segundos.
+
+Se não houver sessão rAthena disponível, informe explicitamente que o teste browser não foi executado. Não considere isso testado por leitura de código.
+
+---
+
+# 16. Não implementar nesta fase
+
+NÃO implementar ainda:
+
+* cartas;
+* flechas;
+* world drop;
+* right-click → item info;
+* novos consumíveis;
+* Fly Wing;
+* Sweet Potato;
+* calças.
+
+Esses entram nas fases seguintes.
+
+---
+
+# 17. Critério de conclusão
+
+A Fase 4 só pode ser considerada concluída quando estiver demonstrado que:
+
+```text
+request
+↓
+rAthena
+↓
+ACK
+↓
+store
+↓
+equipment UI
+↓
+status autoritativo
+↓
+delta visual
+```
+
+está funcionando de forma coerente.
+
+No relatório final, entregar:
+
+## Arquivos alterados
+
+## Arquivos novos
+
+## ACKs implementados
+
+## Protocolo confirmado
+
+## Estrutura do equipmentStore
+
+## Como InventoryItem resolve metadata
+
+## Fluxo equip
+
+## Fluxo unequip
+
+## Como status é atualizado
+
+## Como o delta é calculado
+
+## Testes automatizados
+
+## Testes no browser
+
+## Resultado
+
+## Pendências
+
+## Problemas encontrados
+
+Se encontrar uma decisão arquitetural importante ou protocolo não confirmado, **pare antes de improvisar e reporte o problema**.

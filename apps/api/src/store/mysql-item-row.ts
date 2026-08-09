@@ -108,8 +108,21 @@ const JOB_COLUMNS: Record<string, string> = {
 	wizard: "job_wizard",
 };
 
+/** `class_all` fica de FORA — não é um `CharacterVariantSchema` (não existe
+ * "all" no enum) e não é lido/escrito por `flagsFrom`, que trataria como um
+ * 9º flag comum. É tratado à parte (ver `itemFromMysqlRow`/`itemToMysqlRow`)
+ * porque tem semântica PRÓPRIA: `class_all=1` sozinho, com os 7 abaixo NULL,
+ * já é "sem restrição" pro servidor de verdade — confirmado lendo
+ * `itemdb_read_sqldb_sub` (`rathena/src/map/itemdb.cpp:4067`), que converte a
+ * linha SQL numa árvore YAML sintética e cai no MESMO consumo de
+ * `Classes.All` do loader YAML (`itemdb.cpp:372-420`): `Classes.All: true` →
+ * `item->class_upper |= ITEMJ_ALL`, e `ITEMJ_ALL` já É o OR dos 7 bits
+ * (`itemdb.hpp:228`) — setar os 7 de novo seria redundante, não errado, mas
+ * desnecessário. Sem isto, `class_all=1` virava a STRING "all" empurrada pro
+ * array `classes`, e `MonsterSchema`-como `ItemSchema.classes` REJEITAVA
+ * (não é valor do enum) — a lista inteira de itens voltava 500. */
+const CLASS_ALL_COLUMN = "class_all";
 const CLASS_COLUMNS: Record<string, string> = {
-	all: "class_all",
 	normal: "class_normal",
 	upper: "class_upper",
 	baby: "class_baby",
@@ -260,7 +273,7 @@ export function mysqlRowToItem(row: MysqlItemRow): MysqlItem {
 		range: row.range ?? 0,
 		slots: row.slots ?? 0,
 		jobs: jobs.length ? jobs : ["all"],
-		classes: flagsFrom(row, CLASS_COLUMNS),
+		classes: truthy(row[CLASS_ALL_COLUMN]) ? [] : flagsFrom(row, CLASS_COLUMNS),
 		gender: (row.gender ?? "both").toLowerCase(),
 		locations: flagsFrom(row, LOCATION_COLUMNS),
 		weaponLevel: row.weapon_level ?? undefined,
@@ -347,6 +360,11 @@ export function itemToMysqlRow(item: MysqlItem): MysqlItemRow {
 	for (const [key, column] of Object.entries(JOB_COLUMNS)) {
 		row[column] = item.jobs.includes(key as never) ? 1 : null;
 	}
+	// `classes` vazio = sem restrição (rótulo do ItemForm: "vazio = todos") —
+	// vira `class_all=1` sozinho, que o servidor já trata como suficiente
+	// (ver comentário de `CLASS_ALL_COLUMN`); os 7 individuais ficam NULL,
+	// não precisam repetir o que `class_all` já diz.
+	row[CLASS_ALL_COLUMN] = item.classes.length === 0 ? 1 : null;
 	for (const [key, column] of Object.entries(CLASS_COLUMNS)) {
 		row[column] = item.classes.includes(key as never) ? 1 : null;
 	}

@@ -11,6 +11,7 @@ import { Chat } from "./Chat";
 import { Windows } from "./Windows";
 import { QuestTracker } from "./QuestTracker";
 import { LootToast } from "./LootToast";
+import { WorldDropDialog } from "./WorldDropDialog";
 import { useHudHotkeys } from "./hotkeys";
 import { NpcDialog } from "./NpcDialog";
 import { Panel, RpgButton } from "../ui/rpg";
@@ -94,6 +95,7 @@ export function Hud({ map, playerPos }: { map: GameMap; playerPos: React.Mutable
 
       <NpcDialog />
       <Windows map={map} playerPos={playerPos} />
+      <WorldDropDialog />
       <DeathOverlay />
     </>
   );

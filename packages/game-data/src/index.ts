@@ -23,6 +23,8 @@ export * from "./rathena/status-db-yaml";
 export * from "./rathena/status-db-mapper";
 export * from "./rathena/status-db-validator";
 export * from "./rathena/npc-script-ast";
+export * from "./rathena/npc-script-lexer";
+export * from "./rathena/npc-script-parser";
 export * from "./rathena/npc-script-print";
 export * from "./rathena/npc-script-mapper";
 export * from "./rathena/npc-script-validator";

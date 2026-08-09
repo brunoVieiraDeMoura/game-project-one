@@ -23,6 +23,22 @@ export interface ItemInfo {
   type: string;
   subType?: string;
   weight: number;
+  /**
+   * Metadata estática que a Fase 4 passou a usar (equipar, requisitos): a API
+   * já devolve o registro do `packages/game-data` ItemSchema inteiro em
+   * `/items/by-id` — só não estava sendo lida. Em vez de copiar o catálogo
+   * inteiro para dentro do `InventoryItem` (que é por-instância, vindo do
+   * rAthena), o runtime resolve por `InventoryItem.itemId + ItemCatalog[itemId]`.
+   */
+  slots: number;
+  jobs: string[];
+  classes: string[];
+  equipLevelMin: number;
+  equipLevelMax: number;
+  attack: number;
+  magicAttack: number;
+  defense: number;
+  locations: string[];
 }
 
 interface CatalogState {
@@ -55,6 +71,11 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
         set((s) => {
           const byId = { ...s.byId };
           for (const cru of data.items ?? []) {
+            // Um id desconhecido no meio do lote pode voltar `null` (a API já
+            // filtra, mas isto não custa nada e evita que ISTO aqui vire outro
+            // ponto único de falha do lote inteiro — foi assim que um item de
+            // drop não catalogado apagava o nome de todo mundo na mesma leva).
+            if (!cru) continue;
             const id = Number(cru.id);
             if (!Number.isFinite(id)) continue;
             byId[id] = {
@@ -64,6 +85,15 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
               type: String(cru.type ?? "etc"),
               subType: cru.subType ? String(cru.subType) : undefined,
               weight: Number(cru.weight ?? 0),
+              slots: Number(cru.slots ?? 0),
+              jobs: Array.isArray(cru.jobs) ? cru.jobs.map(String) : ["all"],
+              classes: Array.isArray(cru.classes) ? cru.classes.map(String) : [],
+              equipLevelMin: Number(cru.equipLevelMin ?? 0),
+              equipLevelMax: Number(cru.equipLevelMax ?? 0),
+              attack: Number(cru.attack ?? 0),
+              magicAttack: Number(cru.magicAttack ?? 0),
+              defense: Number(cru.defense ?? 0),
+              locations: Array.isArray(cru.locations) ? cru.locations.map(String) : [],
             };
           }
           return { byId };
@@ -76,6 +106,26 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
       });
   },
 }));
+
+/**
+ * Tipos que a HOTBAR aceita: os mesmos quatro que `InventoryWindow` trata
+ * como consumível (lá pelo `type` numérico do rAthena — 0/2/11/18; aqui pelo
+ * nome do `ItemTypeSchema` de `packages/game-data`, que é o que o catálogo da
+ * API devolve). Equipamento, carta, munição e etc não entram — usá-los não é
+ * `CZ.USE_ITEM`.
+ */
+const USABLE_ITEM_TYPES = new Set(["healing", "usable", "delay_consume", "cash"]);
+
+export function isUsableItemType(type: string | undefined): boolean {
+  return type != null && USABLE_ITEM_TYPES.has(type);
+}
+
+/** Tipos que passam por `CZ.REQ_WEAR_EQUIP` — carta e etc não equipam assim. */
+const EQUIPABLE_ITEM_TYPES = new Set(["armor", "weapon", "ammo", "shadow_gear"]);
+
+export function isEquipableItemType(type: string | undefined): boolean {
+  return type != null && EQUIPABLE_ITEM_TYPES.has(type);
+}
 
 /**
  * Nome para mostrar.

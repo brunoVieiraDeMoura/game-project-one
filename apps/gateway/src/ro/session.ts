@@ -110,6 +110,10 @@ export declare interface RoSession {
 	on(event: "inventory", listener: (payload: InventoryItem[]) => void): this;
 	on(event: "item-add", listener: (payload: InventoryItem) => void): this;
 	on(event: "item-remove", listener: (payload: { index: number; amount: number }) => void): this;
+	on(
+		event: "item-equip-result",
+		listener: (payload: { index: number; success: boolean; equipped: boolean; location: number }) => void,
+	): this;
 	on(event: "skills", listener: (payload: PlayerSkill[]) => void): this;
 	on(event: "skill-cast", listener: (payload: SkillCast) => void): this;
 	on(event: "skill-casting", listener: (payload: SkillCasting) => void): this;
@@ -818,8 +822,14 @@ export class RoSession extends EventEmitter {
 					mdef: pkt.mdefPower,
 					mdefBonus: pkt.plusmdefPower,
 					hit: pkt.hitSuccessValue,
+					// `flee` já é o TOTAL (equipamento incluído, clif.cpp:4156) — não
+					// tem par base+bônus no protocolo. `plusAvoidSuccessValue` é
+					// `flee2` (clif.cpp:4157 = battle_status.flee2/10), ou seja,
+					// Perfect Dodge — um stat PRÓPRIO, achado auditando o indicador
+					// de status (a Fase 4 tinha isto guardado como "fleeBonus" por
+					// engano, somando duas coisas diferentes na tela).
 					flee: pkt.avoidSuccessValue,
-					fleeBonus: pkt.plusAvoidSuccessValue,
+					perfectDodge: pkt.plusAvoidSuccessValue,
 					critical: pkt.criticalSuccessValue,
 					aspd: pkt.ASPD,
 				});
@@ -884,6 +894,58 @@ export class RoSession extends EventEmitter {
 				const item = this.inventory.find((i) => i.index === pkt.index);
 				const delta = item ? item.amount - pkt.count : 1;
 				if (delta > 0) this.forgetItem(pkt.index, delta);
+			});
+		}
+
+		/**
+		 * Equipar/desequipar: confirmado no source do rAthena
+		 * (clif.cpp:4301-4349), NÃO no palpite da auditoria anterior (0xaa/0xac
+		 * eram do cliente pré-2010). No PACKETVER deste projeto (20130618,
+		 * `PACKETVER_MAIN_NUM >= 20121205`) o servidor manda a variante V5:
+		 * `ZC_ACK_WEAR_EQUIP_V5` (0x999, `wearLocation` de 4 bytes) e
+		 * `ZC_ACK_TAKEOFF_EQUIP_V5` (0x99a, idem). As três gerações são
+		 * enganchadas do mesmo jeito que USE_ITEM_ACK — só UMA dispara em tempo
+		 * de execução, a que o binário compilado realmente manda; as outras
+		 * ficam mortas sem custo. O codec (`packages/ro-protocol`) já normaliza
+		 * a inversão de `result` de cada geração (rAthena troca o sentido do bit
+		 * conforme a versão) — aqui `pkt.result` é sempre "true = sucesso".
+		 *
+		 * `this.inventory` é atualizado NA HORA, sem esperar um re-envio de
+		 * ITEMLIST (que a auditoria anterior marcou como "não confirmado") — é
+		 * o próprio ACK que diz o resultado e, se deu certo, ONDE.
+		 */
+		for (const name of ["ACK_WEAR_EQUIP_V5", "REQ_WEAR_EQUIP_ACK2", "REQ_WEAR_EQUIP_ACK"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				const item = this.inventory.find((i) => i.index === pkt.index);
+				const success = Boolean(pkt.result);
+				if (item && success) {
+					item.location = pkt.wearLocation ?? 0;
+					item.equipped = item.location !== 0;
+				}
+				this.emit("item-equip-result", {
+					index: pkt.index,
+					success,
+					equipped: item?.equipped ?? false,
+					location: item?.location ?? 0,
+				});
+			});
+		}
+		for (const name of ["ACK_TAKEOFF_EQUIP_V5", "REQ_TAKEOFF_EQUIP_ACK2", "REQ_TAKEOFF_EQUIP_ACK"] as const) {
+			if (!PACKET.ZC[name]) continue;
+			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				const item = this.inventory.find((i) => i.index === pkt.index);
+				const success = Boolean(pkt.result);
+				if (item && success) {
+					item.location = 0;
+					item.equipped = false;
+				}
+				this.emit("item-equip-result", {
+					index: pkt.index,
+					success,
+					equipped: item?.equipped ?? false,
+					location: item?.location ?? 0,
+				});
 			});
 		}
 
@@ -1355,11 +1417,23 @@ export class RoSession extends EventEmitter {
 		this.sendMap(pkt);
 	}
 
-	equipItem(index: number, position = 0): void {
+	/**
+	 * `position` era documentado (errado) como "0 = onde couber". Não é: o
+	 * rAthena confere `pos & req_pos` (`pc.cpp:12064`, `pos` = posição real do
+	 * item, vinda do próprio item_db) — com `req_pos = 0` a interseção é SEMPRE
+	 * vazia e o pedido falha, pra QUALQUER item, sempre. Não é "deixa o servidor
+	 * escolher", é "recusa tudo". Achado testando Fase 4 ao vivo (nenhum equip
+	 * tinha sucesso mesmo com item_db corrigido) e confirmado lendo o source.
+	 *
+	 * O certo é mandar TODOS os bits (`0xFFFFFFFF`): a checagem só quer
+	 * QUALQUER sobreposição com a posição real do item, então isso nunca
+	 * conflita — e é exatamente o valor que ativa a escolha automática do
+	 * próprio rAthena nos casos ambíguos (acessório esquerdo/direito,
+	 * `pc.cpp:12088-12091`; arma de duas mãos, `pc.cpp:12108-12114`).
+	 */
+	equipItem(index: number, position = 0xffffffff): void {
 		const pkt = new PACKET.CZ.REQ_WEAR_EQUIP();
 		pkt.index = index;
-		// 0 = "onde couber": o servidor escolhe o slot certo pelo item_db. Mandar
-		// uma posição chutada faz o rAthena recusar em silêncio.
 		pkt.wearLocation = position;
 		this.sendMap(pkt);
 	}
@@ -1735,6 +1809,10 @@ function toSkill(raw: any): PlayerSkill {
  * aqui em vez de espalhar `??` pelo cliente.
  */
 function toInventoryItem(raw: any): InventoryItem {
+	// WearState/location é o bitmask EQP_* de ONDE está equipado (0 = nenhum
+	// lugar) — guardado inteiro, não só o booleano, para o equipmentStore saber
+	// QUAL slot (anel 1 vs anel 2, por exemplo) sem adivinhar.
+	const location = raw.WearState ?? raw.location ?? 0;
 	return {
 		index: raw.index ?? raw.Index ?? 0,
 		itemId: raw.ITID ?? 0,
@@ -1742,7 +1820,8 @@ function toInventoryItem(raw: any): InventoryItem {
 		type: raw.type ?? 0,
 		identified: Boolean(raw.IsIdentified ?? 1),
 		refine: raw.RefiningLevel ?? 0,
-		equipped: (raw.WearState ?? raw.location ?? 0) !== 0,
+		equipped: location !== 0,
+		location,
 		cards: [raw.slot?.card1 ?? 0, raw.slot?.card2 ?? 0, raw.slot?.card3 ?? 0, raw.slot?.card4 ?? 0],
 	};
 }

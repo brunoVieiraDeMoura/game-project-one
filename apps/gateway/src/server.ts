@@ -82,6 +82,7 @@ io.on("connection", (socket) => {
 		ro.on("inventory", (payload) => socket.emit("inv:list", payload));
 		ro.on("item-add", (payload) => socket.emit("inv:add", payload));
 		ro.on("item-remove", (payload) => socket.emit("inv:remove", payload));
+		ro.on("item-equip-result", (payload) => socket.emit("item:equip-result", payload));
 		ro.on("skills", (payload) => socket.emit("skill:list", payload));
 		ro.on("skill-cast", (payload) => socket.emit("skill:cast", payload));
 		ro.on("skill-casting", (payload) => socket.emit("skill:casting", payload));
@@ -155,7 +156,10 @@ io.on("connection", (socket) => {
 	});
 
 	socket.on("item:equip", (payload: { index?: number; position?: number }) => {
-		withSession((ro) => ro.equipItem(Number(payload?.index ?? 0), Number(payload?.position ?? 0)));
+		// `position` só quando o CLIENTE realmente manda um (nenhum manda hoje) —
+		// forçar 0 aqui pisava no default certo de `RoSession.equipItem` (ver lá
+		// o porquê de 0 estar ERRADO, não "deixa o servidor escolher").
+		withSession((ro) => ro.equipItem(Number(payload?.index ?? 0), payload?.position != null ? Number(payload.position) : undefined));
 	});
 
 	socket.on("item:unequip", (payload: { index?: number }) => {

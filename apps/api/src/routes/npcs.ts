@@ -4,6 +4,7 @@ import { NpcKindSchema, NpcOriginSchema, NpcSchema } from "@ragnarok/game-data";
 import type { NpcRepository } from "../store/npc-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
+import { applyNpcScriptEdit, rollbackAppliedWrite } from "../store/npc-script-sync";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -16,7 +17,7 @@ const ListQuerySchema = z.object({
 
 const IdParamSchema = z.object({ id: z.string().trim().min(1).max(128) });
 
-export function npcRoutes(repo: NpcRepository, security: SecurityContext | null = null) {
+export function npcRoutes(repo: NpcRepository, security: SecurityContext | null = null, npcScriptRoot: string | null = null) {
   return async function registerNpcRoutes(app: FastifyInstance) {
     app.get("/", async (req, reply) => {
       const q = ListQuerySchema.safeParse(req.query);
@@ -63,18 +64,59 @@ export function npcRoutes(repo: NpcRepository, security: SecurityContext | null 
       const body = NpcSchema.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: body.error.issues });
       try {
-        const updated = await repo.update(p.data.id, body.data);
-        if (!updated) return reply.code(404).send({ error: "not found" });
-        if (admin && security) {
-          await security.audit({
-            actor: admin,
-            action: "update",
-            targetType: "npc",
-            targetId: p.data.id,
-            payload: updated,
-          });
+        const current = await repo.get(p.data.id);
+        if (!current) return reply.code(404).send({ error: "not found" });
+
+        // Ponte pro Writer (leia1.txt, integração Writer↔Admin): só age
+        // quando dialogue/eventHandlers mudaram; PUT é atômico — recusa do
+        // Writer significa NADA muda, nem banco nem .txt, mesmo que outros
+        // campos do mesmo request (nome/posição/warp/shop) fossem válidos.
+        let rollbackFile: (() => void) | null = null;
+        if (npcScriptRoot) {
+          const sync = applyNpcScriptEdit(npcScriptRoot, current, body.data);
+          if (sync.kind === "refused") {
+            return reply.code(sync.httpStatus).send({
+              error: sync.error,
+              message: sync.message,
+              ...(sync.code ? { code: sync.code } : {}),
+              ...(sync.entryLabel !== undefined ? { entryLabel: sync.entryLabel } : {}),
+            });
+          }
+          if (sync.kind === "applied") {
+            rollbackFile = () => rollbackAppliedWrite(sync.absPath, sync.previousRawText);
+          }
         }
-        return updated;
+
+        try {
+          const updated = await repo.update(p.data.id, body.data);
+          if (!updated) return reply.code(404).send({ error: "not found" });
+          if (admin && security) {
+            await security.audit({
+              actor: admin,
+              action: "update",
+              targetType: "npc",
+              targetId: p.data.id,
+              payload: updated,
+            });
+          }
+          return updated;
+        } catch (dbErr) {
+          // .txt já foi escrito com sucesso mas o banco falhou — a única
+          // janela em que os dois lados podem divergir (Node não tem
+          // transação entre arquivo e banco). Melhor esforço: restaura os
+          // bytes originais do arquivo antes de propagar o erro.
+          if (rollbackFile) {
+            try {
+              rollbackFile();
+            } catch (rollbackErr) {
+              return reply.code(500).send({
+                error: "operational",
+                message: `banco falhou e o rollback do arquivo TAMBÉM falhou — estado pode ter ficado divergente: ${(rollbackErr as Error).message}`,
+              });
+            }
+          }
+          throw dbErr;
+        }
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode ?? 500;
         return reply.code(status).send({ error: (err as Error).message });

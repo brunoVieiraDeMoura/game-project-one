@@ -28,6 +28,7 @@ import { AlvoPorTab } from "../play/AlvoPorTab";
 import { melhorAlvo, RAIO_ASSIST_PX, type Candidato } from "../play/aimAssist";
 import { useSoftLockStore } from "../play/softLockStore";
 import { atacar, castarEmAlvo, pegar } from "../net/acoes";
+import { useWorldDropStore } from "../net/worldDropStore";
 import { cliqueVaiParaOChao, useAimStore } from "../net/aimStore";
 import { FollowCamera } from "../play/FollowCamera";
 import { useViewCenter } from "../play/useViewCenter";
@@ -1317,7 +1318,42 @@ export function PlayView() {
   }
 
   return (
-    <div style={{ position: "absolute", inset: 0 }}>
+    <div
+      style={{ position: "absolute", inset: 0 }}
+      onDragOver={(e) => {
+        // só reage a item do inventário (`application/x-ro-item`, o mesmo
+        // mime da SkillBar) — outros arrastes (texto, arquivo) passam direto.
+        // E só sobre o <canvas>: uma janela do HUD por cima dele é o jogador
+        // reorganizando a bolsa, não jogando o item no chão — a MESMA condição
+        // do `onDrop`, de propósito. Aceitar aqui em cima do HUD e recusar só
+        // no drop (sem `preventDefault`) deixava o cursor nativo "pode soltar"
+        // o arraste inteiro e, ao soltar sobre HUD, o navegador não tinha para
+        // onde resolver o gesto — o cursor de arraste do Windows ficava PRESO
+        // até o próximo clique, porque nem `drop` nem `dragend` fechavam a
+        // sequência do jeito que o SO esperava.
+        if (e.dataTransfer.types.includes("application/x-ro-item") && e.target instanceof HTMLCanvasElement) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDrop={(e) => {
+        if (!(e.target instanceof HTMLCanvasElement)) return;
+        // `dataTransfer` só existe DENTRO do evento nativo — lido antes do
+        // `setTimeout`, nunca depois
+        const raw = e.dataTransfer.getData("application/x-ro-item");
+        if (!raw) return;
+        e.preventDefault();
+        const index = Number(raw);
+        // Abrir o diálogo é uma atualização PESADA (monta `WorldDropDialog`,
+        // sobe um overlay de z-index 1000 cobrindo a tela) — feita ainda
+        // DENTRO do handler nativo de `drop`, ela competia com o navegador
+        // terminando a própria sequência de arraste (`drop` → `dragend`), e o
+        // cursor do SO ficava PRESO na versão "arrastando", só se desfazendo
+        // no próximo clique. Adiando para o próximo tick deixa o navegador
+        // fechar o gesto nativo primeiro — o React só reage depois.
+        setTimeout(() => useWorldDropStore.getState().abrir(index), 0);
+      }}
+    >
       {/* só com sessão: avisa o map-server que a cena montou e escuta o mundo */}
       {online && map && <WorldEventsBridge />}
       <Canvas

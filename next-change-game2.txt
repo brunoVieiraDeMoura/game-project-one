@@ -1,132 +1,578 @@
-Quero que faça uma investigação técnica completa sobre um bug de movimentação no meu MMORPG.
+# FASE — TESTE END-TO-END REAL DO ADMIN → GAME → rAthena
 
-Não quero hipóteses. Quero descobrir exatamente onde o problema acontece no código.
+Agora quero uma bateria de **testes funcionais reais**, usando as modificações feitas pelo Admin em `localhost:3000` e verificando o resultado efetivamente dentro de `/play`.
 
-Sintoma
+O objetivo NÃO é apenas verificar que o formulário salva no banco. Cada alteração deve ser seguida até o comportamento real no jogo.
 
-Quando o personagem anda continuamente por uma longa distância (vários chunks), eventualmente acontece um glitch:
+## REGRA PRINCIPAL
 
-o personagem trava por um instante;
-depois volta algumas células para trás;
-em seguida continua andando;
-às vezes parece perder sincronização com o servidor.
+Para cada recurso:
 
-Ainda existe lag e rollback durante caminhadas longas.
+`Admin :3000 → API → banco/arquivo → runtime/game → comportamento observado`
 
-Não quero mais tentativas de correção.
+Uma alteração só deve ser considerada **PASS** se o comportamento correspondente for comprovado no `/play` ou no runtime apropriado.
 
-Quero descobrir exatamente em qual sistema nasce o problema.
+Não considere:
 
-Não altere nenhum comportamento até identificar a causa.
+* HTTP 200 sozinho;
+* registro salvo no banco;
+* JSON correto;
+* arquivo correto;
+* typecheck;
+* teste unitário;
 
-Objetivo
+como prova de funcionamento do recurso.
 
-Instrumente todo o pipeline da movimentação e gere evidências.
+Esses são apenas passos intermediários.
 
-Para cada frame registre:
+---
 
-timestamp
-frame
-tick do cliente
-tick do servidor
-posição renderizada
-posição lógica
-posição prevista
-posição oficial do servidor
-chunk atual
-chunk anterior
-chunk carregado
-chunk descarregado
-quantidade de entidades carregadas
-tamanho da fila de snapshots
-tamanho da fila de prediction
-tamanho da fila de reconciliation
-RTT
-ping
-tempo entre snapshots
-FPS
-frame time
-update time
-render time
-tempo gasto carregando chunks
-tempo gasto desenhando chunks
-tempo gasto em pathfinding
-tempo gasto em reconciliation
-Durante o bug
+# 1. PRIMEIRO: GARANTIR QUE O /PLAY USA AS ALTERAÇÕES DO :3000
 
-Quando acontecer qualquer rollback maior que 1 tile, registre automaticamente:
+Antes da bateria completa, descubra e documente:
 
-os últimos 300 frames antes do rollback;
-os 120 frames seguintes;
-todos os eventos ocorridos nesse intervalo.
-Também registre
-GC (Garbage Collection)
-Context Lost
-criação de Canvas
-destruição de Canvas
-criação de Textures
-upload de Textures
-troca de chunks
-reconstrução de entidades
-reprocessamento de pathfinding
-atualização da câmera
-recebimento de snapshots
-perda de snapshots
-snapshots fora de ordem
-retransmissões
-timeouts
-correções de reconciliation
-Para cada rollback
+1. Como `localhost:3000` se comunica com o `/play`.
+2. Qual API o `/play` utiliza.
+3. Qual banco/configuração o `/play` utiliza.
+4. Qual servidor/runtime fornece os dados para o `/play`.
+5. Se existe cache entre Admin → API → banco → `/play`.
+6. Como uma alteração feita no Admin chega ao jogo.
+7. Qual procedimento de reload/restart é necessário, se houver.
+8. Faça uma alteração de teste pequena e inequívoca pelo Admin.
+9. Confirme dentro do `/play` que a alteração chegou.
 
-Quero uma linha do tempo como:
+Use uma alteração facilmente identificável, por exemplo um nome/descrição temporária.
 
-t=0.000 clique
+**Não assuma que o :3000 e o /play estão conectados só porque ambos funcionam. Prove o caminho dos dados.**
 
-↓
+---
 
-prediction
+# 2. MAPAS
 
-↓
+## Criar mapa novo
 
-snapshot recebido
+Criar pelo Admin um mapa com:
 
-↓
+* ID/nome diferente de qualquer mapa existente no rAthena;
+* dimensões válidas;
+* configuração mínima necessária para ser jogável.
 
-chunk carregado
+Depois:
 
-↓
+1. salvar;
+2. confirmar persistência;
+3. confirmar que o runtime recebeu o mapa;
+4. entrar no `/play`;
+5. verificar que o jogador consegue acessar o mapa;
+6. verificar spawn/posição;
+7. verificar movimentação;
+8. verificar colisão;
+9. verificar se o mapa não depende acidentalmente do mapa homônimo do rAthena.
 
-queda de FPS
+### Monstros no mapa novo
 
-↓
+Adicionar:
 
-GC
+* um monstro novo, inexistente no catálogo original do rAthena;
+* um monstro existente no rAthena.
 
-↓
+Testar ambos dentro do mapa novo:
 
-reconciliation
+* spawn;
+* identificação;
+* HP;
+* ataque;
+* morte;
+* experiência;
+* loot;
+* comportamento esperado.
 
-↓
+---
 
-rollback
+# 3. MONSTROS — XP / DROPS / SKILLS
 
-↓
+Para monstros novos e existentes:
 
-posição final
+## Drops
 
-No final
+Testar:
 
-Não proponha soluções.
+* adicionar drop;
+* remover drop;
+* alterar quantidade/chance quando suportado;
+* item novo como drop;
+* item antigo como drop.
 
-Monte uma tabela com:
+Confirmar o resultado no jogo, não apenas no banco.
 
-horário exato;
-arquivo;
-função;
-evento;
-duração;
-impacto;
-evidência;
-confiança da análise.
+## XP
 
-Só depois de descobrir exatamente onde o rollback nasce iremos corrigir o código.
+Testar:
+
+* XP base;
+* alteração de XP;
+* matar o monstro;
+* verificar XP recebida pelo player.
+
+## Skills
+
+Testar monstros com skill configurada:
+
+* skill existente;
+* skill nova;
+* parâmetros relevantes;
+* ativação;
+* efeito real;
+* dano/efeito resultante.
+
+Registrar qualquer comportamento que seja aceito pelo Admin mas não tenha efeito no runtime.
+
+---
+
+# 4. ITENS
+
+A cobertura deve separar claramente:
+
+### 4.1 Criar itens novos
+
+Criar itens novos cobrindo **todos os tipos/comportamentos que o sistema atualmente suporta**.
+
+Não inventar categorias que a implementação não suporta.
+
+Primeiro faça o inventário das capacidades existentes.
+
+Para cada capacidade suportada:
+
+1. criar item;
+2. salvar;
+3. verificar persistência;
+4. verificar descrição;
+5. verificar item no player;
+6. usar o item;
+7. verificar comportamento;
+8. verificar efeitos colaterais relevantes.
+
+### 4.2 Editar itens existentes
+
+Escolher itens representativos do catálogo real e alterar os comportamentos suportados.
+
+Testar cada alteração no `/play`.
+
+### 4.3 Itens antigos
+
+Usar itens antigos existentes sem alteração.
+
+Confirmar que continuam funcionando.
+
+### 4.4 Verificações específicas
+
+Para cada item relevante:
+
+* aparece no player;
+* nome correto;
+* descrição correta;
+* uso correto;
+* comportamento correto;
+* requisitos corretos;
+* efeitos corretos;
+* interação com equipamentos/status/skills quando aplicável.
+
+---
+
+# 5. EQUIPAMENTOS
+
+Mesma metodologia dos itens, mas separando explicitamente equipamentos.
+
+## Criar novos
+
+Cobrir todos os tipos de equipamento suportados:
+
+* arma;
+* armadura;
+* escudo;
+* cabeça;
+* acessórios;
+* demais categorias realmente suportadas pelo sistema.
+
+Para cada tipo aplicável:
+
+* criar;
+* equipar;
+* verificar no player;
+* verificar atributos;
+* verificar restrições;
+* verificar classe/job;
+* verificar descrição;
+* verificar comportamento durante combate.
+
+## Editar existentes
+
+Alterar equipamentos reais existentes e verificar no `/play`.
+
+## Equipamentos antigos
+
+Equipar equipamentos antigos existentes e confirmar que continuam funcionando.
+
+## Classes
+
+Verificar especialmente:
+
+* restrições por classe;
+* atributos;
+* comportamento específico da classe;
+* compatibilidade do equipamento.
+
+---
+
+# 6. SKILLS
+
+Antes dos testes, faça um inventário dos **tipos e comportamentos de skill que realmente existem na implementação atual**.
+
+Depois cubra cada categoria suportada.
+
+## Criar skills novas
+
+Para cada categoria suportada:
+
+* criar;
+* atribuir à classe apropriada;
+* aprender;
+* usar;
+* verificar custo;
+* verificar alcance/requisitos quando aplicável;
+* verificar dano/efeito;
+* verificar cooldown/cast quando aplicável;
+* verificar descrição.
+
+## Editar skills existentes
+
+Alterar skills reais e verificar o comportamento no jogo.
+
+## Skills antigas
+
+Usar skills existentes sem alteração e verificar que continuam funcionando.
+
+## Integrações
+
+Testar skills em:
+
+* player;
+* classes;
+* monstros;
+* descrições;
+* itens que interajam com skills.
+
+Qualquer fórmula que esteja marcada como `needsReview` deve ser identificada explicitamente como tal e não considerada automaticamente um bug da integração.
+
+---
+
+# 7. STATUS
+
+Primeiro inventariar todos os tipos de comportamento de Status que o sistema atualmente representa.
+
+## Criar
+
+Criar status representativos de cada categoria suportada.
+
+Testar:
+
+* aplicação;
+* duração;
+* remoção;
+* efeitos;
+* interação com player;
+* interação com monstro;
+* interação com skill;
+* interação com item.
+
+## Editar existentes
+
+Alterar status reais e verificar comportamento.
+
+## Status antigos
+
+Aplicar status existentes e confirmar funcionamento.
+
+## Integrações
+
+Verificar status em:
+
+* player;
+* classes;
+* monstros;
+* skills;
+* itens;
+* descrições.
+
+Registrar separadamente qualquer comportamento que seja apenas representado no banco mas não tenha execução correspondente no runtime.
+
+---
+
+# 8. CLASSES
+
+## Criar classes novas
+
+Criar representantes de todos os tipos de classe suportados atualmente.
+
+Testar no `/play`:
+
+* criação/seleção;
+* XP;
+* HP;
+* SP;
+* atributos base;
+* restrições;
+* skills;
+* equipamentos;
+* progressão quando aplicável.
+
+## Editar existentes
+
+Alterar classes existentes e verificar:
+
+* XP;
+* HP;
+* SP;
+* atributos base;
+* efeitos derivados.
+
+## Classes antigas
+
+Criar/usar personagens de classes antigas e confirmar que continuam funcionando.
+
+---
+
+# 9. NPCs
+
+Agora fazer o mesmo para NPCs.
+
+## Criar NPCs novos
+
+Cobrir todos os comportamentos que o pipeline atual realmente suporta.
+
+Primeiro inventariar os comportamentos suportados pelo Mapper/Writer/Admin.
+
+Depois criar NPCs para cada categoria relevante.
+
+Testar no `/play`:
+
+* aparecimento;
+* interação;
+* diálogo;
+* `mes`;
+* `next`;
+* `close`;
+* `if`;
+* `if/else`;
+* `switch/select`;
+* `warp`;
+* event handlers quando acessíveis pelo fluxo atual;
+* ações suportadas;
+* referências a itens;
+* referências a mapas;
+* referências a skills;
+* referências a monstros.
+
+## Editar NPCs existentes
+
+Escolher NPCs reais do rAthena representando diferentes estruturas.
+
+Editar:
+
+* fala simples;
+* fala dentro de `if`;
+* fala dentro de `switch/select`;
+* fala dentro de event handler;
+* conteúdo próximo de `legacyScript`.
+
+Depois verificar no `/play`.
+
+## NPCs antigos
+
+Interagir com NPCs existentes sem alteração e confirmar funcionamento.
+
+---
+
+# 10. TESTE DE REGRESSÃO
+
+Depois das criações/edições:
+
+Testar novamente alguns recursos antigos:
+
+* mapa antigo;
+* monstro antigo;
+* item antigo;
+* equipamento antigo;
+* skill antiga;
+* status antigo;
+* classe antiga;
+* NPC antigo.
+
+O objetivo é verificar que adicionar conteúdo novo não quebrou conteúdo existente.
+
+---
+
+# 11. TESTE DE DESCRIÇÕES E PLAYER
+
+Onde aplicável, verificar especificamente a diferença entre:
+
+**dados salvos**
+
+e
+
+**dados realmente apresentados ao jogador**.
+
+Para itens/equipamentos/skills/status/NPCs:
+
+* nome;
+* descrição;
+* atributos;
+* comportamento;
+* dados exibidos na UI;
+* dados efetivamente usados pelo runtime.
+
+Se o banco mostrar uma alteração mas o `/play` mostrar o valor antigo, registrar como falha de integração/cache.
+
+---
+
+# 12. CRITÉRIO DE PASS/FAIL
+
+Para cada caso registrar:
+
+| Recurso | Operação | Admin     | Banco/arquivo | Runtime   | /play     | Resultado |
+| ------- | -------- | --------- | ------------- | --------- | --------- | --------- |
+| ...     | ...      | PASS/FAIL | PASS/FAIL     | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+
+Um caso só é **PASS** quando todas as etapas necessárias forem comprovadas.
+
+Se o Admin salva mas o jogo não muda:
+
+**FAIL de integração.**
+
+Se o banco muda mas o arquivo/runtime não:
+
+**FAIL de sincronização.**
+
+Se o runtime recebe mas o `/play` não mostra:
+
+**FAIL de integração do game client/runtime.**
+
+Se a funcionalidade não existe no sistema atual:
+
+**N/A — não tentar inventar implementação apenas para preencher a matriz.**
+
+---
+
+# 13. SEGURANÇA DO TESTE
+
+Não destruir conteúdo original.
+
+Use nomes/IDs de teste claramente identificáveis.
+
+Antes de alterar qualquer conteúdo real:
+
+* identificar o que será alterado;
+* registrar o estado original;
+* criar backup quando necessário;
+* preferir entidades novas para testes destrutivos.
+
+No final:
+
+* remover/reverter entidades criadas para teste quando possível;
+* restaurar alterações temporárias;
+* confirmar que o catálogo original permanece íntegro.
+
+Não modificar silenciosamente arquivos do rAthena que não façam parte do fluxo testado.
+
+---
+
+# 14. NÃO FAZER
+
+Nesta fase não quero:
+
+* refatoração;
+* nova arquitetura;
+* novas capacidades do Writer;
+* novas capacidades do Mapper;
+* mudanças de schema sem aprovação;
+* correções especulativas;
+* alterar o comportamento só para fazer um teste passar.
+
+Se um teste revelar um bug:
+
+1. reproduzir;
+2. localizar a camada responsável;
+3. registrar a causa;
+4. registrar o impacto;
+5. **parar antes de corrigir** se a correção exigir mudança fora do escopo desta bateria.
+
+---
+
+# 15. RELATÓRIO FINAL
+
+Não entregue apenas "todos os testes passaram".
+
+Quero:
+
+### A. Fluxo comprovado
+
+Mostrar exatamente:
+
+`Admin → API → DB/arquivo → runtime → /play`
+
+### B. Matriz completa
+
+Listar cada caso testado e:
+
+* criação;
+* edição;
+* uso;
+* resultado no runtime;
+* resultado no `/play`.
+
+### C. Cobertura
+
+Informar quantos casos foram testados por:
+
+* mapas;
+* monstros;
+* drops;
+* XP;
+* skills;
+* itens;
+* equipamentos;
+* status;
+* classes;
+* NPCs.
+
+### D. Falhas
+
+Para cada falha:
+
+* reprodução;
+* causa raiz;
+* camada responsável;
+* impacto;
+* se é bloqueante ou não.
+
+### E. N/A
+
+Separar claramente funcionalidades que não existem ou não podem ser testadas no runtime atual.
+
+### F. Regressões
+
+Confirmar quais conteúdos antigos foram retestados e se permaneceram funcionais.
+
+### G. Estado final
+
+Confirmar:
+
+* arquivos alterados;
+* banco alterado;
+* entidades temporárias removidas/restauradas;
+* servidor alterado;
+* reloads realizados;
+* processos reiniciados;
+* qualquer mudança permanente deixada no ambiente.
+
+**Não considere o teste concluído enquanto não houver evidência de que as alterações feitas pelo `localhost:3000` realmente chegam e produzem o comportamento correspondente no `/play`.**

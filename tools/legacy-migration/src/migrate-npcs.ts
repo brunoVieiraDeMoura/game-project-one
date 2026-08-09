@@ -1,8 +1,16 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NpcSchema, type Npc } from "@ragnarok/game-data";
-import { parseNpcDialogue } from "./parse-npc-dialogue";
+import {
+  NpcSchema,
+  parseNpcScript,
+  mapNpcScriptWithUnits,
+  validateNpcScript,
+  type Npc,
+  type NpcScriptAst,
+  type NpcMapResultWithUnits,
+} from "@ragnarok/game-data";
+import { loadMapCatalog, loadIdCatalog, buildNpcEventIndex, makeCatalogs } from "./npc-script/catalogs";
 
 /**
  * Migração de NPCs: warps, shops e scripts dos arquivos alcançáveis a partir
@@ -12,10 +20,24 @@ import { parseNpcDialogue } from "./parse-npc-dialogue";
  * Usage: pnpm migrate:npcs [--out <path>]
  *
  * Formatos exatos de rathena/src/map/npc.cpp (npc_parse_warp/shop/script/
- * duplicate). Diálogo: prefixo linear mes/next/close reconhecido; resto do
- * script vira nó legacyScript needsReview (nunca descartado, nunca
- * adivinhado — soul §5.5). Funções (`function script`) não são NPCs e ficam
- * fora (contadas no relatório).
+ * duplicate). Diálogo: pipeline novo (leia1.txt, 2026-08-11 — "alinhar a
+ * migração dos NPCs ao novo pipeline Lexer → Parser → AST → Mapper") —
+ * `parseNpcScript` (Lexer+Parser+AST) → `mapNpcScriptWithUnits` (Mapper) →
+ * `validateNpcScript` (Validator, com catálogos reais de mapa/item/skill/
+ * monstro + índice cross-NPC de `donpcevent`). Cada `On*:` vira um
+ * `eventHandler` de PRIMEIRA CLASSE (não mais achatado/perdido dentro de um
+ * `legacyScript` só, como o migrador linear antigo fazia — achado
+ * documentado no relatório desta migração). Construção não reconhecida
+ * semanticamente vira `legacyScript` do PRÓPRIO statement (nunca descartado,
+ * nunca adivinhado — soul §5.5). Funções (`function script`) não são NPCs e
+ * ficam fora (contadas no relatório, nunca vistas pelo pipeline).
+ *
+ * NÃO persiste `mainSourceMap`/`handlerSourceMaps` (offsets de byte) — eles
+ * só fazem sentido no INSTANTE desta migração, contra o `.txt` de então;
+ * ficariam inválidos assim que o arquivo original mudasse. O `before` que um
+ * futuro Writer real vai precisar tem que ser recomputado NA HORA a partir
+ * do `.txt`, não lido do banco — ver leia1.txt anterior (bloqueio de
+ * integração Admin/API, ainda não resolvido, fora do escopo desta etapa).
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -89,6 +111,13 @@ function main() {
   }[];
   const itemIdByAegis = new Map(items.map((i) => [i.aegisName.toLowerCase(), i.id]));
 
+  // catálogos reais pro Validator — mesmos usados nos testes do módulo NPC
+  // (mapas do map_index.txt do rAthena, itens/skills/monstros já migrados).
+  const mapCatalog = loadMapCatalog(NPC_ROOT);
+  const itemCatalog = loadIdCatalog(outDir, "items.json");
+  const skillCatalog = loadIdCatalog(outDir, "skills.json");
+  const monsterCatalog = loadIdCatalog(outDir, "monsters.json");
+
   const warnings: string[] = [];
   const files = resolveConfChain("npc/re/scripts_main.conf", warnings);
   console.log(`${files.length} arquivos de NPC na cadeia de conf`);
@@ -99,8 +128,104 @@ function main() {
   const idByFullName = new Map<string, string>();
   const pendingDuplicates: { fullName: string; sourceName: string }[] = [];
   let functionsSkipped = 0;
-  let dialoguesFull = 0;
-  let dialoguesFlagged = 0;
+
+  // PRÉ-PASSADA: parseia/mapeia todo script ANTES do loop principal —
+  // só pra montar o índice cross-NPC de `donpcevent` (precisa dos rótulos
+  // de TODOS os NPCs de uma vez). A ORDEM DE PUSH em si continua sendo a
+  // do loop principal, abaixo, na ordem NATURAL do arquivo — achado
+  // (leia1.txt, 2026-08-11): uma primeira versão desta migração fazia o
+  // push do script NA pré-passada (fora de ordem), e isso quebrava a
+  // resolução de alias de `duplicate()` sempre que um NPC tinha nome com
+  // "#Ex" E "::Ex" ao mesmo tempo (ex. real do corpus: `Horn#LF_ar03_01::
+  // LF_ar03_01`, arug_cas03.txt:45) — o PRIMEIRO `duplicate()` subsequente
+  // (que também termina em "#LF_ar03_01") "roubava" o alias "LF_ar03_01"
+  // ANTES do NPC fonte real registrar o dele, porque só o fonte tinha sido
+  // adiado pra depois. `duplicateOf` saía apontando pro `duplicate()`
+  // vizinho, não pro NPC fonte — silencioso, só visível comparando
+  // byte a byte com a migração antiga. Corrigido preservando a ORDEM DE
+  // PUSH original; a pré-passada só EXTRAI dado, nunca EMPILHA NPC.
+  const scriptAstByRef = new Map<string, { fullName: string; ast: NpcScriptAst; mapped: NpcMapResultWithUnits }>();
+  for (const rel of files) {
+    const filePath = join(NPC_ROOT, rel);
+    if (!existsSync(filePath)) continue;
+    const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+    let inBlockComment = false;
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li]!;
+      if (inBlockComment) {
+        if (line.includes("*/")) inBlockComment = false;
+        continue;
+      }
+      if (line.trim().startsWith("/*") && !line.includes("*/")) {
+        inBlockComment = true;
+        continue;
+      }
+      if (line.trim().startsWith("//") || !line.includes("\t")) continue;
+      const cols = line.split("\t");
+      const [w1, w2, w3] = [cols[0] ?? "", cols[1] ?? "", cols[2] ?? ""];
+      const w4Raw = cols.slice(3).join("\t").replace(/^\s+/, "");
+      if (w1 === "function" && w2 === "script") {
+        li = skipBlock(lines, li);
+        continue;
+      }
+      if (w2 !== "script" && !/^script\([A-Z]+\)$/.test(w2)) continue;
+      const fileRef = `${rel}:${li + 1}`; // mesma fórmula da passada real — ANTES de `li` avançar pro fim do bloco
+      let joined = w4Raw;
+      let endLi = li;
+      while (!blockClosed(joined) && endLi + 1 < lines.length) {
+        endLi++;
+        joined += "\n" + lines[endLi];
+      }
+      li = endLi;
+      const headMatch = joined
+        .replace(/,\s*,\s*\{/, ",{")
+        .match(/^\s*([^,]+?)(?:,(\d+))?(?:,(\d+))?,\s*\{([\s\S]*)\}\s*(?:\/\/[^\n]*)?$/);
+      if (!headMatch) continue; // reportado como warning na passada real, abaixo
+      try {
+        const ast = parseNpcScript(headMatch[4]!);
+        const mapped = mapNpcScriptWithUnits(ast);
+        scriptAstByRef.set(fileRef, { fullName: w3, ast, mapped });
+      } catch {
+        // falha de parse/map — a passada real (abaixo) reporta como inválido.
+      }
+    }
+  }
+
+  // índice cross-NPC pra `donpcevent("Npc::Label")` — já dá pra montar aqui,
+  // a pré-passada acima já tem TODOS os scripts.
+  const npcEventIndex = buildNpcEventIndex(
+    [...scriptAstByRef.values()].map((s) => ({
+      name: s.fullName,
+      labels: s.ast.entryPoints.filter((ep) => ep.label !== null).map((ep) => ep.label),
+    })),
+  );
+  const catalogs = makeCatalogs(mapCatalog, itemCatalog, skillCatalog, monsterCatalog, npcEventIndex);
+  const nodeKindTally = (nodes: { kind: string; action?: { kind: string } }[]) => {
+    for (const n of nodes) {
+      metrics.nodes++;
+      metrics.byNodeKind[n.kind] = (metrics.byNodeKind[n.kind] ?? 0) + 1;
+      if (n.kind === "action" && n.action?.kind === "legacyScript") metrics.legacyScriptNodes++;
+    }
+  };
+
+  // métricas do pipeline novo — leia1.txt §4: números reais do corpus inteiro.
+  const metrics = {
+    scriptsProcessed: 0,
+    entryPoints: 0,
+    labeledEntryPoints: 0,
+    nodes: 0,
+    byNodeKind: {} as Record<string, number>,
+    eventHandlers: 0,
+    npcsWithEventHandlers: 0,
+    legacyScriptNodes: 0,
+    validatorInvalid: 0, // classification "invalid" (erro estrutural/referência)
+    validatorUnknown: 0, // classification "unknown" (válido, tem legacyScript)
+    validatorValid: 0,
+    unknownReferences: { maps: 0, items: 0, skills: 0, monsters: 0 },
+    invalidReferences: { maps: 0, items: 0, skills: 0, monsters: 0 },
+    gotoMissing: 0,
+    donpcMissing: 0,
+  };
 
   const parseShopItems = (
     spec: string,
@@ -289,10 +414,36 @@ function main() {
           warnings.push(`${fileRef}: script NPC não reconhecido — REVISAR`);
           continue;
         }
-        const [, sprite, tx, ty, code] = headMatch;
-        const dialogue = parseNpcDialogue(code!, fileRef);
-        if (dialogue.fullyParsed) dialoguesFull++;
-        else dialoguesFlagged++;
+        const [, sprite, tx, ty] = headMatch;
+        // já parseado/mapeado na PRÉ-PASSADA (mesma detecção de bloco,
+        // mesmo fileRef) — reusa em vez de reparsear, e faz o PUSH aqui,
+        // na ordem NATURAL do arquivo (ver nota grande acima da pré-passada).
+        const pre = scriptAstByRef.get(fileRef);
+        if (!pre) {
+          invalid.push({ npc: w3, error: "script não encontrado na pré-passada (parse/map falhou) — ver warnings" });
+          continue;
+        }
+        const { ast, mapped } = pre;
+
+        metrics.scriptsProcessed++;
+        metrics.entryPoints += ast.entryPoints.length;
+        metrics.labeledEntryPoints += ast.entryPoints.filter((ep) => ep.label !== null).length;
+        nodeKindTally(mapped.dialogue);
+        for (const h of mapped.eventHandlers) nodeKindTally(h.dialogue);
+        metrics.eventHandlers += mapped.eventHandlers.length;
+        if (mapped.eventHandlers.length > 0) metrics.npcsWithEventHandlers++;
+
+        const report = validateNpcScript(ast, mapped, catalogs);
+        if (report.classification === "invalid") metrics.validatorInvalid++;
+        else if (report.classification === "unknown") metrics.validatorUnknown++;
+        else metrics.validatorValid++;
+        for (const key of ["maps", "items", "skills", "monsters"] as const) {
+          metrics.unknownReferences[key] += report.references[key].unknown;
+          metrics.invalidReferences[key] += report.references[key].invalid;
+        }
+        metrics.gotoMissing += report.gotos.missing;
+        metrics.donpcMissing += report.donpcevents.missing;
+
         pushNpc(
           {
             id: slug(w3),
@@ -301,8 +452,9 @@ function main() {
             mapId: head.mapId,
             position: [head.x, head.y, 0],
             direction: head.facing,
-            dialogueEntry: dialogue.entry,
-            dialogue: dialogue.nodes,
+            dialogueEntry: mapped.dialogueEntry,
+            dialogue: mapped.dialogue,
+            eventHandlers: mapped.eventHandlers,
             ...(tx !== undefined && ty !== undefined ? { touchArea: { xs: Number(tx), ys: Number(ty) } } : {}),
             legacyRef: fileRef,
           },
@@ -339,13 +491,16 @@ function main() {
           shops: npcs.filter((n) => n.shop).length,
           dialogues: npcs.filter((n) => n.dialogue.length > 0).length,
           duplicates: npcs.filter((n) => n.duplicateOf).length,
+          eventHandlers: npcs.filter((n) => n.eventHandlers.length > 0).length,
         },
-        dialoguesFullyParsed: dialoguesFull,
-        dialoguesFlagged: dialoguesFlagged,
+        pipeline: metrics,
         functionsSkipped,
         invalid,
         warnings,
-        note: "diálogos flagged têm o script restante intacto em legacySource (nó action/legacyScript, needsReview) — revisão manual, nada descartado",
+        note:
+          "pipeline novo (leia1.txt 2026-08-11): Lexer→Parser→AST→mapNpcScriptWithUnits→Validator. " +
+          "eventHandlers são entry points de PRIMEIRA CLASSE (On*:), não mais achatados dentro de legacyScript. " +
+          "Construção não reconhecida semanticamente vira legacyScript do PRÓPRIO statement — nunca descartado, nunca adivinhado.",
       },
       null,
       2,
@@ -355,8 +510,12 @@ function main() {
   console.log(`npcs: ${npcs.length} migrados, ${invalid.length} inválidos`);
   console.log(
     `warps ${npcs.filter((n) => n.warp).length}; shops ${npcs.filter((n) => n.shop).length}; ` +
-      `diálogos ${dialoguesFull} completos / ${dialoguesFlagged} flagged; ` +
+      `scripts ${metrics.scriptsProcessed} (entryPoints ${metrics.entryPoints}, eventHandlers ${metrics.eventHandlers} em ${metrics.npcsWithEventHandlers} NPCs); ` +
       `duplicates ${npcs.filter((n) => n.duplicateOf).length}; funções puladas ${functionsSkipped}`,
+  );
+  console.log(
+    `Validator: valid ${metrics.validatorValid} / unknown ${metrics.validatorUnknown} / invalid ${metrics.validatorInvalid}; ` +
+      `goto órfão ${metrics.gotoMissing}; donpcevent não resolvido ${metrics.donpcMissing}`,
   );
   console.log(`${warnings.length} warnings — ver npcs-migration-report.json`);
   console.log(`saída: ${outPath}`);

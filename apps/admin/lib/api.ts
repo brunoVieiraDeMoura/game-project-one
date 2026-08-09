@@ -45,7 +45,16 @@ async function handle<T>(res: Response): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = typeof body.error === "string" ? body.error : JSON.stringify(body.error);
+      // recusa do Writer/sync de NPC (PUT /npcs/:id): `error` é só o
+      // discriminante curto ("writer-refused"/"stale-source"/"not-editable"/
+      // "operational") — o MOTIVO de verdade está em `message`. Sem isto o
+      // Admin mostrava "422: writer-refused" sem dizer POR QUÊ (achado
+      // testando o fluxo real contra um NPC com comentário protegido).
+      if (typeof body.message === "string") {
+        detail = body.message;
+      } else {
+        detail = typeof body.error === "string" ? body.error : JSON.stringify(body.error);
+      }
     } catch {
       // keep statusText
     }

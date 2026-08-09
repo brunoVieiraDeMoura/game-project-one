@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useHudStore } from "./hudStore";
-import { useSkillBar } from "./skillBarStore";
+import { useSkillBar, type SkillBarSlot } from "./skillBarStore";
 import { ATAQUE_BASICO, ATAQUE_BASICO_ID, baterNoAlvo, useAtaqueBasico } from "../net/ataqueBasico";
 import { useAttackStore } from "../net/attackStore";
 import { usePlayerStore } from "../net/playerStore";
@@ -9,6 +9,7 @@ import { useAimStore } from "../net/aimStore";
 import { castarEmAlvo } from "../net/acoes";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { useCooldownStore } from "../net/cooldownStore";
+import { useItemCatalog, isUsableItemType } from "../net/itemCatalog";
 import { gateway } from "../net/gateway";
 import { isTyping } from "../play/isTyping";
 import { IconSquare } from "../ui/rpg";
@@ -62,16 +63,26 @@ export function SkillBar() {
   const setPage = useHudStore((s) => s.setSkillPage);
   const slots = useSkillBar((s) => s.slots);
   const skills = usePlayerStore((s) => s.skills);
+  const inventory = usePlayerStore((s) => s.inventory);
   const ataqueBasicoAtivo = useAtaqueBasico((s) => s.ativo);
   const stats = usePlayerStore((s) => s.stats);
   const online = usePlayerStore((s) => s.known);
   const aiming = useAimStore((s) => s.skill);
   const catalog = useSkillCatalog((s) => s.byId);
+  const itemNames = useItemCatalog((s) => s.byId);
 
   // nome legível e tipo de alvo das skills do personagem (catálogo do admin)
   useEffect(() => {
     if (online) useSkillCatalog.getState().ensure(skills.map((s) => s.id));
   }, [online, skills]);
+
+  // nome dos itens postos na barra — pode chegar aqui sem a bolsa nunca ter
+  // aberto (barra persiste entre sessões), então o pedido não pode depender
+  // do InventoryWindow ter montado.
+  useEffect(() => {
+    const ids = slots.filter((s) => s.kind === "item" && s.id !== 0).map((s) => s.id);
+    if (ids.length) useItemCatalog.getState().ensure(ids);
+  }, [slots]);
 
   // recarga vem do servidor (ZC_SKILL_POSTDELAY); o cliente só desenha
   useEffect(() => {
@@ -98,7 +109,21 @@ export function SkillBar() {
   }, [online, page, slots, skills]);
 
   function trigger(slotIndex: number) {
-    const skillId = slots[slotIndex] ?? 0;
+    const slot = slots[slotIndex];
+    if (!slot || slot.id === 0) return;
+
+    // Item: mesmo caminho que o clique no inventário — `CZ.USE_ITEM` já
+    // existente, sem reimplementar consumo. O item é achado pelo itemId (não
+    // por um índice guardado), porque quem é autoritativo é o `playerStore`
+    // agora, não o que a hotbar lembra de quando o item foi arrastado.
+    if (slot.kind === "item") {
+      const item = usePlayerStore.getState().inventory.find((i) => i.itemId === slot.id);
+      if (!item) return; // sumiu do inventário — o subscribe do store já devia ter limpado o slot
+      gateway().emit("item:use", { index: item.index });
+      return;
+    }
+
+    const skillId = slot.id;
 
     /**
      * ATAQUE BÁSICO é um MODO, não um comando: alterna.
@@ -173,17 +198,38 @@ export function SkillBar() {
       <div style={{ ...caixa(SB_LAYOUT.slots), display: "flex", gap: px(SLOT_GAP) }}>
         {Array.from({ length: 9 }).map((_, i) => {
           const slotIndex = page * 9 + i;
-          const id = slots[slotIndex] ?? 0;
-          const basico = id === ATAQUE_BASICO_ID;
-          const skill = basico ? ATAQUE_BASICO : skills.find((s) => s.id === id);
+          const slot: SkillBarSlot = slots[slotIndex] ?? { kind: "skill", id: 0 };
+          const basico = slot.kind === "skill" && slot.id === ATAQUE_BASICO_ID;
+          const skill = slot.kind === "skill" ? (basico ? ATAQUE_BASICO : skills.find((s) => s.id === slot.id)) : undefined;
+          const item = slot.kind === "item" ? inventory.find((i2) => i2.itemId === slot.id) : undefined;
+          const preenchido = Boolean(skill) || Boolean(item);
           return (
             <SkillSlot
               key={slotIndex}
               numero={i + 1}
               slotIndex={slotIndex}
-              skillId={skill?.id}
-              nome={skill ? (basico ? skill.name : (catalog[skill.id]?.name ?? skill.name)) : undefined}
-              detalhe={skill ? (basico ? "Auto-ataque" : `Lv ${skill.level} · ${skill.spCost} SP`) : undefined}
+              preenchido={preenchido}
+              nome={
+                skill
+                  ? basico
+                    ? skill.name
+                    : (catalog[skill.id]?.name ?? skill.name)
+                  : item
+                    ? (itemNames[item.itemId]?.name ?? `#${item.itemId}`)
+                    : undefined
+              }
+              seed={skill ? `sk-${skill.id}` : item ? `item-${item.itemId}` : undefined}
+              detalhe={
+                skill
+                  ? basico
+                    ? "Auto-ataque"
+                    : `Lv ${skill.level} · ${skill.spCost} SP`
+                  : item
+                    ? `x${item.amount}`
+                    : undefined
+              }
+              quantidade={item && item.amount > 1 ? item.amount : undefined}
+              cooldownSkillId={skill && !basico ? skill.id : undefined}
               // o realce de "mirando" serve ao modo LIGADO: são a mesma
               // pergunta na tela — "este slot está esperando alguma coisa"
               mirando={basico ? ataqueBasicoAtivo : Boolean(skill) && aiming?.id === skill?.id}
@@ -242,17 +288,26 @@ export function SkillBar() {
 function SkillSlot({
   numero,
   slotIndex,
-  skillId,
+  preenchido,
   nome,
+  seed,
   detalhe,
+  quantidade,
+  cooldownSkillId,
   mirando,
   onUse,
 }: {
   numero: number;
   slotIndex: number;
-  skillId?: number;
+  /** true pra skill OU item — o que decide clicável/arrastável/realce */
+  preenchido: boolean;
   nome?: string;
+  seed?: string;
   detalhe?: string;
+  /** só item: badge de quantidade quando amount > 1 */
+  quantidade?: number;
+  /** só skill (não-básico): o cronômetro de recarga é por skill do rAthena, item não tem */
+  cooldownSkillId?: number;
   mirando: boolean;
   onUse: () => void;
 }) {
@@ -278,23 +333,39 @@ function SkillSlot({
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
-        const dropped = e.dataTransfer.getData("application/x-ro-skill");
+        const droppedSkill = e.dataTransfer.getData("application/x-ro-skill");
+        const droppedItemIndex = e.dataTransfer.getData("application/x-ro-item");
         const from = e.dataTransfer.getData("application/x-ro-slot");
-        if (from) useSkillBar.getState().swap(Number(from), slotIndex);
-        else if (dropped) useSkillBar.getState().assign(slotIndex, Number(dropped));
+        if (from) {
+          useSkillBar.getState().swap(Number(from), slotIndex);
+          return;
+        }
+        if (droppedSkill) {
+          useSkillBar.getState().assign(slotIndex, Number(droppedSkill));
+          return;
+        }
+        if (droppedItemIndex) {
+          const item = usePlayerStore.getState().inventory.find((i) => i.index === Number(droppedItemIndex));
+          if (!item) return;
+          // Não aceita silenciosamente equipamento/carta/munição/etc — só o
+          // que o catálogo (packages/game-data ItemType) marca como usável.
+          const info = useItemCatalog.getState().byId[item.itemId];
+          if (!isUsableItemType(info?.type)) return;
+          useSkillBar.getState().assignItem(slotIndex, item.itemId);
+        }
       }}
-      draggable={Boolean(skillId)}
+      draggable={preenchido}
       onDragStart={(e) => e.dataTransfer.setData("application/x-ro-slot", String(slotIndex))}
-      title={nome ? `${nome} ${detalhe} — botão direito tira da barra` : "arraste uma habilidade (Alt+S) para cá"}
+      title={nome ? `${nome}${detalhe ? ` ${detalhe}` : ""} — botão direito tira da barra` : "arraste uma habilidade (Alt+S) ou consumível (Alt+E) para cá"}
       style={{
         position: "relative",
         flex: 1,
         minWidth: 0,
-        cursor: skillId ? "pointer" : "default",
-        transform: pressed ? "scale(0.94)" : hover && skillId ? "translateY(-3px) scale(1.04)" : "none",
+        cursor: preenchido ? "pointer" : "default",
+        transform: pressed ? "scale(0.94)" : hover && preenchido ? "translateY(-3px) scale(1.04)" : "none",
         filter: mirando
           ? "brightness(1.25) drop-shadow(0 0 6px rgba(255,206,120,0.95))"
-          : hover && skillId
+          : hover && preenchido
             ? "brightness(1.12)"
             : undefined,
         transition: "transform 110ms ease-out, filter 110ms ease-out",
@@ -335,10 +406,28 @@ function SkillSlot({
           pointerEvents: "none",
         }}
       >
-        {nome && <IconSquare seed={`sk-${skillId}`} label={nome} size={px(48)} />}
+        {nome && <IconSquare seed={seed ?? nome} label={nome} size={px(48)} />}
       </div>
 
-      {skillId != null && <Cooldown skillId={skillId} raio={borda * 0.66} />}
+      {cooldownSkillId != null && <Cooldown skillId={cooldownSkillId} raio={borda * 0.66} />}
+
+      {quantidade != null && (
+        <div
+          style={{
+            position: "absolute",
+            right: px(6),
+            bottom: px(4),
+            font: `700 ${px(15)}px ${FRAME_NUM_FONT}`,
+            fontVariantNumeric: FRAME_NUM_VARIANT,
+            lineHeight: 1,
+            color: SB_COLORS.label,
+            textShadow: `0 1px 2px ${SB_COLORS.shadow}`,
+            pointerEvents: "none",
+          }}
+        >
+          {quantidade}
+        </div>
+      )}
 
       <div
         style={{

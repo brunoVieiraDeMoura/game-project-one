@@ -194,7 +194,7 @@ export function mysqlRowToMonster(row: MysqlMonsterRow, resolveItemId: ItemIdRes
 		title: row.title ?? undefined,
 		race: (row.race ?? "Formless").toLowerCase(),
 		element: {
-			type: (row.element ?? "Neutral").toLowerCase(),
+			type: elementFromRathena(row.element ?? "Neutral"),
 			level: row.element_level ?? 1,
 		},
 		size: (row.size ?? "Medium").toLowerCase(),
@@ -232,7 +232,7 @@ export function monsterToMysqlRow(monster: Monster, resolveItemName: ItemNameRes
 		chase_range: monster.chaseRange,
 		size: upperFirst(monster.size),
 		race: upperFirst(monster.race),
-		element: upperFirst(monster.element.type),
+		element: elementToRathena(monster.element.type),
 		element_level: monster.element.level,
 		walk_speed: monster.walkSpeed,
 		attack_delay: monster.attackDelayMs,
@@ -281,7 +281,21 @@ function upperFirst(value: string): string {
 	return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+/** rAthena chama esse elemento de "Dark" (`db/re/mob_db.yml: Element: Dark`);
+ * `ElementSchema` (`packages/game-data/src/common.ts`) chama de "shadow" —
+ * o resto dos 10 elementos bate 1:1 por case (`Fire` ↔ `fire`). Sem esta
+ * tradução, `MonsterSchema.parse` rejeitava TODO monstro com esse elemento
+ * (`invalid_enum_value`, "dark" não é opção válida) e a lista inteira de
+ * monstros voltava 500 — um `.safeParse` num lote falha o lote inteiro. */
+function elementFromRathena(value: string): string {
+	return value.toLowerCase() === "dark" ? "shadow" : value.toLowerCase();
+}
+
+function elementToRathena(element: Element): string {
+	return element === "shadow" ? "Dark" : upperFirst(element);
+}
+
 /** schema (minúsculo) → grafia do rAthena ("fire" → "Fire"), pro filtro de elemento. */
 export function monsterElementToRathena(element: Element): string {
-	return upperFirst(element);
+	return elementToRathena(element);
 }

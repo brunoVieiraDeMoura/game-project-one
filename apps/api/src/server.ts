@@ -67,6 +67,11 @@ export interface ServerDeps {
   mapRepository?: MapRepository;
   /** null disables auth+audit (JSON dev mode / tests); undefined = derive from env. */
   security?: SecurityContext | null;
+  /** raiz de `npc/` pro Writer relocalizar o `.txt` de um NPC editado
+   * (leia1.txt, integração Writer↔Admin, 2026-08-08). null desliga a
+   * integração inteira (PUT vira CRUD puro, como antes dela existir) —
+   * default é `join(REPO_ROOT, "rathena")`, undefined usa esse default. */
+  npcScriptRoot?: string | null;
 }
 
 function defaultItemRepository(): ItemRepository {
@@ -262,7 +267,8 @@ export async function buildServer(deps: ServerDeps = {}) {
   const monsterRepository = deps.monsterRepository ?? defaultMonsterRepository();
   await app.register(monsterRoutes(monsterRepository, security), { prefix: "/monsters" });
   const npcRepository = deps.npcRepository ?? defaultNpcRepository();
-  await app.register(npcRoutes(npcRepository, security), { prefix: "/npcs" });
+  const npcScriptRoot = deps.npcScriptRoot === undefined ? join(REPO_ROOT, "rathena") : deps.npcScriptRoot;
+  await app.register(npcRoutes(npcRepository, security, npcScriptRoot), { prefix: "/npcs" });
   const serverConfigRepository = deps.serverConfigRepository ?? defaultServerConfigRepository();
   await app.register(serverConfigRoutes(serverConfigRepository, security), { prefix: "/server-config" });
   const userRepository = deps.userRepository ?? defaultUserRepository();

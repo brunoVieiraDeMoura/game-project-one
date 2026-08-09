@@ -17,6 +17,10 @@ import {
   type LoginRegiao,
 } from "./login";
 
+/** ícone e tipografia do rodapé (site/discord/notícias/suporte) — pedido:
+ * sem moldura/fundo, só ícone+texto nesta cor, ativo ou não */
+const COR_RODAPE = "#997744";
+
 /**
  * A decoração da tela de entrada: título, placas de região, classificação
  * indicativa, atalhos do rodapé e epígrafe.
@@ -183,10 +187,20 @@ export function LoginTitulo() {
  * da fita (a primeira conta, só pela largura do bico, saía baixa demais): a
  * fita mede ~40 px de alto num palco de 1402, contra 52 nativos do bico →
  * `escala(1402) = 40/52 ≈ 0,77`, `k ≈ 0,00055` por px de palco. A largura
- * TOTAL mede ~348 px no mesmo palco (24,8%) — ela entra em `u()`, à parte da
- * `escala` (a arte do bico contra a largura do miolo+bicos são medidas
- * diferentes, mesmo as duas saindo do palco).
+ * TOTAL mede ~348 px no mesmo palco (24,8%). Hoje ela é derivada da MESMA
+ * `escala` do bico (`LARGURA_FITA_NATIVA`), não mais de um `u()` cru — ver o
+ * comentário grande dentro de `EraRibbon`.
  */
+/** largura nativa da fita (px, na mesma unidade de `LOGIN_FRAME_SIZE`) — maior
+ * que a medida crua da referência de propósito, pro texto caber com folga
+ * dentro do papel em vez de tocar a borda dele */
+const LARGURA_FITA_NATIVA = 380;
+/** quanto o ramo entra por baixo da fita, também em px nativos */
+const RAMO_OVERLAP_NATIVA = 60;
+/** corpo da letra de "A ERA DE ASTERION" em px nativos (px em `escala=1`) —
+ * era `u(2.5)`, % do palco cru sem o teto que `escala` tem; acima de ~1286 px
+ * de palco a fita parava de crescer e o texto não, e vazava */
+const ERA_FONTE_NATIVA = 26;
 function EraRibbon({ palco }: { palco: number }) {
   // dobrado sobre a primeira calibração (0,4..0,95 × 0,00055): medida contra a
   // referência de novo, a fita ficava um fio apertado no texto — o desenho é
@@ -194,7 +208,40 @@ function EraRibbon({ palco }: { palco: number }) {
   const escala = Math.max(0.65, Math.min(1.35, palco * 0.00105));
   const ramoW = LOGIN_FRAME_SIZE.ramo.w * escala;
   const ramoH = LOGIN_FRAME_SIZE.ramo.h * escala;
-  const larguraFita = u(29); // total (bicos + miolo) — crescida junto da escala
+  /**
+   * A largura da fita e o afastamento do ramo SAEM DA MESMA `escala` do bico
+   * (`LARGURA_FITA_NATIVA`/`RAMO_OVERLAP_NATIVA`, em "px nativos" — a mesma
+   * unidade de `LOGIN_FRAME_SIZE`), não mais de `u()` cru.
+   *
+   * Antes a largura era `u(29)` — um percentual do palco CRU, sem o clamp que
+   * `escala` tem (0,65..1,35). Em telas pequenas `escala` para de encolher no
+   * piso, mas a largura em `u()` continuava encolhendo junto do palco: o bico
+   * (preso à escala) ficava GRANDE demais para uma fita que tinha ficado
+   * pequena demais, e o par de ramos (posicionado a partir da largura da
+   * fita) saía do centro. Com as duas em px-de-escala, bico, fita e ramo
+   * sobem e descem JUNTOS — não tem mais como desalinhar.
+   */
+  const larguraFitaPx = LARGURA_FITA_NATIVA * escala;
+  const fonteEraPx = ERA_FONTE_NATIVA * escala;
+  /**
+   * Quanto o ramo AVANÇA por baixo da fita, medido da quina dela pra dentro —
+   * maior valor = ramo mais escondido sob o papel (leia1.txt: "os 2 ramos...
+   * atrás desse papel"), menor = mais pra fora, quase solto no ar.
+   *
+   * `left`/`right` aqui são px CONTRA A LARGURA DA PRÓPRIA FITA
+   * (`larguraFitaPx`), não mais "50% do container + extra": o `<div>` que os
+   * embrulha agora é o MESMO que embrulha o `<Ribbon>`, do MESMO tamanho dele
+   * (os ramos são `position:absolute` e não contam para o tamanho do pai, que
+   * some a largura só do filho em fluxo — o `Ribbon`). Antes esse `<div>` era
+   * o de FORA (`display:flex;justifyContent:center`), que herda a largura do
+   * TÍTULO ("IMPÉRIO"/"ANTIGO", bem mais largo que a fita) — daí o "50% desse
+   * container" não ser 50% da FITA, e um extra fixo (`u(12.4)`, sem o clamp da
+   * `escala`) precisar caçar às cegas onde a quina da fita ficava a cada
+   * tamanho de tela. Contra a largura exata da fita não sobra conta pra
+   * adivinhar: a quina é sempre `larguraFitaPx`, ponto final.
+   */
+  const ramoOverlapPx = RAMO_OVERLAP_NATIVA * escala;
+  const ramoAnchorPx = larguraFitaPx - ramoOverlapPx;
   return (
     <div
       style={{
@@ -204,57 +251,64 @@ function EraRibbon({ palco }: { palco: number }) {
         justifyContent: "center",
       }}
     >
-      <img
-        src={LOGIN_FRAME_ART.ramo}
-        alt=""
-        draggable={false}
-        style={{
-          position: "absolute",
-          right: `calc(50% + ${u(12.4)})`,
-          bottom: 2,
-          width: ramoW,
-          height: ramoH,
-          transform: "scaleX(-1)",
-          zIndex: 0,
-        }}
-      />
-      <img
-        src={LOGIN_FRAME_ART.ramo}
-        alt=""
-        draggable={false}
-        style={{
-          position: "absolute",
-          left: `calc(50% + ${u(12.4)})`,
-          bottom: 2,
-          width: ramoW,
-          height: ramoH,
-          zIndex: 0,
-        }}
-      />
       <div style={{ position: "relative", zIndex: 1 }}>
+        <img
+          src={LOGIN_FRAME_ART.ramo}
+          alt=""
+          draggable={false}
+          style={{
+            position: "absolute",
+            right: ramoAnchorPx,
+            bottom: 2,
+            width: ramoW,
+            height: ramoH,
+            transform: "scaleX(-1)",
+            zIndex: 0,
+          }}
+        />
+        <img
+          src={LOGIN_FRAME_ART.ramo}
+          alt=""
+          draggable={false}
+          style={{
+            position: "absolute",
+            left: ramoAnchorPx,
+            bottom: 2,
+            width: ramoW,
+            height: ramoH,
+            zIndex: 0,
+          }}
+        />
         <Ribbon
           cap={LOGIN_FRAME_ART.eraCap}
           ext={LOGIN_FRAME_ART.eraExt}
           tam={{ cap: LOGIN_FRAME_SIZE.eraCap, ext: LOGIN_FRAME_SIZE.eraExt }}
           banda={RIBBON_BAND.era}
           escala={escala}
-          largura={larguraFita}
+          largura={`${larguraFitaPx}px`}
         >
           <span
             style={{
               fontFamily: LOGIN_TITLE_FONT,
-              fontSize: u(2.5),
-              letterSpacing: u(0.15),
+              // NATIVO × `escala` — igual a `larguraFitaPx`, nunca mais `u()`
+              // cru. Era esse o motivo de o texto vazar a fita acima de
+              // ~1286 px de palco (onde `escala` bate no teto de 1,35 e para
+              // de crescer): a fita parava, mas `u(2.5)` é % do palco CRU e
+              // seguia crescendo sem limite — acima desse ponto o texto
+              // sempre ia acabar maior que o papel, por mais larga que a fita
+              // ficasse. Presos na mesma `escala`, os dois travam JUNTOS.
+              fontSize: fonteEraPx,
+              letterSpacing: fonteEraPx * 0.06,
               // `letter-spacing` só entra DEPOIS de cada letra (inclusive a
               // última) — centralizado por flex, o texto lia puxado para a
               // ESQUERDA porque a caixa é mais larga que a tinta (a folga do
               // último caractere sobra do lado direito). `marginLeft` do
               // mesmo tamanho empurra a tinta de volta ao centro real, igual
               // o `textIndent` já faz no título (`LoginTitulo`).
-              marginLeft: u(0.15),
+              marginLeft: fonteEraPx * 0.06,
               textTransform: "uppercase",
               color: "#e8cf8e",
-              textShadow: `0 ${u(0.1)} ${u(0.2)} rgba(0,0,0,0.95)`,
+              textShadow: `0 ${fonteEraPx * 0.04}px ${fonteEraPx * 0.08}px rgba(0,0,0,0.95)`,
               whiteSpace: "nowrap",
             }}
           >
@@ -510,14 +564,14 @@ function AtalhoDoRodape({ link }: { link: (typeof LOGIN_LINKS)[number] }) {
   const borda = Math.max(10, palco * 0.012);
   const conteudo = (
     <>
-      <IconeDeLink nome={link.icone} ativo={Boolean(link.href)} />
+      <IconeDeLink nome={link.icone} />
       <span
         style={{
           fontFamily: FRAME_FONT,
           fontSize: u(0.85),
           letterSpacing: u(0.05),
           textTransform: "uppercase",
-          color: link.href ? LOGIN_COLORS.ink : LOGIN_COLORS.inkFaint,
+          color: COR_RODAPE,
         }}
       >
         {link.rotulo}
@@ -539,23 +593,25 @@ function AtalhoDoRodape({ link }: { link: (typeof LOGIN_LINKS)[number] }) {
     gap: u(0.3),
     padding: `${u(0.5)} ${u(0.4)}`,
   };
+  // moldura FICA (pedido: "era pra tirar só o background") — só o preenchimento
+  // sai, `background: "none"` deixa a madeira do rodapé aparecer por dentro
   return link.href ? (
     <a href={link.href} target="_blank" rel="noreferrer" style={{ display: "block" }} {...hover.props}>
-      <CardFrame border={borda} background={LOGIN_COLORS.panel} style={frameStyle} inner={inner} title={link.rotulo}>
+      <CardFrame border={borda} background="none" style={frameStyle} inner={inner} title={link.rotulo}>
         {conteudo}
       </CardFrame>
     </a>
   ) : (
     <div {...hover.props}>
-      <CardFrame border={borda} background={LOGIN_COLORS.panel} style={frameStyle} inner={inner} title="em breve">
+      <CardFrame border={borda} background="none" style={frameStyle} inner={inner} title="em breve">
         {conteudo}
       </CardFrame>
     </div>
   );
 }
 
-function IconeDeLink({ nome, ativo }: { nome: string; ativo: boolean }) {
-  const cor = ativo ? LOGIN_COLORS.gold : LOGIN_COLORS.inkFaint;
+function IconeDeLink({ nome }: { nome: string }) {
+  const cor = COR_RODAPE;
   const comum = { width: u(2.1), height: u(2.1), display: "block" } as const;
   if (nome === "globo") {
     return (
@@ -615,7 +671,25 @@ export function LoginEpigrafe() {
         pointerEvents: "none",
       }}
     >
-      <div style={{ textAlign: "right", padding: `${u(1)} ${u(1.4)}` }}>
+      {/**
+       * CENTRALIZADO no papel, não colado no topo — o texto é bem mais curto
+       * que a altura do papel, e com `padding` simples ele nascia junto da
+       * borda de cima e sobrava pergaminho vazio embaixo. `position: absolute;
+       * inset: 0` some com a altura automática (que só a caixa de texto teria)
+       * e deixa o `justifyContent: center` centralizar contra a altura CHEIA
+       * do papel.
+       */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          textAlign: "right",
+          padding: `0 ${u(1.4)}`,
+        }}
+      >
         <div
           style={{
             fontFamily: FRAME_FONT,

@@ -1,8 +1,12 @@
-import { useState } from "react";
-import { usePlayerStore } from "../net/playerStore";
+import { useEffect, useState } from "react";
+import { usePlayerStore, type InventoryItem } from "../net/playerStore";
 import { useCharacterStore } from "../character/characterStore";
 import { gateway } from "../net/gateway";
+import { useItemCatalog } from "../net/itemCatalog";
+import { equipPending, requestUnequip, useEquipment } from "../net/equipmentStore";
+import { useStatusDelta } from "../net/statusDeltaStore";
 import { useHudStore } from "./hudStore";
+import { IconSquare } from "../ui/rpg";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { JOB_NAMES } from "../character/jobNames";
@@ -62,6 +66,16 @@ export function StatusWindow() {
   const data = useCharacterStore((s) => s.data);
   const fechar = () => useHudStore.getState().closeWindow("status");
 
+  // Projeção do inventário, não estado próprio — ver `net/equipmentStore`.
+  const equipment = useEquipment();
+  const nomes = useItemCatalog((s) => s.byId);
+  useEffect(() => {
+    const ids = Object.values(equipment)
+      .filter((it): it is InventoryItem => it != null)
+      .map((it) => it.itemId);
+    if (ids.length) useItemCatalog.getState().ensure(ids);
+  }, [equipment]);
+
   const [pend, setPend] = useState<Pendentes>(ZERO);
   const [ajuda, setAjuda] = useState<(typeof ST_ATTRS)[number] | null>(null);
 
@@ -75,6 +89,15 @@ export function StatusWindow() {
     int: stats.upInt,
     dex: stats.upDex,
     luk: stats.upLuk,
+  };
+
+  const attrBonus: Record<RaisableStat, number> = {
+    str: stats.strBonus,
+    agi: stats.agiBonus,
+    vit: stats.vitBonus,
+    int: stats.intBonus,
+    dex: stats.dexBonus,
+    luk: stats.lukBonus,
   };
 
   const gastos = ST_ATTRS.reduce((n, a) => n + pend[a.key] * (custo[a.key] || 1), 0);
@@ -101,26 +124,47 @@ export function StatusWindow() {
     ? (JOB_NAMES[stats.class] ?? `classe ${stats.class}`)
     : (data?.jobName ?? "—");
 
+  // Indicador de ±10s: o `statKey` (4º elemento) só existe nas linhas que
+  // `net/statusDeltaStore` sabe calcular. MATK e Vel. Ataque JÁ SABE — MATK é
+  // base+bônus como ATK/DEF (não intervalo, ver `ServerStats.matkMin`), e
+  // Vel. Ataque calcula o delta em cima do NÚMERO EXIBIDO (`200-aspd/10`), não
+  // do valor interno — assim "melhorou" sempre é ↑, sem inverter sinal na UI.
+  const deltas = useStatusDelta((s) => s.deltas);
+
   /** três blocos, separados por divisória — como o change pede */
-  const blocos: [string, string, string?][][] = [
+  const blocos: [string, string, string?, string?][][] = [
     [
       ["Nível", online ? String(stats.baseLevel) : String(data?.level ?? "—")],
       ["Classe", classe],
     ],
     [
-      ["HP", `${stats.hp} / ${stats.maxHp}`, ST_COLORS.hp],
-      ["SP", `${stats.sp} / ${stats.maxSp}`, ST_COLORS.sp],
+      ["HP", `${stats.hp} / ${stats.maxHp}`, ST_COLORS.hp, "maxHp"],
+      ["SP", `${stats.sp} / ${stats.maxSp}`, ST_COLORS.sp, "maxSp"],
     ],
     [
-      ["ATK", online ? `${stats.atk} + ${stats.atkBonus}` : `${d?.atk ?? "—"}`],
-      ["DEF", online ? `${stats.def} + ${stats.defBonus}` : `${d?.def ?? "—"}`],
-      ["MATK", online ? `${stats.matkMin} ~ ${stats.matkMax}` : `${d?.matk ?? "—"}`],
-      ["MDEF", online ? `${stats.mdef} + ${stats.mdefBonus}` : `${d?.mdef ?? "—"}`],
-      ["Precisão", online ? String(stats.hit) : `${d?.hit ?? "—"}`],
-      ["Esquiva", online ? `${stats.flee} + ${stats.fleeBonus}` : `${d?.flee ?? "—"}`],
-      ["Crítico", online ? `${stats.critical}` : `${d?.crit ?? "—"}`],
+      ["ATK", online ? `${stats.atk} + ${stats.atkBonus}` : `${d?.atk ?? "—"}`, undefined, "atk"],
+      ["DEF", online ? `${stats.def} + ${stats.defBonus}` : `${d?.def ?? "—"}`, undefined, "def"],
+      // matkMin = base, matkMax = bônus de equipamento — SOMA, não intervalo
+      // (rathena/src/map/pc.hpp:1237, "values to the left/right of the +").
+      ["MATK", online ? `${stats.matkMin} + ${stats.matkMax}` : `${d?.matk ?? "—"}`, undefined, "matk"],
+      ["MDEF", online ? `${stats.mdef} + ${stats.mdefBonus}` : `${d?.mdef ?? "—"}`, undefined, "mdef"],
+      ["Precisão", online ? String(stats.hit) : `${d?.hit ?? "—"}`, undefined, "hit"],
+      // `flee` já é o TOTAL (equipamento incluído) — sem "+N", não tem par
+      // base+bônus no protocolo (era esse o engano do "+14" antigo).
+      ["Esquiva", online ? String(stats.flee) : `${d?.flee ?? "—"}`, undefined, "flee"],
+      // Stat PRÓPRIO (flee2/10), não bônus de Esquiva — só aparece online
+      // porque a ficha local (engine-core) não modela Perfect Dodge.
+      ...(online
+        ? ([["Perfect Dodge", String(stats.perfectDodge), undefined, "perfectDodge"]] as [
+            string,
+            string,
+            string?,
+            string?,
+          ][])
+        : []),
+      ["Crítico", online ? `${stats.critical}` : `${d?.crit ?? "—"}`, undefined, "critical"],
       // ASPD do pacote é o valor interno (amotion); o RO mostra 200 - x/10.
-      ["Vel. Ataque", online ? (200 - stats.aspd / 10).toFixed(2) : `${d?.aspd ?? "—"}`],
+      ["Vel. Ataque", online ? (200 - stats.aspd / 10).toFixed(2) : `${d?.aspd ?? "—"}`, undefined, "aspd"],
     ],
   ];
 
@@ -161,9 +205,25 @@ export function StatusWindow() {
         {charName || "Status"}
       </div>
 
-      {ST_SLOTS.map((s) => (
-        <SlotEquip key={s.key} art={s.art} label={s.label} cx={s.cx} cy={s.cy} />
-      ))}
+      {ST_SLOTS.map((s) => {
+        // `legs` não tem bit EQP_* (calça não existe no jogo ainda — item 6 do
+        // pedido) e cai aqui sempre `undefined`, o que já a deixa decorativa
+        // sem precisar de um `if` próprio.
+        const item = (equipment as Partial<Record<string, InventoryItem>>)[s.key];
+        return (
+          <SlotEquip
+            key={s.key}
+            art={s.art}
+            label={s.label}
+            cx={s.cx}
+            cy={s.cy}
+            item={item}
+            nome={item ? (nomes[item.itemId]?.name ?? `#${item.itemId}`) : undefined}
+            pendente={item ? equipPending(item.index) : false}
+            onDoubleClick={item && online ? () => requestUnequip(item.index) : undefined}
+          />
+        );
+      })}
 
       {/* Divisória entre as colunas: a MESMA peça reta das barras de HP/SP,
           girada de pé e com opacidade — em vez de uma linha CSS que destoaria
@@ -200,8 +260,8 @@ export function StatusWindow() {
         {blocos.map((bloco, i) => (
           <div key={i}>
             {i > 0 && <Divisoria />}
-            {bloco.map(([rot, val, cor]) => (
-              <Linha key={rot} rotulo={rot} valor={val} cor={cor} />
+            {bloco.map(([rot, val, cor, statKey]) => (
+              <Linha key={rot} rotulo={rot} valor={val} cor={cor} delta={statKey ? deltas[statKey] : undefined} />
             ))}
           </div>
         ))}
@@ -211,16 +271,21 @@ export function StatusWindow() {
         <Cabecalho>Atributos</Cabecalho>
         {ST_ATTRS.map((a) => {
           const valor = base[a.key] + pend[a.key];
+          // bônus de EQUIPAMENTO (strBonus etc) é persistente, igual ATK/DEF —
+          // só existe online (a ficha local não modela COUPLESTATUS).
+          const bonus = online ? attrBonus[a.key] : 0;
           return (
             <LinhaAtributo
               key={a.key}
               nome={a.nome}
               valor={valor}
+              bonus={bonus}
               pendente={pend[a.key] > 0}
               podeSubir={online && valor < ST_ATTR_MAX && sobrando >= (custo[a.key] || 1)}
               noMaximo={valor >= ST_ATTR_MAX}
               onMais={() => somar(a.key)}
               onAjuda={() => setAjuda(ajuda?.key === a.key ? null : a)}
+              delta={deltas[a.key]}
             />
           );
         })}
@@ -381,8 +446,15 @@ function Cabecalho({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** linha "rótulo .......... valor" da coluna de números */
-function Linha({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: string }) {
+/**
+ * Linha "rótulo .......... valor" da coluna de números.
+ *
+ * `delta` é o que mudou na ÚLTIMA operação de equipar/desequipar
+ * (`net/statusDeltaStore`), por ~10s — "ATK 120 ↑ +20". Só aparece quando
+ * existe (o `undefined` de quem não mudou não desenha nada, como o pedido
+ * exige: "não mostrar +0 nem valores que não mudaram").
+ */
+function Linha({ rotulo, valor, cor, delta }: { rotulo: string; valor: string; cor?: string; delta?: number }) {
   return (
     <div style={{ display: "flex", alignItems: "baseline", marginBottom: px(4) }}>
       <span
@@ -411,6 +483,24 @@ function Linha({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: st
       >
         {valor}
       </span>
+      {delta != null && delta !== 0 && (
+        <span
+          style={{
+            marginLeft: px(4),
+            fontFamily: FRAME_NUM_FONT,
+            fontVariantNumeric: FRAME_NUM_VARIANT,
+            fontWeight: 700,
+            fontSize: px(TYPE.small),
+            lineHeight: 1,
+            color: delta > 0 ? "#7fc463" : "#d9695f",
+            textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {delta > 0 ? "↑" : "↓"} {delta > 0 ? "+" : ""}
+          {delta}
+        </span>
+      )}
     </div>
   );
 }
@@ -419,19 +509,25 @@ function Linha({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: st
 function LinhaAtributo({
   nome,
   valor,
+  bonus,
   pendente,
   podeSubir,
   noMaximo,
   onMais,
   onAjuda,
+  delta,
 }: {
   nome: string;
   valor: number;
+  /** bônus de equipamento (strBonus etc), persistente — mesmo padrão "130 + X" de ATK/DEF */
+  bonus?: number;
   pendente: boolean;
   podeSubir: boolean;
   noMaximo: boolean;
   onMais: () => void;
   onAjuda: () => void;
+  /** mesmo indicador ±10s de `Linha` — atributo também recebe bônus de equipamento (strBonus etc) */
+  delta?: number;
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: px(5), marginBottom: px(7) }}>
@@ -470,8 +566,25 @@ function LinhaAtributo({
           textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
         }}
       >
-        {valor}
+        {bonus ? `${valor} + ${bonus}` : valor}
       </span>
+      {delta != null && delta !== 0 && (
+        <span
+          style={{
+            fontFamily: FRAME_NUM_FONT,
+            fontVariantNumeric: FRAME_NUM_VARIANT,
+            fontWeight: 700,
+            fontSize: px(TYPE.small),
+            lineHeight: 1,
+            color: delta > 0 ? "#7fc463" : "#d9695f",
+            textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {delta > 0 ? "↑" : "↓"} {delta > 0 ? "+" : ""}
+          {delta}
+        </span>
+      )}
       <BotaoImagem
         art={CHAT_ART.addTab}
         titulo={noMaximo ? `Maximo (${ST_ATTR_MAX})` : "Somar um ponto"}
@@ -533,16 +646,43 @@ function BotaoImagem({
   );
 }
 
-/** slot de equipamento sobre a cena: mesma moldura dos slots de habilidade */
-function SlotEquip({ art, label, cx, cy }: { art: string; label: string; cx: number; cy: number }) {
+/**
+ * Slot de equipamento sobre a cena: mesma moldura dos slots de habilidade.
+ *
+ * Vazio, mostra o ícone decorativo da categoria (a arte original, sem
+ * reformulação). Ocupado, troca para o mesmo placeholder `IconSquare` que o
+ * inventário e a hotbar já usam para item de verdade — é o item REAL, vindo
+ * do `equipmentStore`, não um enfeite. Duplo clique nele desequipa.
+ */
+function SlotEquip({
+  art,
+  label,
+  cx,
+  cy,
+  item,
+  nome,
+  pendente,
+  onDoubleClick,
+}: {
+  art: string;
+  label: string;
+  cx: number;
+  cy: number;
+  item?: InventoryItem;
+  nome?: string;
+  pendente?: boolean;
+  onDoubleClick?: () => void;
+}) {
   const frame = useNineSlice(SLOT_FRAME);
   const [hover, setHover] = useState(false);
   const d = px(ST_SLOT_D);
   const borda = Math.max(6, d * 0.24);
+  const titulo = item ? `${nome ?? `#${item.itemId}`}${item.refine ? ` +${item.refine}` : ""} — duplo clique desequipa` : label;
 
   return (
     <div
-      title={label}
+      title={titulo}
+      onDoubleClick={onDoubleClick}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       style={{
@@ -551,8 +691,10 @@ function SlotEquip({ art, label, cx, cy }: { art: string; label: string; cx: num
         top: px(cy) - d / 2,
         width: d,
         height: d,
-        transition: "filter 110ms ease-out",
+        cursor: onDoubleClick ? "pointer" : "default",
+        transition: "filter 110ms ease-out, opacity 110ms ease-out",
         filter: hover ? "brightness(1.15)" : undefined,
+        opacity: pendente ? 0.6 : 1,
       }}
     >
       <div
@@ -574,8 +716,23 @@ function SlotEquip({ art, label, cx, cy }: { art: string; label: string; cx: num
           pointerEvents: "none",
         }}
       >
-        <img src={art} alt="" draggable={false} style={{ width: "62%", height: "62%", opacity: 0.85 }} />
+        {item ? (
+          <IconSquare seed={`item-${item.itemId}`} size={d * 0.62} />
+        ) : (
+          <img src={art} alt="" draggable={false} style={{ width: "62%", height: "62%", opacity: 0.85 }} />
+        )}
       </div>
+      {item && (
+        <div
+          style={{
+            position: "absolute",
+            inset: borda / 3,
+            borderRadius: borda * 0.66,
+            boxShadow: "inset 0 0 0 2px rgba(255,206,120,0.85)",
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {frame && (
         <div
           style={{

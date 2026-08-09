@@ -15,6 +15,7 @@ import { useLootStore } from "../hud/lootStore";
 import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
+import { clearEquipPending, settleStatusWatch } from "./equipmentStore";
 
 /**
  * Entidades e movimento vindos do servidor → worldStore.
@@ -155,6 +156,23 @@ export function useWorldEvents(): void {
     };
     const onInvRemove = (p: { index: number; amount: number }) =>
       usePlayerStore.getState().removeItem(p.index, p.amount);
+    const onEquipResult = (p: { index: number; success: boolean; equipped: boolean; location: number }) => {
+      // O pedido pode destravar mesmo em falha (senão o slot ficaria preso
+      // pra sempre); o indicador de status e a ATUALIZAÇÃO do item só fazem
+      // sentido quando algo realmente mudou.
+      //
+      // BUG achado em teste real de browser (Fase 4): o gateway já atualizava
+      // o PRÓPRIO snapshot (`this.inventory` em session.ts) no ACK, mas nunca
+      // mandava isso de volta pro `playerStore` — só um evento fino
+      // {index,success,equipped,location}. O item ficava com `equipped`
+      // errado na tela até o próximo re-sync completo (`world:ready`), porque
+      // nada escrevia esses dois campos de volta no item certo.
+      clearEquipPending(p.index);
+      if (p.success) {
+        usePlayerStore.getState().updateItemEquip(p.index, p.equipped, p.location);
+        settleStatusWatch();
+      }
+    };
 
     const onSkills = (p: SkillPayload[]) => usePlayerStore.getState().setSkills(p);
 
@@ -265,6 +283,7 @@ export function useWorldEvents(): void {
     socket.on("inv:list", onInvList);
     socket.on("inv:add", onInvAdd);
     socket.on("inv:remove", onInvRemove);
+    socket.on("item:equip-result", onEquipResult);
     socket.on("entity:spawn", onSpawn);
     socket.on("entity:move", onMove);
     socket.on("entity:stop", onStop);
@@ -306,6 +325,7 @@ export function useWorldEvents(): void {
       socket.off("inv:list", onInvList);
       socket.off("inv:add", onInvAdd);
       socket.off("inv:remove", onInvRemove);
+      socket.off("item:equip-result", onEquipResult);
       socket.off("entity:spawn", onSpawn);
       socket.off("entity:move", onMove);
       socket.off("entity:stop", onStop);

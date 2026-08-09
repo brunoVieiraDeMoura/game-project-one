@@ -7,6 +7,8 @@ import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "./charFrame";
 import { LoginFrame2, loginFrame2Trilhos } from "./LoginFrame2";
 import { LOGIN2_SIZE } from "./loginPanelArt";
 import { CanvaFrame, CharSelectFrame, canvaTrilhos, escalaDoCanva } from "./CanvaFrame";
+import { LoginMusic } from "./LoginMusic";
+import { LoginVolumeButton } from "./LoginVolume";
 import { LOGIN_ART, LOGIN_COLORS, u } from "./login";
 
 /**
@@ -151,32 +153,6 @@ export function LoginBackdrop({
         }
       >
         {/**
-         * O TOM da referência: `referencia.png` é um mapa em SÉPIA (sampleado:
-         * céu ~rgb(144,109,62), terra ~rgb(59,66,52) — uma família só de
-         * marrom/tan, sem azul nem verde de verdade), enquanto o `background.jpg`
-         * que o jogo usa é a pintura em cor CHEIA (céu azul, água azul, campo
-         * verde). São a MESMA pintura — só a referência aplicou um filtro por
-         * cima para o mapa ler como "página antiga".
-         *
-         * `mix-blend-mode: color` reproduz isso sem precisar de um asset novo:
-         * ele pega o MATIZ/SATURAÇÃO desta camada (um marrom só) e mantém a
-         * LUMINOSIDADE de baixo (a pintura) — o resultado é a pintura inteira
-         * na mesma família de cor, exatamente como a referência.
-         */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "#8a6a3f",
-            mixBlendMode: "color",
-            // 100% igualava TUDO na mesma matiz — a referência ainda deixa o
-            // céu mais claro e a água ligeiramente mais fria por baixo do
-            // sépia. Com folga, essa variação sutil passa por baixo do tingimento.
-            opacity: 0.82,
-            pointerEvents: "none",
-          }}
-        />
-        {/**
          * Escurecimento por cima da cena.
          *
          * A pintura tem céu claro e areia, e texto claro sobre eles some. Um véu
@@ -206,6 +182,8 @@ export function LoginBackdrop({
             <CanvaFrame escala={escalaDoCanva(largura)} />
           ))}
       </div>
+      <LoginMusic />
+      <LoginVolumeButton />
     </div>
   );
 }
@@ -500,9 +478,31 @@ export function LoginCampo({
         padding: `${u(0.5)} ${u(1)}`,
       }}
     >
+      {/**
+       * O AUTOFILL do Chrome pinta o `<input>` de branco por dentro — a
+       * pseudo-classe `:-webkit-autofill` carrega um `background-color` que
+       * vence o `background: transparent` inline por especificidade de user
+       * agent, e junto vem o texto preto. Sem isso, todo usuário com senha
+       * salva via um campo branco no meio da pílula escura (medido: era
+       * exatamente esse o defeito, "campo1" com fundo branco na referência
+       * viva). `box-shadow` inset é o único jeito confiável de sobrescrever —
+       * `background` sozinho não pega. Mesma regra do `ScrollbarHider`: CSS
+       * solta, co-localizada com quem a usa.
+       */}
+      <style>{`
+        .login-input:-webkit-autofill,
+        .login-input:-webkit-autofill:hover,
+        .login-input:-webkit-autofill:focus,
+        .login-input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px #100c07 inset;
+          -webkit-text-fill-color: ${LOGIN_COLORS.ink};
+          caret-color: ${LOGIN_COLORS.ink};
+        }
+      `}</style>
       <IconeDeCampo nome={icone} />
       <input
         {...input}
+        className="login-input"
         style={{
           flex: 1,
           minWidth: 0,
@@ -533,6 +533,77 @@ function IconeDeCampo({ nome }: { nome: "usuario" | "senha" }) {
     <svg viewBox="0 0 24 24" style={comum} aria-hidden fill={cor}>
       <path d="M7 10V7a5 5 0 0110 0v3h1a2 2 0 012 2v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7a2 2 0 012-2zm2 0h6V7a3 3 0 00-6 0z" />
     </svg>
+  );
+}
+
+/**
+ * "Lembrar de mim" — caixa PRÓPRIA, não o quadrado nu do sistema.
+ *
+ * `accentColor` (o que havia antes) só pinta o checkbox NATIVO — no Chrome/
+ * Windows isso ainda é um quadrado branco de canto reto com um `check` fino,
+ * a mesma peça de qualquer formulário do SO. A referência mostra uma casinha
+ * ESCURA com borda dourada e check dourado, do mesmo material do resto da UI.
+ * `input` continua existindo (foco por teclado, leitor de tela, `Space` para
+ * alternar) — só fica visualmente invisível (`opacity:0`, mas ainda por cima
+ * e clicável); quem se vê é o `span` ao lado, decorativo (`pointerEvents:
+ * none`).
+ */
+export function LoginCheckbox({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: u(0.5),
+        fontFamily: FRAME_FONT,
+        fontSize: u(1.35),
+        color: LOGIN_COLORS.inkDim,
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ position: "relative", width: u(1.3), height: u(1.3), flex: "0 0 auto" }}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, opacity: 0, cursor: "pointer" }}
+        />
+        <span
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            background: LOGIN_COLORS.field,
+            border: `1.5px solid ${checked ? LOGIN_COLORS.gold : LOGIN_COLORS.goldFaint}`,
+            borderRadius: "15%",
+            pointerEvents: "none",
+          }}
+        >
+          {checked && (
+            <svg viewBox="0 0 16 16" style={{ width: "78%", height: "78%" }} aria-hidden>
+              <path
+                d="M3 8.2l3.2 3.2L13 4.6"
+                fill="none"
+                stroke={LOGIN_COLORS.gold}
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+        </span>
+      </span>
+      {children}
+    </label>
   );
 }
 

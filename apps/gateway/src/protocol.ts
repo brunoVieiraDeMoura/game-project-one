@@ -180,6 +180,13 @@ export interface InventoryItem {
 	identified: boolean;
 	refine: number;
 	equipped: boolean;
+	/**
+	 * Bitmask EQP_* (rathena/src/common/mmo.hpp) de ONDE está equipado — 0 =
+	 * não equipado. `equipped` só guardava o booleano e jogava fora o dado que
+	 * diz QUAL slot; sem ele o cliente não sabe distinguir anel 1 de anel 2, ou
+	 * espada de escudo, só que "algo" está vestido.
+	 */
+	location: number;
 	cards: number[];
 }
 
@@ -209,7 +216,8 @@ export interface StatusBlock {
 	mdefBonus: number;
 	hit: number;
 	flee: number;
-	fleeBonus: number;
+	/** flee2 do rAthena — Perfect Dodge, NÃO bônus de flee (ver comentário em session.ts) */
+	perfectDodge: number;
 	critical: number;
 	aspd: number;
 }

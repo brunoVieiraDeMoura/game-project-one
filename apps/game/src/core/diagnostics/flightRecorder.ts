@@ -862,10 +862,26 @@ export function timeline(caso: Caso, limiarQuadroMs = 33): string {
   }
 
   const gatilho = caso.quadros.find((q) => q.quadro === caso.quadroGatilho) ?? caso.quadros[0];
+  /**
+   * "célula(s)" e "causa=" só descrevem o ROLLBACK.
+   *
+   * `LinhaQuadro.causa` é do detector de recuada do `NetPlayer`
+   * (predicao/servidor/fixpos/snap — QUEM escreveu a última posição), uma
+   * coluna do QUADRO como outra qualquer. Ela persiste entre quadros como o
+   * resto do rascunho (não é acumulador), então o valor lido aqui para um
+   * `frameLongo` é só o que sobrou da última vez que a posição mudou — nada
+   * a ver com o que tornou O QUADRO lento. Escrever "causa=servidor" ali lia
+   * como "o servidor causou o frame longo", e não é isso que a coluna diz.
+   * `caso.valor` também não é célula em nenhum outro gatilho — é ms em
+   * `frameLongo`, contagem de geração em `rendererRecriado`, etc.
+   */
+  const ehRollback = caso.motivo === "rollback";
+  const unidade = ehRollback ? "célula(s)" : "";
+  const causaTxt = ehRollback && gatilho ? ` causa=${CAUSAS[gatilho.causa] || "?"}` : "";
   linhas.push({
     t: 0,
     rotulo: `>>> ${caso.motivo.toUpperCase()}`,
-    detalhe: `${caso.valor.toFixed(2)} célula(s)${gatilho ? ` causa=${CAUSAS[gatilho.causa] || "?"}` : ""}`,
+    detalhe: `${caso.valor.toFixed(2)}${unidade ? ` ${unidade}` : ""}${causaTxt}`,
   });
 
   /**

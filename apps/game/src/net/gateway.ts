@@ -78,6 +78,8 @@ export interface InventoryItemPayload {
   identified: boolean;
   refine: number;
   equipped: boolean;
+  /** bitmask EQP_* de onde está equipado — 0 = não equipado */
+  location: number;
   cards: number[];
 }
 
@@ -130,6 +132,7 @@ export interface ServerEvents {
   "inv:list": (p: InventoryItemPayload[]) => void;
   "inv:add": (p: InventoryItemPayload) => void;
   "inv:remove": (p: { index: number; amount: number }) => void;
+  "item:equip-result": (p: { index: number; success: boolean; equipped: boolean; location: number }) => void;
   "skill:list": (p: SkillPayload[]) => void;
   "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff"; action: number }) => void;
   "skill:casting": (p: { skillId: number; sourceGid: number; targetGid: number; x: number; y: number; durationMs: number }) => void;

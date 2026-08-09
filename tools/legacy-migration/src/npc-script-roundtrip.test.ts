@@ -2,7 +2,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { printNpcScript, type Statement, type Expr, type NpcScriptAst } from "@ragnarok/game-data";
-import { parseNpcScript, parseExpression } from "./npc-script/parser";
+import { parseNpcScript, parseExpression } from "@ragnarok/game-data";
 import { extractScriptBodies } from "./npc-script/extract-corpus";
 
 /**
@@ -22,7 +22,22 @@ function stripLines(node: unknown): unknown {
   if (node && typeof node === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node)) {
-      if (k === "line" || k === "start" || k === "end" || k === "bodyStart" || k === "bodyEnd") continue;
+      if (
+        k === "line" ||
+        k === "start" ||
+        k === "end" ||
+        k === "bodyStart" ||
+        k === "bodyEnd" ||
+        k === "testStart" ||
+        k === "testEnd" ||
+        k === "discriminantStart" ||
+        k === "discriminantEnd" ||
+        k === "headerStart" ||
+        k === "headerEnd" ||
+        k === "consequentBodyStart" ||
+        k === "alternateBodyStart"
+      )
+        continue;
       out[k] = stripLines(v);
     }
     return out;

@@ -41,17 +41,29 @@ export const STAT_NAMES: Record<number, string> = {
 	35: "upInt",
 	36: "upDex",
 	37: "upLuk",
-	41: "atk",
-	42: "atk2",
+	41: "atk", // SP_ATK1 = pc_leftside_atk — base (clif.cpp:3696)
+	// SP_ATK2/DEF2/MDEF2 = pc_rightside_* (clif.cpp:3705-3719) — a mesma
+	// divisão base/bônus do pacote COUPLESTATUS (0xbd, `pushStat` com `bonus`),
+	// só que mandada como PAR_CHANGE incremental separado — ex.: ao equipar
+	// arma, só o ATK2 muda, o ATK1 (base) nem chega. Nomear como o campo
+	// `*Bonus` de verdade (não "atk2"/"def2"/"mdef2", que não batem com nada
+	// em `ServerStats` e eram descartados em silêncio por
+	// `playerStore.applyStat`) é o que faz o indicador de equipar/desequipar
+	// atualizar sozinho, sem esperar o snapshot completo do login.
+	42: "atkBonus",
 	43: "matkMax",
 	44: "matkMin",
 	45: "def",
-	46: "def2",
+	46: "defBonus",
 	47: "mdef",
-	48: "mdef2",
+	48: "mdefBonus",
 	49: "hit",
 	50: "flee",
-	51: "flee2",
+	// FLEE2 NÃO é bônus de FLEE1 — é "Perfect Dodge", um stat próprio
+	// (clif.cpp:3672, `battle_status.flee2/10`). Campo dedicado em
+	// `ServerStats.perfectDodge` (achado auditando o indicador de status —
+	// antes disto caía errado dentro de "fleeBonus").
+	51: "perfectDodge",
 	52: "critical",
 	53: "aspd",
 	55: "jobLevel",

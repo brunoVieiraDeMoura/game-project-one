@@ -19,6 +19,8 @@ export interface InventoryItem {
   identified: boolean;
   refine: number;
   equipped: boolean;
+  /** bitmask EQP_* (rathena mmo.hpp) de onde está equipado — 0 = não equipado */
+  location: number;
   cards: number[];
 }
 
@@ -44,6 +46,19 @@ export interface ServerStats {
   int: number;
   dex: number;
   luk: number;
+  /**
+   * Bônus de EQUIPAMENTO/buff em cima do atributo base (`battle_status.X -
+   * status.X`, mandado via COUPLESTATUS — `clif.cpp:3779-3796`). Achado
+   * auditando o indicador: o protocolo já manda isso pra STR/AGI/VIT/INT/DEX/
+   * LUK do mesmo jeito que manda pra ATK/DEF/MDEF, só que o cliente jogava
+   * fora (sem campo pra guardar, sem entrada em `BONUS_FIELD`).
+   */
+  strBonus: number;
+  agiBonus: number;
+  vitBonus: number;
+  intBonus: number;
+  dexBonus: number;
+  lukBonus: number;
   /** custo em pontos para subir mais 1 (o número no "+" do RO) */
   upStr: number;
   upAgi: number;
@@ -53,6 +68,14 @@ export interface ServerStats {
   upLuk: number;
   atk: number;
   atkBonus: number;
+  /**
+   * `matkMin` é a base (INT/nível, `pc_leftside_matk`); `matkMax` é o bônus de
+   * equipamento (arma+ematk+consumível, `pc_rightside_matk`) — MESMO padrão
+   * base+bônus de atk/def/mdef, não um intervalo. Os nomes ecoam os campos do
+   * pacote (`min_mattPower`/`max_mattPower`, legado pré-renewal) só pra não
+   * duplicar mais um rename; quem importa é a UI mostrar "+", não "~"
+   * (`pc.hpp:1237`: "values to the left/right of the +").
+   */
   matkMin: number;
   matkMax: number;
   def: number;
@@ -60,8 +83,10 @@ export interface ServerStats {
   mdef: number;
   mdefBonus: number;
   hit: number;
+  /** total, JÁ com equipamento somado (`battle_status.flee`) — sem par base+bônus no protocolo */
   flee: number;
-  fleeBonus: number;
+  /** flee2 do rAthena — Perfect Dodge, um stat PRÓPRIO, não bônus de flee */
+  perfectDodge: number;
   critical: number;
   aspd: number;
   class: number;
@@ -90,6 +115,12 @@ const EMPTY_STATS: ServerStats = {
   int: 1,
   dex: 1,
   luk: 1,
+  strBonus: 0,
+  agiBonus: 0,
+  vitBonus: 0,
+  intBonus: 0,
+  dexBonus: 0,
+  lukBonus: 0,
   upStr: 2,
   upAgi: 2,
   upVit: 2,
@@ -106,7 +137,7 @@ const EMPTY_STATS: ServerStats = {
   mdefBonus: 0,
   hit: 0,
   flee: 0,
-  fleeBonus: 0,
+  perfectDodge: 0,
   critical: 0,
   aspd: 0,
   class: 0,
@@ -157,15 +188,31 @@ interface PlayerState {
   setSkills: (skills: PlayerSkill[]) => void;
   addItem: (item: InventoryItem) => void;
   removeItem: (index: number, amount: number) => void;
+  /** aplica o resultado autoritativo de um ACK de equip/unequip (ver net/useWorldEvents.onEquipResult) */
+  updateItemEquip: (index: number, equipped: boolean, location: number) => void;
   reset: () => void;
 }
 
-/** Campos com par base+bônus: o pacote traz os dois, guardamos separados. */
+/**
+ * Campos com par base+bônus: o pacote traz os dois (COUPLESTATUS,
+ * `clif.cpp:3609`/`3779-3796`), guardamos separados.
+ *
+ * `flee` fica de FORA de propósito — `battle_status.flee` já é o TOTAL
+ * (`clif.cpp:3669-3670`, `clif_par_change` simples, não `clif_couplestatus`),
+ * sem par base+bônus no protocolo. Somar um "fleeBonus" ali seria inventar um
+ * dado que o rAthena nunca manda (era o bug antigo: o campo existia mas
+ * continha Perfect Dodge, não bônus de esquiva).
+ */
 const BONUS_FIELD: Record<string, keyof ServerStats> = {
   atk: "atkBonus",
   def: "defBonus",
   mdef: "mdefBonus",
-  flee: "fleeBonus",
+  str: "strBonus",
+  agi: "agiBonus",
+  vit: "vitBonus",
+  int: "intBonus",
+  dex: "dexBonus",
+  luk: "lukBonus",
 };
 
 export const usePlayerStore = create<PlayerState>((set) => ({
@@ -246,6 +293,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         .filter((i) => i.amount > 0),
     })),
 
+  updateItemEquip: (index, equipped, location) =>
+    set((s) => ({
+      inventory: s.inventory.map((i) => (i.index === index ? { ...i, equipped, location } : i)),
+    })),
+
   // charName sobrevive ao reset: ele vem da seleção de personagem, ANTES de a
   // cena montar, e o reset roda no desmonte da cena (que o StrictMode faz de
   // propósito no dev). Zerar aqui apagava o nome do HUD logo na entrada.
@@ -254,7 +306,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 
 // espelho no console (como __world/__vfx): "o HUD está errado ou o pacote não
 // chegou?" só se responde vendo o estado cru
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as unknown as { __player?: () => unknown }).__player = () => {
     const s = usePlayerStore.getState();
     return { conhecido: s.known, nome: s.charName, stats: s.stats, itens: s.inventory.length, skills: s.skills.length };

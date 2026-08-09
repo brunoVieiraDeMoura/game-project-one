@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
 import { useItemCatalog } from "../net/itemCatalog";
+import { equipPending, precheckEquip, requestEquip, requestUnequip } from "../net/equipmentStore";
 import { useHudStore } from "./hudStore";
 import { IconSquare } from "../ui/rpg";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
+import { dragImagemNormal } from "../ui/cursors";
 import { CHAT_ART } from "../ui/chatFrame";
 import { CurvedBox } from "../ui/CurvedBox";
 import { useNineSlice } from "../ui/nineSlice";
@@ -81,14 +83,31 @@ export function InventoryWindow() {
         : !CONSUMABLE_TYPES.has(it.type) && !EQUIP_TYPES.has(it.type),
   );
 
-  // Consumível: usa. Equipamento: veste/tira. O servidor responde com o
-  // inv:remove / a lista nova — nada muda na tela por conta própria.
+  // Consumível: CLIQUE ÚNICO usa (padrão RO). Equipamento: DUPLO CLIQUE
+  // veste/tira — clique único em equipamento não faz nada, senão um clique
+  // errado troca a arma sem querer. O servidor responde com o inv:remove / a
+  // lista nova — nada muda na tela por conta própria (ele que valida classe,
+  // requisito e slot; o cliente só pede).
   const usar = (item: (typeof inventory)[number]) => {
-    if (EQUIP_TYPES.has(item.type)) {
-      gateway().emit(item.equipped ? "item:unequip" : "item:equip", { index: item.index });
+    if (CONSUMABLE_TYPES.has(item.type)) gateway().emit("item:use", { index: item.index });
+  };
+
+  const equipar = (item: (typeof inventory)[number]) => {
+    if (!EQUIP_TYPES.has(item.type)) return;
+    // Duplo clique repetido enquanto o pedido anterior ainda não voltou não
+    // manda um segundo `CZ.REQ_WEAR_EQUIP` — o slot fica preso até o ACK
+    // (sucesso OU falha) chegar, nunca por um relógio do cliente.
+    if (equipPending(item.index)) return;
+    if (item.equipped) {
+      requestUnequip(item.index);
       return;
     }
-    if (CONSUMABLE_TYPES.has(item.type)) gateway().emit("item:use", { index: item.index });
+    // Checagem RASA: só nível, que é dado que já está na tela. Classe,
+    // sexo e slot de carta continuam sendo o rAthena quem decide — isto é
+    // só para não abrir um pedido que qualquer jogador já veria como bobo.
+    const pre = precheckEquip(nomes[item.itemId], stats.baseLevel);
+    if (!pre.ok) return;
+    requestEquip(item.index);
   };
 
   const gap = px(BAG_GRID.gap);
@@ -185,10 +204,11 @@ export function InventoryWindow() {
               equipado={it?.equipped}
               titulo={
                 it
-                  ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — clique usa/equipa, botão direito joga no chão`
+                  ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — ${EQUIP_TYPES.has(it.type) ? "duplo clique equipa" : "clique usa"}, botão direito joga no chão`
                   : undefined
               }
-              onClick={it ? () => usar(it) : undefined}
+              onClick={it && CONSUMABLE_TYPES.has(it.type) ? () => usar(it) : undefined}
+              onDoubleClick={it && EQUIP_TYPES.has(it.type) ? () => equipar(it) : undefined}
               onDrop={
                 it
                   ? () => gateway().emit("item:drop", { index: it.index, amount: 1 })
@@ -306,6 +326,7 @@ function Slot({
   equipado,
   titulo,
   onClick,
+  onDoubleClick,
   onDrop,
   indice,
   lado,
@@ -315,6 +336,7 @@ function Slot({
   equipado?: boolean;
   titulo?: string;
   onClick?: () => void;
+  onDoubleClick?: () => void;
   onDrop?: () => void;
   indice?: number;
   /** lado do slot em px de tela — moldura, ícone e número saem daqui */
@@ -338,6 +360,7 @@ function Slot({
   return (
     <div
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       // Botão direito joga no chão, como no RO (lá é arrastar para fora da
       // janela; aqui o menu de contexto do navegador atrapalharia).
       onContextMenu={(e) => {
@@ -347,16 +370,30 @@ function Slot({
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       draggable={indice != null}
-      onDragStart={(e) => indice != null && e.dataTransfer.setData("application/x-ro-item", String(indice))}
+      onDragStart={(e) => {
+        if (indice == null) return;
+        e.dataTransfer.setData("application/x-ro-item", String(indice));
+        // sem isto o navegador escolhe o ícone sozinho — e o padrão do Chrome
+        // pra um `<div>` genérico costuma ser "copy" (o sinal de "+"), que não
+        // combina com o cursor do jogo. "move" é o mais perto de um arraste
+        // comum, sem selo nenhum por cima.
+        e.dataTransfer.effectAllowed = "move";
+        // o "fantasma" do arraste nativo não lê `cursor: url(...)` — é
+        // `setDragImage` ou nada. Sem isto o navegador desenhava uma captura
+        // semitransparente do PRÓPRIO slot (moldura, ícone, tudo); com isto é
+        // o cursor_normal do jogo que segue o mouse.
+        const arte = dragImagemNormal();
+        if (arte) e.dataTransfer.setDragImage(arte.img, arte.hotspot[0], arte.hotspot[1]);
+      }}
       title={titulo}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-start",
-        cursor: onClick ? "pointer" : "default",
-        transform: hover && onClick ? "translateY(-2px)" : "none",
-        filter: hover && onClick ? "brightness(1.12)" : undefined,
+        cursor: onClick || onDoubleClick ? "pointer" : "default",
+        transform: hover && (onClick || onDoubleClick) ? "translateY(-2px)" : "none",
+        filter: hover && (onClick || onDoubleClick) ? "brightness(1.12)" : undefined,
         transition: "transform 110ms ease-out, filter 110ms ease-out",
       }}
     >
