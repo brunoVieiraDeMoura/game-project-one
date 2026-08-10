@@ -3,8 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
+  STATUS_CALC_FLAG_OPTIONS,
   STATUS_CATEGORY_LABELS,
   STATUS_GROUP_LABELS,
+  STATUS_STATE_OPTIONS,
   StatusEffectDefSchema,
   StatusGroupSchema,
   classeDaSkill,
@@ -12,7 +14,7 @@ import {
   type StatusEffectDef,
 } from "@ragnarok/game-data";
 import { createStatus, updateStatus } from "@/lib/api";
-import { Badge, Button, Field, Input, NumberField, Section, Select, TokenListField } from "./ui";
+import { Badge, Button, Field, Input, MultiSelectField, NumberField, Section, Select, TokenListField } from "./ui";
 import { STATUS_LIMITS } from "@/lib/field-limits";
 
 /** Form do catálogo de statuses (soul.txt §5.3). */
@@ -179,8 +181,18 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
 
       <Section title="Comportamento">
         <div className="grid gap-3 md:grid-cols-2">
-          <TokenListField label="Estados bloqueados (no_move, no_cast, no_attack, ...)" values={st.states} onChange={(v) => set("states", v)} />
-          <TokenListField label="Stats recalculados (def, mdef, speed, ...)" values={st.calcFlags} onChange={(v) => set("calcFlags", v)} />
+          <MultiSelectField
+            label="Estados bloqueados (SCS_*)"
+            values={st.states}
+            options={STATUS_STATE_OPTIONS}
+            onChange={(v) => set("states", v)}
+          />
+          <MultiSelectField
+            label="Stats recalculados (SCB_*)"
+            values={st.calcFlags}
+            options={STATUS_CALC_FLAG_OPTIONS}
+            onChange={(v) => set("calcFlags", v)}
+          />
           <TokenListField label="Flags (no_dispell, boss_resist, debuff, ...)" values={st.flags} onChange={(v) => set("flags", v)} />
           <TokenListField label="Options (client)" values={st.options} onChange={(v) => set("options", v)} />
           <Field label="Opt1 (overlay exclusivo: stone, freeze, ...)">

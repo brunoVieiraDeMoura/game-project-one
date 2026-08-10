@@ -45,6 +45,20 @@ const STATE_READABLE: Record<string, string> = {
   NOCHATCOND: "no_chat_cond", NOCONSUMEITEMCOND: "no_consume_item_cond", NODEATHPENALTY: "no_death_penalty",
   NOCHAT: "no_chat", NOEQUIPITEM: "no_equip_item", NOUNEQUIPITEM: "no_un_equip_item",
   NOCASTCOND: "no_cast_cond", NOWARP: "no_warp",
+  // Os 6 abaixo NUNCA aparecem nos 1.019 registros de db/re/status.yml (por
+  // isso faltavam — ver nota do módulo) — confirmados em
+  // rathena/src/map/status.hpp:3090-3102 (docs/audit/risk-report.md, A1).
+  // Grafia derivada pelo MESMO padrão dos irmãos "*COND" já na tabela
+  // acima (NOMOVECOND→no_move_cond etc.): forma base já existente
+  // (NOATTACK→no_attack, NODEATHPENALTY→no_death_penalty,
+  // NOEQUIPITEM→no_equip_item, NOINTERACT→no_interact,
+  // NOUNEQUIPITEM→no_un_equip_item, NOWARP→no_warp) + sufixo "_cond".
+  NOATTACKCOND: "no_attack_cond",
+  NODEATHPENALTYCOND: "no_death_penalty_cond",
+  NOEQUIPITEMCOND: "no_equip_item_cond",
+  NOINTERACTCOND: "no_interact_cond",
+  NOUNEQUIPITEMCOND: "no_un_equip_item_cond",
+  NOWARPCOND: "no_warp_cond",
 };
 
 const CALC_FLAG_READABLE: Record<string, string> = {
@@ -54,6 +68,15 @@ const CALC_FLAG_READABLE: Record<string, string> = {
   VIT: "vit", All: "all", FLEE2: "flee2", MODE: "mode", MAXSP: "max_sp", MDEF2: "mdef2", DYE: "dye",
   CRATE: "crate", PATK: "patk", SMATK: "smatk", STA: "sta", WIS: "wis", SPL: "spl", POW: "pow",
   CON: "con", CRT: "crt", RES: "res", MRES: "mres", HPLUS: "hplus",
+  // Os 5 abaixo faltavam pelo mesmo motivo (nunca observados nos dados) —
+  // confirmados em status.hpp:3109,3135-3137,3141. BASE/SIZE/RACE/RANGE
+  // são palavra única, sem ambiguidade; MAXAP segue o mesmo padrão que
+  // MAXHP→max_hp / MAXSP→max_sp já na tabela (MAX+sigla de 2 letras).
+  BASE: "base",
+  SIZE: "size",
+  RACE: "race",
+  RANGE: "range",
+  MAXAP: "max_ap",
 };
 
 const OPT1_READABLE: Record<string, string> = {

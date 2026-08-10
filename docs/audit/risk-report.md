@@ -1,30 +1,31 @@
 # Relatório de risco — Auditoria de inputs Admin vs rAthena
 
-Atualizado na REVISÃO FINAL de Fase 0 + Fase 1. Nenhum achado foi corrigido em código nesta
-rodada nem na revisão — são achados de schema/write-path/backend que exigem aprovação explícita
-do usuário, conforme regra do plano (`estuda-next-change-editor-txt-linked-kettle.md`). A revisão
-RECONFERIU evidência primária (fonte C++/SQL real, não a matriz) de A1, A2, A9, A10/A11, A15, A19
-e encontrou 1 achado incorreto (A2 — retratado) e 1 achado que virou confirmado (A19 — era
-hipótese, agora tem prova direta de write-path sem conversão). Nenhuma linha de código foi tocada
-por essa reconferência — só a precisão deste documento.
+Atualizado após a Fase 2c (states[]/calcFlags[] do Status, Opção A aprovada). A1 foi CORRIGIDO em
+código nesta rodada (`packages/game-data/src/rathena/status-db-mapper.ts` — 11 chaves adicionadas
+às tabelas `STATE_READABLE`/`CALC_FLAG_READABLE`, cada uma confirmada contra `status.hpp` antes da
+edição), com teste de regressão (`status-flag-options.test.ts`, 6 casos incl. prova de write-path
+real). Os demais 18 achados ativos continuam só relatados — nenhum outro corrigido. Revisão
+anterior (Fase 0+1) já havia reconferido evidência primária de A1, A2, A9, A10/A11, A15, A19 e
+encontrado 1 achado incorreto (A2 — retratado) e 1 confirmado (A19).
 
 ## Resumo
 
 | Severidade | Contagem |
 |---|---|
-| alta | 9 (A19 permanece alta, evidência agora mais forte) |
-| média | 6 (A2 saiu desta contagem — retratado, não é mais um risco) |
+| alta | 8 (A1 saiu — resolvido; A19 permanece alta) |
+| média | 6 |
 | baixa | 4 |
+| resolvido em código | 1 (A1) |
 | retratado (achado incorreto, não conta como risco) | 1 (A2) |
 
-**19 achados ativos** (A1, A3-A20, excluindo A2) + 1 retratado = 20 linhas no total. Bloqueados
-por aprovação: **19** (todos os ativos). Corrigidos em código: **0**. Ver
+**18 achados ativos** (A3-A20, excluindo A1 resolvido e A2 retratado) + 1 resolvido + 1 retratado =
+20 linhas no total. Bloqueados por aprovação: **18**. Corrigidos em código: **1** (A1). Ver
 `docs/audit/{items,monsters,skills,statuses,job-classes,monster-skills}.md` para o detalhamento
 campo-a-campo que originou cada linha abaixo.
 
 | ID | Severidade | Área | Achado | Evidência | Impacto se não corrigido | Ação proposta | Aprovação necessária? | Fase de fix |
 |---|---|---|---|---|---|---|---|---|
-| A1 | alta | write-path (YAML) | `STATE_READABLE`(18)/`CALC_FLAG_READABLE`(39 flags + `All`) são subconjunto EXATO de `SCS_*`(24 reais, `status.hpp:3216-3271` menos `SCS_NONE`/`SCS_MAX`)/`SCB_*`(44 reais + `All`, `status.hpp:3107-3158` menos `SCB_NONE`/`SCB_MAX`) — o writer não consegue GRAVAR os que faltam (`fullSmallEnumRecord` itera as chaves da tabela, não do enum). **Reverificado nesta revisão, contagem exata**: `STATE_READABLE` falta exatamente 6 — `NOATTACKCOND, NODEATHPENALTYCOND, NOEQUIPITEMCOND, NOINTERACTCOND, NOUNEQUIPITEMCOND, NOWARPCOND`; `CALC_FLAG_READABLE` falta exatamente 5 — `BASE, SIZE, RACE, RANGE, MAXAP` | `packages/game-data/src/rathena/status-db-mapper.ts:41-57` (`STATE_READABLE`), `:50-57` (`CALC_FLAG_READABLE`); `rathena/src/map/status.hpp:3216-3271` (`SCS_*`), `:3107-3158` (`SCB_*`) | Operador seleciona/precisa de uma flag de status que existe no rAthena (`SCS_NOATTACKCOND`, `SCB_MAXAP` etc.) e a UI não a oferece — status fica mais restrito no editor do que no servidor real | Reconciliar as 2 tabelas contra as listas C++ completas (nomes exatos acima) antes de construir qualquer multi-select (bloqueante da Fase 2c) | sim | Fase2c |
+| A1 | **RESOLVIDO nesta rodada (Opção A aprovada)** | write-path (YAML) | ~~`STATE_READABLE`(18)/`CALC_FLAG_READABLE`(39+`All`) subconjunto de `SCS_*`(24)/`SCB_*`(44+`All`)~~ — **corrigido**: as 6 (`NOATTACKCOND, NODEATHPENALTYCOND, NOEQUIPITEMCOND, NOINTERACTCOND, NOUNEQUIPITEMCOND, NOWARPCOND`) e as 5 (`BASE, SIZE, RACE, RANGE, MAXAP`) que faltavam foram adicionadas às tabelas, cada uma confirmada individualmente contra `status.hpp` antes da edição. `STATE_READABLE` agora 24=24, `CALC_FLAG_READABLE` agora 45=45 (44+`All`) — conjunto EXATO, não mais subconjunto. `states[]`/`calcFlags[]` do `StatusForm` convertidos pra `MultiSelectField` com as tabelas completas. | `packages/game-data/src/rathena/status-db-mapper.ts:41-70` (tabelas, com comentário citando a origem de cada chave nova); `status-flag-options.ts` (opções da UI); `status-flag-options.test.ts` (6 testes: conjunto exato contra lista extraída de `status.hpp`, write-path real via `statusToRawEntry` prova que os 11 chegam como `true` no `RawStatus` sem warning de "não reconhecido") | — (resolvido) | — (feito) | não (já implementado) | Fase2c — feito |
 | A2 | **retratado nesta revisão** | write-path (YAML) | ~~`FLAG_READABLE` tem 52 chaves vs `SCF_*` real = 51 — provável token inventado~~ **FALSO, corrigido nesta revisão**: contei `SCF_*` real linha a linha (`status.hpp:3216-3271`, 54 entradas menos `SCF_NONE`/`SCF_MAX` = 52) e comparei nome a nome contra as 52 chaves de `FLAG_READABLE` — **conjuntos IDÊNTICOS, 52=52, nenhum token sobrando ou faltando**. A auditoria original errou a contagem do enum real. `FLAG_READABLE` está correto e completo; não bloqueia Fase 2c. | `status-db-mapper.ts:86-107` (`FLAG_READABLE`); `rathena/src/map/status.hpp:3216-3271` (`SCF_*`, comparação nome-a-nome feita nesta revisão) | nenhum — achado original era incorreto | Nenhuma — remover A2 da lista de bloqueios da Fase 2c; `flags[]` pode usar `FLAG_READABLE` sem reconciliação pendente quando essa fase for aprovada | não (achado fechado) | n/a — não bloqueia mais nada |
 | A3 | alta | write-path (SQL) | Descarte silencioso no write MariaDB: `CLASS_COLUMNS`/`JOB_COLUMNS`/`LOCATION_COLUMNS` (valor sem coluna correspondente simplesmente some); `EquipLocationSchema.both_hands`/`both_accessories` sem coluna SQL; `CharacterVariantSchema.all_upper`/`all_baby`/`all_third` sem coluna SQL | `apps/api/src/store/mysql-item-row.ts` (CLASS_COLUMNS, JOB_COLUMNS, LOCATION_COLUMNS) | Operador marca `both_hands` (item de duas mãos) no admin, salva, banco real NUNCA grava aquele bit — item volta a "uma mão" silenciosamente | Adicionar as colunas SQL faltantes ou mapear pra bits compostos existentes; redesenho de mapper, fora do escopo de UI | sim | fora de escopo (backend) |
 | A4 | alta | write-path (SQL) | `Monster.skills` (`MonsterSkillUseSchema`) sem NENHUMA persistência SQL — zero referências a `mob_skill_db` em `apps/api/src` (grep confirmado) | grep `apps/api/src` por `mob_skill` | Bloqueia qualquer editor de Monster Skills — construir UI sem resolver isso criaria perda de dado nova | Implementar `MysqlMobSkillRepository` (CSV de 19 colunas, `mob_skill_db.txt`) antes de qualquer UI | sim | Fase4 (bloqueada, fora de escopo aprovado nesta rodada) |

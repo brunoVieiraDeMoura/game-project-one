@@ -23,6 +23,7 @@ export * from "./rathena/job-class-validator";
 export * from "./rathena/case-insensitive-lookup";
 export * from "./rathena/status-db-yaml";
 export * from "./rathena/status-db-mapper";
+export * from "./rathena/status-flag-options";
 export * from "./rathena/status-db-validator";
 export * from "./rathena/npc-script-ast";
 export * from "./rathena/npc-script-lexer";
