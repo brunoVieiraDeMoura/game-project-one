@@ -150,6 +150,9 @@ export interface SkillMapResult {
   warnings: string[];
 }
 
+/** id numérico do catálogo → aegis name (`item_db_re.name_aegis`). Mesmo formato de `ItemNameResolver` em `apps/api/src/store/mysql-monster-row.ts` — não importado de lá porque `game-data` não pode depender de `apps/api` (direção contrária da dependência). */
+export type ItemNameResolver = (itemId: number) => string | undefined;
+
 /**
  * `Skill` → `ParsedSkillEntry`, pronto pro Writer reemitir. Quando `base`
  * existe (skill já tinha entrada no catálogo rAthena), a cauda 11-13 de
@@ -157,7 +160,11 @@ export interface SkillMapResult {
  * (ex.: `Unit.Interval` já vem do próprio schema, mas metadados de
  * `appliedStatuses` não) preservam o valor da base em vez de zerar.
  */
-export function skillToParsedEntry(skill: Skill, base: ParsedSkillEntry | undefined): SkillMapResult {
+export function skillToParsedEntry(
+  skill: Skill,
+  base: ParsedSkillEntry | undefined,
+  resolveItemName: ItemNameResolver,
+): SkillMapResult {
   const warnings: string[] = [];
   const max = skill.maxLevel;
   const tail = (key: keyof ParsedSkillEntry): number[] | undefined => (base ? (base[key] as number[]) : undefined);
@@ -250,18 +257,29 @@ export function skillToParsedEntry(skill: Skill, base: ParsedSkillEntry | undefi
             return out;
           })(),
           spiritSphereCost: expandToThirteen(requires?.spiritSphereCost, max, reqTail("spiritSphereCost"), 0),
-          itemCost: (requires?.itemsConsumed ?? []).map((c) => ({ item: String(c.itemId), amount: c.amount, level: c.level })),
+          itemCost: (requires?.itemsConsumed ?? []).flatMap((c) => {
+            const aegisName = resolveItemName(c.itemId);
+            if (!aegisName) {
+              warnings.push(`ItemCost: item id ${c.itemId} não encontrado no catálogo — omitido do skill_db.yml`);
+              return [];
+            }
+            return [{ item: aegisName, amount: c.amount, level: c.level }];
+          }),
           equipment: (() => {
             const out: Record<string, boolean> = {};
-            for (const id of requires?.requiredEquipment ?? []) out[String(id)] = true;
+            for (const id of requires?.requiredEquipment ?? []) {
+              const aegisName = resolveItemName(id);
+              if (!aegisName) {
+                warnings.push(`Equipment: item id ${id} não encontrado no catálogo — omitido do skill_db.yml`);
+                continue;
+              }
+              out[aegisName] = true;
+            }
             return out;
           })(),
     };
   if (requires?.requiredState && !REV_STATE.get(requires.requiredState)) {
     warnings.push(`requiredState "${requires.requiredState}" sem correspondência em rAthena — State não foi alterado`);
-  }
-  if (requires?.itemsConsumed.length || requires?.requiredEquipment.length) {
-    warnings.push("ItemCost/Equipment gravados com o ID do item como texto — o Writer precisa resolver pro aegis name antes de escrever (ver item-repository)");
   }
 
   const unit = skill.unit;

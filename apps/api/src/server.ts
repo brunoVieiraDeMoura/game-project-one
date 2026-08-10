@@ -129,7 +129,7 @@ function defaultJobClassRepository(skillRepository: SkillRepository): JobClassRe
   return catalog;
 }
 
-function defaultSkillRepository(): SkillRepository {
+function defaultSkillRepository(itemRepository: ItemRepository): SkillRepository {
   const catalog: SkillRepository =
     env.supabaseUrl && env.supabaseServiceRoleKey
       ? new SupabaseSkillRepository(env.supabaseUrl, env.supabaseServiceRoleKey)
@@ -141,9 +141,10 @@ function defaultSkillRepository(): SkillRepository {
   // Skill não tem tabela SQL no rAthena: o que o servidor lê é YAML. Com o
   // db/import ligado ao repo (scripts/wsl-setup.sh), salvar no painel escreve
   // o override e pede @reloadskilldb — o catálogo acima continua sendo a
-  // lista completa.
+  // lista completa. itemRepository resolve itemId→aegisName pro ItemCost/
+  // Equipment do Requires (achado A21).
   if (hasRoDatabase()) {
-    return new YamlSkillRepository(catalog, join(REPO_ROOT, "rathena-db-import", "skill_db.yml"));
+    return new YamlSkillRepository(catalog, join(REPO_ROOT, "rathena-db-import", "skill_db.yml"), itemRepository);
   }
   return catalog;
 }
@@ -255,7 +256,7 @@ export async function buildServer(deps: ServerDeps = {}) {
     app.log.warn("auth desabilitada (sem SUPABASE_URL/SERVICE_ROLE_KEY) — modo dev");
   }
 
-  const skillRepository = deps.skillRepository ?? defaultSkillRepository();
+  const skillRepository = deps.skillRepository ?? defaultSkillRepository(itemRepository);
   const jobClassRepository = deps.jobClassRepository ?? defaultJobClassRepository(skillRepository);
   const statusRepository = deps.statusRepository ?? defaultStatusRepository(skillRepository);
 

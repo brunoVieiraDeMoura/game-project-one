@@ -7,11 +7,13 @@ import {
   reemitRawSkillYaml,
   skillToParsedEntry,
   validateSkillEntry,
+  type ItemNameResolver,
   type ParsedSkillEntry,
   type RawSkillYaml,
   type Skill,
 } from "@ragnarok/game-data";
 import type { SkillListQuery, SkillListResult, SkillRepository } from "./skill-repository.js";
+import type { ItemRepository } from "./item-repository.js";
 import { queueReload } from "./mysql-item-repository.js";
 
 /**
@@ -47,6 +49,8 @@ export class YamlSkillRepository implements SkillRepository {
     private readonly delegate: SkillRepository,
     /** caminho do db/import/skill_db.yml (symlink → rathena-db-import/) */
     private readonly importPath: string,
+    /** resolve itemId → aegisName pra `Requires.ItemCost`/`Requires.Equipment` (achado A21); omitido = itens não resolvidos (comportamento anterior aos testes que não exercitam esses campos) */
+    private readonly itemRepository?: ItemRepository,
   ) {}
 
   async list(query: SkillListQuery): Promise<SkillListResult> {
@@ -118,7 +122,8 @@ export class YamlSkillRepository implements SkillRepository {
     const existingRaw = overrides.get(skill.id);
     const base: ParsedSkillEntry | undefined = existingRaw ? parseSkillEntry(existingRaw) : undefined;
 
-    const { entry, warnings } = skillToParsedEntry(skill, base);
+    const resolveItemName = await this.buildItemNameResolver(skill);
+    const { entry, warnings } = skillToParsedEntry(skill, base, resolveItemName);
 
     const issues = validateSkillEntry(entry);
     if (issues.length > 0) {
@@ -132,6 +137,31 @@ export class YamlSkillRepository implements SkillRepository {
     await queueReload("skilldb");
 
     return { warnings };
+  }
+
+  /**
+   * itemId → aegisName pros itens que ESTA skill referencia (`ItemCost` +
+   * `Equipment`) — mesma necessidade de `mysqlRowToMonster`/
+   * `monsterToMysqlRow` (`mysql-monster-row.ts`), mas `ItemRepository` não
+   * expõe lookup em lote (só `get(id)`, `item-repository.ts:27`), diferente
+   * de `MysqlMonsterRepository.itemNamesById` que consulta `item_db_re`
+   * direto por SQL — daí resolver id a id, uma vez por id distinto.
+   */
+  private async buildItemNameResolver(skill: Skill): Promise<ItemNameResolver> {
+    const ids = new Set<number>();
+    for (const cost of skill.requirements?.itemsConsumed ?? []) ids.add(cost.itemId);
+    for (const id of skill.requirements?.requiredEquipment ?? []) ids.add(id);
+    if (ids.size === 0 || !this.itemRepository) return () => undefined;
+
+    const repo = this.itemRepository;
+    const names = new Map<number, string>();
+    await Promise.all(
+      [...ids].map(async (id) => {
+        const item = await repo.get(id);
+        if (item) names.set(id, item.aegisName);
+      }),
+    );
+    return (id) => names.get(id);
   }
 }
 

@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { parse as parseYamlText } from "yaml";
-import { RawSkillYamlSchema, parseSkillEntry, type Skill } from "@ragnarok/game-data";
+import { RawSkillYamlSchema, parseSkillEntry, type Item, type Skill } from "@ragnarok/game-data";
 import { JsonSkillRepository } from "./json-skill-repository";
 import { YamlSkillRepository } from "./yaml-skill-repository";
+import type { ItemListResult, ItemRepository } from "./item-repository";
 
 /**
  * Testes exigidos antes de qualquer gravação real em `db/import/
@@ -54,6 +55,52 @@ function provoke(overrides: Partial<Skill> = {}): Skill {
     ...bash({ id: 6, aegisName: "SM_PROVOKE", name: "Provocar", type: "support", damageNature: "none", target: "enemy" }),
     ...overrides,
   };
+}
+
+function fakeItem(id: number, aegisName: string): Item {
+  return {
+    id,
+    aegisName,
+    name: aegisName,
+    type: "etc",
+    buyPrice: 10,
+    sellPrice: 5,
+    weight: 10,
+    attack: 0,
+    magicAttack: 0,
+    defense: 0,
+    range: 0,
+    slots: 0,
+    jobs: ["all"],
+    classes: [],
+    gender: "both",
+    locations: [],
+    equipLevelMin: 0,
+    equipLevelMax: 0,
+    refineable: false,
+    gradable: false,
+    viewSprite: 0,
+  };
+}
+
+/** Fake mínimo de `ItemRepository` (achado A21): só `get(id)` é exercitado pelo resolver do Writer — os demais métodos não são chamados por este caminho. */
+class FakeItemRepository implements ItemRepository {
+  constructor(private readonly items: Map<number, Item>) {}
+  async list(): Promise<ItemListResult> {
+    throw new Error("FakeItemRepository.list não implementado — não usado pelo write-path de Skill");
+  }
+  async get(id: number): Promise<Item | undefined> {
+    return this.items.get(id);
+  }
+  async create(item: Item): Promise<Item> {
+    throw new Error("FakeItemRepository.create não implementado — não usado pelo write-path de Skill");
+  }
+  async update(): Promise<Item | undefined> {
+    throw new Error("FakeItemRepository.update não implementado — não usado pelo write-path de Skill");
+  }
+  async remove(): Promise<boolean> {
+    throw new Error("FakeItemRepository.remove não implementado — não usado pelo write-path de Skill");
+  }
 }
 
 describe("YamlSkillRepository — Writer schema-first (Parser+Mapper+Validator já aprovados)", () => {
@@ -148,5 +195,130 @@ describe("YamlSkillRepository — Writer schema-first (Parser+Mapper+Validator j
       bash({ damageFormula: { expression: "atk*2", element: "weapon", needsReview: false } }),
     );
     expect(warnings.some((w) => w.includes("damageFormula"))).toBe(true);
+  });
+});
+
+describe("YamlSkillRepository — ItemCost/Equipment resolvem itemId → aegisName (achado A21)", () => {
+  let importPath: string;
+  let repo: YamlSkillRepository;
+  let delegate: JsonSkillRepository;
+  let itemRepository: FakeItemRepository;
+
+  beforeEach(() => {
+    importPath = join(tmpdir(), `skill_db.yml-a21-test-${Date.now()}-${Math.random()}.yml`);
+    delegate = new JsonSkillRepository(join(tmpdir(), `skills-a21-test-${Date.now()}-${Math.random()}.json`));
+    itemRepository = new FakeItemRepository(
+      new Map([
+        [501, fakeItem(501, "Red_Potion")],
+        [1201, fakeItem(1201, "Knife")],
+      ]),
+    );
+    repo = new YamlSkillRepository(delegate, importPath, itemRepository);
+  });
+
+  afterEach(async () => {
+    await rm(importPath, { force: true });
+  });
+
+  async function readEntry() {
+    const raw = await readFile(importPath, "utf8");
+    const doc = parseYamlText(raw) as { Body: unknown[] };
+    return RawSkillYamlSchema.parse(doc.Body[0]);
+  }
+
+  it("1) itemId válido resolve pro aegisName correto (via ItemCost)", async () => {
+    await repo.create(bash({ requirements: { itemsConsumed: [{ itemId: 501, amount: 1 }], requiredEquipment: [], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }));
+    const entry = await readEntry();
+    expect(entry.Requires?.ItemCost).toEqual([{ Item: "Red_Potion", Amount: 1 }]);
+  });
+
+  it("2) ItemCost com itemId válido → YAML contém aegisName, não o número", async () => {
+    const { warnings } = await repo.writeOverride(
+      bash({ requirements: { itemsConsumed: [{ itemId: 501, amount: 3, level: 2 }], requiredEquipment: [], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }),
+    );
+    const entry = await readEntry();
+    expect(entry.Requires?.ItemCost).toEqual([{ Item: "Red_Potion", Amount: 3, Level: 2 }]);
+    expect(warnings.some((w) => w.includes("ItemCost"))).toBe(false);
+  });
+
+  it("3) Equipment com itemId válido → YAML contém aegisName, não o número", async () => {
+    const { warnings } = await repo.writeOverride(
+      bash({ requirements: { itemsConsumed: [], requiredEquipment: [1201], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }),
+    );
+    const entry = await readEntry();
+    expect(entry.Requires?.Equipment).toEqual({ Knife: true });
+    expect(warnings.some((w) => w.includes("Equipment"))).toBe(false);
+  });
+
+  it("4) itemId inexistente: omitido do YAML + warning (nunca String(itemId) como fallback)", async () => {
+    const { warnings } = await repo.writeOverride(
+      bash({
+        requirements: {
+          itemsConsumed: [{ itemId: 999999, amount: 1 }],
+          requiredEquipment: [888888],
+          requiredWeapons: [],
+          requiredAmmo: [],
+          requiredStatuses: [],
+        },
+      }),
+    );
+    const entry = await readEntry();
+    expect(entry.Requires?.ItemCost ?? []).toEqual([]);
+    expect(entry.Requires?.Equipment ?? {}).toEqual({});
+    expect(warnings.some((w) => w.includes("ItemCost") && w.includes("999999"))).toBe(true);
+    expect(warnings.some((w) => w.includes("Equipment") && w.includes("888888"))).toBe(true);
+    // nunca grava o id cru como texto
+    const raw = await readFile(importPath, "utf8");
+    expect(raw).not.toContain("999999");
+    expect(raw).not.toContain("888888");
+  });
+
+  it("5) skill sem ItemCost/Equipment preserva o comportamento anterior (sem warning de item, sem chaves no YAML)", async () => {
+    const { warnings } = await repo.writeOverride(bash());
+    const entry = await readEntry();
+    expect(entry.Requires?.ItemCost ?? []).toEqual([]);
+    expect(entry.Requires?.Equipment ?? {}).toEqual({});
+    expect(warnings.some((w) => w.includes("ItemCost") || w.includes("Equipment"))).toBe(false);
+  });
+
+  it("6) múltiplos itens: todos resolvidos individualmente (ItemCost + Equipment juntos)", async () => {
+    const { warnings } = await repo.writeOverride(
+      bash({
+        requirements: {
+          itemsConsumed: [
+            { itemId: 501, amount: 2 },
+            { itemId: 999999, amount: 1 },
+          ],
+          requiredEquipment: [1201, 888888],
+          requiredWeapons: [],
+          requiredAmmo: [],
+          requiredStatuses: [],
+        },
+      }),
+    );
+    const entry = await readEntry();
+    expect(entry.Requires?.ItemCost).toEqual([{ Item: "Red_Potion", Amount: 2 }]);
+    expect(entry.Requires?.Equipment).toEqual({ Knife: true });
+    expect(warnings.some((w) => w.includes("999999"))).toBe(true);
+    expect(warnings.some((w) => w.includes("888888"))).toBe(true);
+  });
+
+  it("7) nenhum outro campo de Skill mudou (comparação com a skill sem itens)", async () => {
+    // mesma forma de `requirements` nos dois lados (armas/munição vazias em ambos)
+    // pra isolar a diferença EXCLUSIVAMENTE em itemsConsumed/requiredEquipment
+    await repo.create(bash({ requirements: { itemsConsumed: [], requiredEquipment: [], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }));
+    const withoutItems = await readEntry();
+    await rm(importPath, { force: true });
+
+    await repo.update(5, bash({ requirements: { itemsConsumed: [{ itemId: 501, amount: 1 }], requiredEquipment: [1201], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }));
+    const withItems = await readEntry();
+
+    const { Requires: _r1, ...restWithout } = withoutItems;
+    const { Requires: _r2, ...restWithItems } = withItems;
+    expect(restWithItems).toEqual(restWithout);
+    // dentro de Requires, só ItemCost/Equipment mudam — o resto (SpCost etc.) é idêntico
+    const { ItemCost: _ic1, Equipment: _eq1, ...requiresRestWithout } = withoutItems.Requires ?? {};
+    const { ItemCost: _ic2, Equipment: _eq2, ...requiresRestWithItems } = withItems.Requires ?? {};
+    expect(requiresRestWithItems).toEqual(requiresRestWithout);
   });
 });
