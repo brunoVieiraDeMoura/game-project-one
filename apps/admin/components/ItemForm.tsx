@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CharacterVariantSchema,
@@ -13,9 +13,10 @@ import {
   ItemTypeSchema,
   labelOf,
   type Item,
+  type StatusEffectDef,
 } from "@ragnarok/game-data";
-import { createItem, updateItem } from "@/lib/api";
-import { Button, Checkbox, Field, Input, Label, NumberField, Select, Section } from "./ui";
+import { createItem, listAllStatuses, updateItem } from "@/lib/api";
+import { Button, CatalogPickerField, Checkbox, Field, Input, Label, NumberField, Select, Section, type CatalogOption } from "./ui";
 import { EffectsEditor } from "./EffectsEditor";
 import { ITEM_LIMITS } from "@/lib/field-limits";
 
@@ -73,6 +74,25 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
   const [item, setItem] = useState<EditableItem>(initial ?? EMPTY);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // Fase 3: delay.statusId — write-path real (mysql-item-row.ts: delay_status
+  // coluna, ida e volta sem tradução). Catálogo eager (mesmo padrão de
+  // SkillForm.requiredStatuses) porque status já é carregado assim em
+  // outro form do mesmo tamanho de catálogo (~1000, cabe em 1 fetch).
+  const [statuses, setStatuses] = useState<StatusEffectDef[]>([]);
+  useEffect(() => {
+    listAllStatuses()
+      .then((res) => setStatuses(res.statuses))
+      .catch(() => setStatuses([]));
+  }, []);
+  async function searchStatusesForPicker(query: string): Promise<CatalogOption[]> {
+    const q = query.trim().toLowerCase();
+    const pool = q ? statuses.filter((s) => s.id.includes(q) || s.name.toLowerCase().includes(q)) : statuses;
+    return pool.slice(0, 30).map((s) => ({ value: s.id, label: `${s.name} (${s.id})` }));
+  }
+  async function resolveStatusLabel(value: string): Promise<string | undefined> {
+    const s = statuses.find((st) => st.id === value);
+    return s ? `${s.name} (${s.id})` : undefined;
+  }
 
   const set = <K extends keyof EditableItem>(key: K, value: EditableItem[K]) =>
     setItem((p) => ({ ...p, [key]: value }));
@@ -384,9 +404,14 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
               onChange={(v) => set("delay", { ...item.delay!, durationMs: v as number })}
               {...ITEM_LIMITS.delayDurationMs}
             />
-            <Field label="Status de controle (opcional)">
-              <Input value={item.delay.statusId ?? ""} onChange={(e) => set("delay", { ...item.delay!, statusId: e.target.value || undefined })} />
-            </Field>
+            <CatalogPickerField
+              label="Status de controle (opcional)"
+              value={item.delay.statusId}
+              onChange={(v) => set("delay", { ...item.delay!, statusId: v })}
+              search={searchStatusesForPicker}
+              resolveLabel={resolveStatusLabel}
+              emptyMeans="nenhum"
+            />
           </div>
         ) : (
           <p className="text-xs text-zinc-600">Sem delay.</p>

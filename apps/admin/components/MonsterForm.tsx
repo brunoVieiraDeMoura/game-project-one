@@ -15,9 +15,26 @@ import {
   labelOf,
   type Monster,
 } from "@ragnarok/game-data";
-import { createMonster, updateMonster } from "@/lib/api";
-import { Button, Checkbox, Field, Input, MultiSelectField, NumberField, Section, Select } from "./ui";
+import { createMonster, getItem, listItems, updateMonster } from "@/lib/api";
+import { Button, CatalogPickerField, Checkbox, Field, Input, MultiSelectField, NumberField, Section, Select, type CatalogOption } from "./ui";
 import { MONSTER_LIMITS } from "@/lib/field-limits";
+
+/** Fase 3: `drops[].itemId`/`mvpDrops[].itemId` são de verdade resolvidos
+ * pro aegis name antes de gravar (`mysql-monster-row.ts:
+ * resolveItemName`) — write-path real, confirmado na auditoria (não é o
+ * mesmo bug do ItemCost de Skill). Busca assíncrona: catálogo de item é
+ * grande demais pra carregar inteiro (soul.txt/CLAUDE.md: 29k itens). */
+async function searchItemsForPicker(query: string): Promise<CatalogOption[]> {
+  if (!query.trim()) return [];
+  const res = await listItems({ page: 1, pageSize: 20, search: query });
+  return res.items.map((it) => ({ value: String(it.id), label: `${it.name} (${it.id})` }));
+}
+async function resolveItemLabel(value: string): Promise<string | undefined> {
+  const id = Number(value);
+  if (!Number.isFinite(id)) return undefined;
+  const it = await getItem(id);
+  return `${it.name} (${it.id})`;
+}
 
 /** Full-coverage monster form (soul.txt §5.4). */
 
@@ -75,11 +92,13 @@ function DropRows({
       <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
         {drops.map((d, i) => (
           <div key={i} className="flex items-end gap-2">
-            <NumberField
-              label="Item ID"
-              className="w-28"
-              value={d.itemId}
-              onChange={(v) => update(i, { itemId: v as number })}
+            <CatalogPickerField
+              label="Item"
+              className="w-56"
+              value={String(d.itemId)}
+              onChange={(v) => update(i, { itemId: v ? Number(v) : (undefined as unknown as number) })}
+              search={searchItemsForPicker}
+              resolveLabel={resolveItemLabel}
             />
             <NumberField
               label="Taxa (%)"

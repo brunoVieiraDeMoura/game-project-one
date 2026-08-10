@@ -1,25 +1,23 @@
 # Relatório de risco — Auditoria de inputs Admin vs rAthena
 
-Atualizado após a Fase 2c (states[]/calcFlags[] do Status, Opção A aprovada). A1 foi CORRIGIDO em
-código nesta rodada (`packages/game-data/src/rathena/status-db-mapper.ts` — 11 chaves adicionadas
-às tabelas `STATE_READABLE`/`CALC_FLAG_READABLE`, cada uma confirmada contra `status.hpp` antes da
-edição), com teste de regressão (`status-flag-options.test.ts`, 6 casos incl. prova de write-path
-real). Os demais 18 achados ativos continuam só relatados — nenhum outro corrigido. Revisão
-anterior (Fase 0+1) já havia reconferido evidência primária de A1, A2, A9, A10/A11, A15, A19 e
-encontrado 1 achado incorreto (A2 — retratado) e 1 confirmado (A19).
+Atualizado após a auditoria da Fase 3 (Catalog Pickers). 3 achados NOVOS (A21-A23) descobertos ao
+avaliar write-path de candidatos a picker — nenhum corrigido, todos bloquearam a conversão do
+campo correspondente. Fase 2c já havia corrigido A1 em código (`status-db-mapper.ts`, 11 chaves
+completadas). Revisão de Fase 0+1 reconferiu evidência primária de A1, A2, A9, A10/A11, A15, A19 e
+encontrou 1 achado incorreto (A2 — retratado) e 1 confirmado (A19).
 
 ## Resumo
 
 | Severidade | Contagem |
 |---|---|
-| alta | 8 (A1 saiu — resolvido; A19 permanece alta) |
-| média | 6 |
+| alta | 9 (A1 resolvido; A19 permanece alta; +A21 nova) |
+| média | 8 (+A22, A23 novas) |
 | baixa | 4 |
 | resolvido em código | 1 (A1) |
 | retratado (achado incorreto, não conta como risco) | 1 (A2) |
 
-**18 achados ativos** (A3-A20, excluindo A1 resolvido e A2 retratado) + 1 resolvido + 1 retratado =
-20 linhas no total. Bloqueados por aprovação: **18**. Corrigidos em código: **1** (A1). Ver
+**21 achados ativos** (A3-A23, excluindo A1 resolvido e A2 retratado) + 1 resolvido + 1 retratado =
+23 linhas no total. Bloqueados por aprovação: **21**. Corrigidos em código: **1** (A1). Ver
 `docs/audit/{items,monsters,skills,statuses,job-classes,monster-skills}.md` para o detalhamento
 campo-a-campo que originou cada linha abaixo.
 
@@ -45,6 +43,10 @@ campo-a-campo que originou cada linha abaixo.
 | A18 | baixa | schema | `JobClass.aspdModifiers[].baseAspd` é `z.number()` (aceita decimal) no zod, mas o campo real do rAthena é `int16` (sempre inteiro) — um valor decimal nunca é válido no servidor | `packages/game-data/src/job-class.ts` (AspdModifierSchema) vs `pc.cpp:13945-13968` (int16) | Usuário grava `123.5`, zod aceita, servidor real trunca/rejeita | Nenhuma nesta rodada — `NumberField` aplica min/max mas não força `step=1` (mudaria zod pra decidir se aceita decimal), decisão de schema | sim | fora de escopo |
 | A19 | **alta — CONFIRMADO nesta revisão** | write-path (SQL) | `Item.delay.durationMs` está nomeado/documentado como MILISSEGUNDOS no zod, mas o campo real do rAthena (`Delay.Duration`) é em **SEGUNDOS** (`doc/item_db.txt:250`, literal: "Duration of delay in seconds"). **Verificado nesta revisão**: `apps/api/src/store/mysql-item-row.ts:210,338` grava `delay_duration: item.delay?.durationMs ?? null` — passagem DIRETA, zero conversão (`/1000` ou `*1000`) em qualquer ponto do read/write path. Não é mais hipótese — é bug de dado ATIVO: todo item com delay de uso salvo por este admin grava um valor 1000× maior que o pretendido no `delay_duration` (coluna que o rAthena lê como segundos) | `apps/api/src/store/mysql-item-row.ts:210` (read: `durationMs: row.delay_duration ?? 0`, sem conversão), `:338` (write: `delay_duration: item.delay?.durationMs ?? null`, sem conversão); `rathena/src/map/itemdb.cpp:765-777` (`Delay.Duration` uint32); `rathena/doc/item_db.txt:250` ("Duration of delay in seconds") | TODO item com delay de uso (`item.delay.durationMs`) salvo com este admin fica com delay real 1000× o valor mostrado na UI — ex. usuário digita "3000" (querendo 3s) e o servidor real aplica 3000 segundos (50 minutos) de delay | Adicionar conversão ms↔segundos em `mysqlRowToItem`/`itemToMysqlRow` (`* 1000` no read, `/ 1000` no write) — é fix de write-path/schema, fora do escopo desta auditoria de UI, mas severidade alta o suficiente pra tratar antes de qualquer outra fase | sim | fora de escopo (backend/writer) — recomendado priorizar antes da Fase 2 |
 | A20 | baixa | frontend | `SkillForm.tsx`/`MonsterForm.tsx`/`StatusForm.tsx` tinham `TokenListField` local duplicado (3×) com bug de não resincronizar de `useState(initial)` com props — linha deletada no meio de uma lista indexada deixava texto de outra linha em componente sobrevivente | `SkillForm.tsx:76-105` (antes da Fase0), `MonsterForm.tsx:51`, `StatusForm.tsx:26` | Editor de flags CSV podia mostrar texto desatualizado após deletar uma linha do meio | **Corrigido na Fase 0** — `TokenListField` consolidado em `ui.tsx`, ainda com o mesmo bug de estado local (o fix definitivo vem só com `MultiSelectField` na Fase 2, que não tem estado espelhado) | não | Fase0 (mitigado, fix completo em Fase2) |
+
+| A21 | alta | write-path (YAML) | `Skill.requirements.itemsConsumed[].itemId`/`.requiredEquipment[]` — o writer grava o ID NUMÉRICO como string crua (`item: String(c.itemId)`, `out[String(id)] = true`) direto em `ItemCost.Item`/`Equipment` do `skill_db.yml`, mas rAthena espera o AEGIS NAME do item nesses campos (mesmo padrão que `Monster.drops[].itemId` já resolve corretamente via `resolveItemName`). O próprio módulo já documentava isso como aviso, nunca corrigido: `warnings.push("ItemCost/Equipment gravados com o ID do item como texto — o Writer precisa resolver pro aegis name antes de escrever")` — descoberto (não corrigido) durante a auditoria de Fase 3, ao avaliar se esses campos eram candidatos seguros a `CatalogPickerField` | `packages/game-data/src/rathena/skill-db-mapper.ts:252,256,264` | Toda skill com item consumido ou equipamento exigido salva um `ItemCost`/`Equipment` que o rAthena não consegue resolver pro item real (o loader busca por nome, recebe um número) — a exigência de item pode falhar silenciosamente no load | Resolver `itemId`→aegisName no mapper (precisa de um `ItemNameResolver`, mesmo padrão de `mysql-monster-row.ts`) antes de escrever `ItemCost.Item`/`Equipment` | sim | fora de escopo — **bloqueou `CatalogPickerField` nestes 2 campos na Fase 3** |
+| A22 | média | write-path (YAML) | `JobClass.parentClassId` tem 3 comportamentos DESCONECTADOS: (1) persiste em Supabase (`job-class-row.ts: parent_class_id`); (2) na leitura do catálogo YAML real, é SOBRESCRITO por `deriveParentClassId` a partir de `Inherit` do `skill_tree.yml` (`job-class-mapper.ts:495`); (3) na ESCRITA pro `skill_tree.yml`, `Inherit` é montado a partir de `skillTreeInherit[]` (array), não de `parentClassId` (singular) — `jobClassToSkillTreeEntry`. Editar `parentClassId` no admin não afeta `Inherit` gravado, e a próxima leitura recalcula `parentClassId` a partir do `Inherit` antigo, sobrescrevendo silenciosamente o que foi digitado. Descoberto durante a auditoria de Fase 3, ao avaliar se era candidato seguro a picker | `packages/game-data/src/rathena/job-class-mapper.ts:495` (read, deriva de Inherit), `:381-396` (write, usa `skillTreeInherit` não `parentClassId`) | Operador troca a classe pai no admin, salva, vê "sucesso", recarrega — o valor volta ao que `Inherit`/`skillTreeInherit` diziam antes; a edição nunca chega no `skill_tree.yml` real | Decidir um design: ou `parentClassId` passa a escrever em `skillTreeInherit` (perde a cardinalidade múltipla que `skillTreeInherit[]` permite), ou o campo vira read-only na UI com um editor de `skillTreeInherit[]` (que hoje não tem UI nenhuma) no lugar | sim | fora de escopo — **bloqueou `CatalogPickerField` neste campo na Fase 3** |
+| A23 | média | write-path (SQL) | `Monster.spawns[]` nunca é lido nem escrito por `mysql-monster-row.ts`/`mysql-monster-repository.ts` (zero referências, confirmado por grep) — sob o backend MySQL ativo (`hasRoDatabase()` hoje), todo monstro carrega `spawns: []` (default do zod, já que a linha SQL não tem essa informação) e qualquer edição de spawn no admin é descartada no save sem erro. Coerente com o comentário já existente no módulo ("Spawns NÃO estão nesta tabela: no rAthena eles são linhas de script NPC") — mas o `MonsterForm` continua expondo edição completa de spawns como se persistisse. Descoberto durante a auditoria de Fase 3 | grep `apps/api/src/store/mysql-monster-row.ts` + `mysql-monster-repository.ts` (zero ocorrências de `spawns`) | Operador edita/adiciona spawn no admin, salva, "sucesso" — nada persiste; ao recarregar o monstro os spawns editados sumiram, sem aviso nenhum de que aquela seção não é gravável neste backend | Nenhuma nesta rodada — considerar UI marcar a seção "Spawns" como somente-leitura/informativa quando o backend for MySQL, já que gravar spawn de verdade exigiria escrever script NPC, fora do escopo de write-path deste form | sim | fora de escopo — **bloqueou `CatalogPickerField` em `spawns[].mapId` na Fase 3** |
 
 ## Achados corrigidos nesta rodada
 

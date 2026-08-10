@@ -7,9 +7,26 @@ import {
   JobClassSchema,
   type JobClass,
 } from "@ragnarok/game-data";
-import { createJobClass, updateJobClass } from "@/lib/api";
-import { Button, Field, Input, NumberField, Section, Select } from "./ui";
+import { createJobClass, getSkill, listSkills, updateJobClass } from "@/lib/api";
+import { Button, CatalogPickerField, Field, Input, NumberField, Section, Select, type CatalogOption } from "./ui";
 import { JOB_LIMITS } from "@/lib/field-limits";
+
+/** Fase 3: `skills[].skillId` tem write-path real —
+ * `jobClassToSkillTreeEntry`/`rawTreeSkillFromEntry` (`job-class-mapper.ts`)
+ * resolve o id pro aegis name via `SkillIdResolver.nameOf` antes de gravar
+ * `Tree[].Name` no `skill_tree.yml` (diferente do bug confirmado em
+ * `SkillForm.requirements.itemsConsumed`, que grava o ID cru). */
+async function searchSkillsForPicker(query: string): Promise<CatalogOption[]> {
+  if (!query.trim()) return [];
+  const res = await listSkills({ page: 1, pageSize: 20, search: query });
+  return res.skills.map((s) => ({ value: String(s.id), label: `${s.name} (${s.id})` }));
+}
+async function resolveSkillLabel(value: string): Promise<string | undefined> {
+  const id = Number(value);
+  if (!Number.isFinite(id)) return undefined;
+  const s = await getSkill(id);
+  return `${s.name} (${s.id})`;
+}
 
 /** Full-coverage job class form (soul.txt §5.2). */
 
@@ -238,11 +255,13 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
         <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
           {jc.skills.map((s, i) => (
             <div key={i} className="flex items-end gap-2">
-              <NumberField
-                label="Skill ID"
-                className="w-28"
-                value={s.skillId}
-                onChange={(v) => updateSkill(i, { skillId: v as number })}
+              <CatalogPickerField
+                label="Skill"
+                className="w-56"
+                value={String(s.skillId)}
+                onChange={(v) => updateSkill(i, { skillId: v ? Number(v) : (undefined as unknown as number) })}
+                search={searchSkillsForPicker}
+                resolveLabel={resolveSkillLabel}
               />
               <NumberField
                 label="Nível máx"

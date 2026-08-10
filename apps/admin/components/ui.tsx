@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
 
 /** Minimal shadcn-style primitives (project has no shadcn CLI setup yet). */
@@ -402,6 +402,148 @@ export function MultiSelectField({
               Fechar
             </button>
           </div>
+        </div>
+      )}
+    </Field>
+  );
+}
+
+export type CatalogOption = { value: string; label: string };
+
+/** Seletor de referência a catálogo (Fase 3) — busca em texto, mostra
+ * ID+nome, guarda SÓ o valor (id numérico como string, ou aegis name —
+ * quem chama decide o formato, o componente é agnóstico). Cobre tanto
+ * catálogo EAGER (`search` filtra uma lista já carregada, resolve na
+ * hora) quanto ASSÍNCRONO (`search` chama a API a cada busca, debounce
+ * de 200ms embutido) — a única diferença é o que `search`/`resolveLabel`
+ * fazem por dentro; o componente não sabe a diferença.
+ *
+ * Valor sem `resolveLabel` bem-sucedido (id não existe no catálogo, ou
+ * falha de rede) mostra o valor CRU em âmbar — nunca fica em branco,
+ * nunca é trocado sozinho, sempre preservado ao salvar (mesma garantia
+ * de `MultiSelectField` pro valor legado). */
+export function CatalogPickerField({
+  label,
+  value,
+  onChange,
+  search,
+  resolveLabel,
+  placeholder = "Buscar...",
+  emptyMeans,
+  className = "",
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+  search: (query: string) => Promise<CatalogOption[]>;
+  resolveLabel?: (value: string) => Promise<string | undefined>;
+  placeholder?: string;
+  emptyMeans?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<CatalogOption[]>([]);
+  const [resolved, setResolved] = useState<string | undefined>(undefined);
+  const [resolving, setResolving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setResolved(undefined);
+    if (value === undefined || !resolveLabel) return;
+    setResolving(true);
+    resolveLabel(value)
+      .then((l) => {
+        if (!cancelled) setResolved(l);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setResolving(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      search(q)
+        .then((r) => {
+          if (!cancelled) setResults(r);
+        })
+        .catch(() => {
+          if (!cancelled) setResults([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [q, open]);
+
+  const unresolved = value !== undefined && !resolving && resolved === undefined;
+
+  return (
+    <Field label={label} className={`relative ${className}`}>
+      {!open ? (
+        <div
+          className="flex min-h-[2.25rem] w-full items-center justify-between gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 cursor-text"
+          onClick={() => {
+            setOpen(true);
+            setQ("");
+          }}
+        >
+          <span className={`truncate text-sm ${value === undefined ? "text-zinc-500" : unresolved ? "text-amber-400" : "text-zinc-100"}`}>
+            {value === undefined
+              ? (emptyMeans ?? "—")
+              : resolving
+                ? `${value}…`
+                : unresolved
+                  ? `${value} (fora do catálogo!)`
+                  : resolved}
+          </span>
+          {value !== undefined && (
+            <button
+              type="button"
+              className="shrink-0 text-red-400 hover:text-red-300 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(undefined);
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ) : (
+        <Input
+          autoFocus
+          placeholder={placeholder}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        />
+      )}
+      {open && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 shadow-lg">
+          {results.length === 0 && <p className="p-2 text-xs text-zinc-500">Nenhum resultado.</p>}
+          {results.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className="block w-full px-2 py-1.5 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       )}
     </Field>

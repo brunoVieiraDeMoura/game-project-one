@@ -13,9 +13,27 @@ import {
   labelOf,
   type StatusEffectDef,
 } from "@ragnarok/game-data";
-import { createStatus, updateStatus } from "@/lib/api";
-import { Badge, Button, Field, Input, MultiSelectField, NumberField, Section, Select, TokenListField } from "./ui";
+import { createStatus, listSkills, updateStatus } from "@/lib/api";
+import { Badge, Button, CatalogPickerField, Field, Input, MultiSelectField, NumberField, Section, Select, TokenListField, type CatalogOption } from "./ui";
 import { STATUS_LIMITS } from "@/lib/field-limits";
+
+/** Fase 3: `durationLookupSkill` guarda o AEGIS NAME da skill (não um id
+ * numérico) — `status-db-mapper.ts` grava `DurationLookup` verbatim
+ * (busca do rAthena é por nome, case-insensitive: `skill_name2id`).
+ * Não existe endpoint "skill por aegis name", então resolver o rótulo de
+ * um valor já salvo é uma busca por esse texto e um match exato no
+ * resultado — se não achar (id fora do catálogo local, ou erro de rede),
+ * cai no comportamento padrão do picker (mostra o valor cru, preserva). */
+async function searchSkillsForDurationLookup(query: string): Promise<CatalogOption[]> {
+  if (!query.trim()) return [];
+  const res = await listSkills({ page: 1, pageSize: 20, search: query });
+  return res.skills.map((s) => ({ value: s.aegisName, label: `${s.name} (${s.aegisName})` }));
+}
+async function resolveDurationLookupLabel(value: string): Promise<string | undefined> {
+  const res = await listSkills({ page: 1, pageSize: 5, search: value });
+  const match = res.skills.find((s) => s.aegisName.toLowerCase() === value.toLowerCase());
+  return match ? `${match.name} (${match.aegisName})` : undefined;
+}
 
 /** Form do catálogo de statuses (soul.txt §5.3). */
 
@@ -207,12 +225,14 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
 
       <Section title="Duração e resistência">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Field label="Skill de duração (aegis, DurationLookup)">
-            <Input
-              value={st.durationLookupSkill ?? ""}
-              onChange={(e) => set("durationLookupSkill", e.target.value === "" ? undefined : e.target.value)}
-            />
-          </Field>
+          <CatalogPickerField
+            label="Skill de duração (DurationLookup)"
+            value={st.durationLookupSkill}
+            onChange={(v) => set("durationLookupSkill", v)}
+            search={searchSkillsForDurationLookup}
+            resolveLabel={resolveDurationLookupLabel}
+            emptyMeans="nenhuma"
+          />
           <NumberField
             label="Duração padrão (ms)"
             value={st.defaultDurationMs}
