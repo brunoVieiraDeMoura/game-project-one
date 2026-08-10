@@ -5,6 +5,7 @@ import type { NpcRepository } from "../store/npc-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
 import { applyNpcScriptEdit, rollbackAppliedWrite } from "../store/npc-script-sync";
+import { queueReload } from "../store/mysql-item-repository.js";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -72,6 +73,7 @@ export function npcRoutes(repo: NpcRepository, security: SecurityContext | null 
         // Writer significa NADA muda, nem banco nem .txt, mesmo que outros
         // campos do mesmo request (nome/posição/warp/shop) fossem válidos.
         let rollbackFile: (() => void) | null = null;
+        let scriptFileChanged = false;
         if (npcScriptRoot) {
           const sync = applyNpcScriptEdit(npcScriptRoot, current, body.data);
           if (sync.kind === "refused") {
@@ -84,6 +86,7 @@ export function npcRoutes(repo: NpcRepository, security: SecurityContext | null 
           }
           if (sync.kind === "applied") {
             rollbackFile = () => rollbackAppliedWrite(sync.absPath, sync.previousRawText);
+            scriptFileChanged = true;
           }
         }
 
@@ -98,6 +101,16 @@ export function npcRoutes(repo: NpcRepository, security: SecurityContext | null 
               targetId: p.data.id,
               payload: updated,
             });
+          }
+          // achado da auditoria independente da Fase 3: diferente de todo
+          // outro módulo (item/mob/skill/status), a edição de diálogo de NPC
+          // gravava o .txt real e o banco com sucesso mas NUNCA enfileirava
+          // `@reloadscript` — o rAthena rodando continuava servindo o texto
+          // ANTIGO até um restart manual. Só depois que os dois lados (arquivo
+          // + banco) confirmaram, nunca antes (rollback do arquivo em caso de
+          // falha do banco não deixaria um reload órfão pra um texto revertido).
+          if (scriptFileChanged) {
+            await queueReload("script");
           }
           return updated;
         } catch (dbErr) {
