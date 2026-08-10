@@ -1,0 +1,38 @@
+// --------------------------------------------------------------
+// -   game-project — substitui o npc/scripts_custom.conf vanilla  -
+// --------------------------------------------------------------
+//
+// ## Por que este arquivo existe, e por que TEM que ser este
+//
+// Trocar o spawn de um mapa exige TIRAR o arquivo oficial da lista, e o
+// `delnpc:` só funciona depois que ele já entrou nela (`npc_delsrcfile` em
+// `src/map/npc.cpp` faz um `vector_erase_if_exists` — apagar o que ainda não
+// está lá é no-op).
+//
+// A ordem é esta (src/map/map.cpp):
+//   :5357  map_config_read()  → conf/map_athena.conf → conf/import/map_conf.txt
+//   :5363  map_reloadnpc()    → npc/re/scripts_main.conf → ... → os spawns
+//   :5444  do_init_npc()      → só AQUI a lista é lida de verdade
+//
+// Ou seja: um `delnpc:` no nosso `rathena-conf/map_conf.txt` roda ANTES dos
+// spawns oficiais entrarem e não faz nada. O único gancho posterior é a última
+// linha do `npc/re/scripts_main.conf`:
+//
+//   import: npc/scripts_custom.conf
+//
+// Daí este arquivo. Ele chega ao rAthena por SYMLINK (scripts/wsl-setup.sh),
+// como o `conf/import` e o `npc/game-project` — nada dentro de `rathena/` no
+// repo é escrito.
+//
+// ## Cuidado ao mexer
+//
+// `delnpc:` apaga o ARQUIVO inteiro, e `npc/re/mobs/fields/prontera.txt` cobre
+// DOZE mapas (prt_fild00..prt_fild11), não só o 08. Por isso o substituto em
+// `npc-idle/mobs/prontera.txt` é uma CÓPIA do oficial com apenas o bloco do
+// prt_fild08 trocado: os outros onze continuam idênticos ao renewal. Ao subir
+// de versão o rAthena, é essa cópia que precisa ser reconciliada.
+
+// prt_fild08 volta ao spawn do RO original (140 monstros, não os 271 do
+// renewal) — ver o comentário no topo do bloco no arquivo abaixo.
+delnpc: npc/re/mobs/fields/prontera.txt
+npc: npc/game-project/mobs/prontera.txt

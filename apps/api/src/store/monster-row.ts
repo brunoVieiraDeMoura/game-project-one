@@ -96,7 +96,7 @@ export function monsterToRow(m: Monster): MonsterRow {
     class: m.class,
     modes: m.modes,
     race_groups: m.raceGroups,
-    group_id: m.groupId,
+    group_id: m.groupId ?? 0,
     title: m.title ?? null,
     race: m.race,
     element: m.element,

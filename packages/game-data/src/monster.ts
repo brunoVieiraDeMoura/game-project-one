@@ -110,7 +110,11 @@ export const MonsterSchema = z.object({
   modes: z.array(z.string()).default([]),
   /** secondary groups: goblin, kobold, treasure, biolab, ... */
   raceGroups: z.array(z.string()).default([]),
-  groupId: z.number().int().default(0),
+  /** ausente = sem grupo. NUNCA `.default(0)`: rAthena rejeita GroupId=0
+   * explícito no load ("Node 'GroupId' needs to be at least 1") — reproduzido
+   * ao vivo na Fase 3 (docs/audit/fase3-testes/monstros.md). Um campo limpo
+   * no admin tem que virar ausente, não 0. */
+  groupId: z.number().int().optional(),
   title: z.string().optional(),
 
   race: RaceSchema,

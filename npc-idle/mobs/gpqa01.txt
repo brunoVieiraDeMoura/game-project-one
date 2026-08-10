@@ -1,0 +1,13 @@
+//===== game-project Script ===================================
+//= gpqa01 — Monster Spawn Script (QA, Fase 3)
+//===== Descrição: ============================================
+//= Mapa de teste criado na bateria de testes funcionais reais da Fase 3
+//= (docs/audit/fase3-testes/). Spawna o monstro novo criado nesta rodada
+//= (GPQA_NOVO_MOB, id 39001) e um monstro real já existente do rAthena
+//= (Poring, id 1002) no mesmo mapa, pra provar que os dois coexistem e
+//= que o spawn passa pelo caminho real do servidor (script NPC, não o
+//= admin — `Monster.spawns[]` não persiste no MySQL, ver risk-report A23).
+//==============================================================
+
+gpqa01,64,64,10,10	monster	QA Slime Novo	25001,3,5000
+gpqa01,50,50,10,10	monster	Poring	1002,3,5000

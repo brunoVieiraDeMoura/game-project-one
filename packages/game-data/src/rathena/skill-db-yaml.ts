@@ -709,7 +709,21 @@ export function reemitRawSkillYaml(p: ParsedSkillEntry): RawSkillYaml {
             ZenyCost: perLevel(p.requires.zenyCost, "Amount"),
             ...(Object.keys(p.requires.weapon).length ? { Weapon: p.requires.weapon } : {}),
             ...(Object.keys(p.requires.ammo).length ? { Ammo: p.requires.ammo } : {}),
-            AmmoAmount: perLevel(p.requires.ammoAmount, "Amount"),
+            // Nunca emitir sem pelo menos 1 tipo de munição MARCADO (`true`) —
+            // o loader real rejeita ("An ammo type is required before
+            // specifying ammo amount.", skill.cpp:15432-15434) se `AmmoAmount`
+            // existir no YAML e `require.ammo` for 0. `Object.keys(...).length`
+            // não basta de gate: o formulário do admin (MultiSelectField)
+            // manda o mapa de munição com TODAS as chaves presentes e `false`
+            // (não omite as desmarcadas), então `.length` nunca é 0 depois de
+            // uma skill passar pelo admin — precisa checar se ALGUM valor é
+            // `true`. Antes disto `AmmoAmount` era emitido incondicional, e
+            // QUALQUER skill nova (sem munição) recém-criada pelo admin
+            // derrubava a linha inteira no reload/boot — reproduzido ao vivo
+            // na Fase 3 (docs/audit/fase3-testes/skills.md).
+            ...(Object.values(p.requires.ammo).some(Boolean)
+              ? { AmmoAmount: perLevel(p.requires.ammoAmount, "Amount") }
+              : {}),
             ...(p.requires.state ? { State: p.requires.state } : {}),
             ...(Object.keys(p.requires.status).length ? { Status: p.requires.status } : {}),
             SpiritSphereCost: perLevel(p.requires.spiritSphereCost, "Amount"),
@@ -736,3 +750,4 @@ export function reemitRawSkillYaml(p: ParsedSkillEntry): RawSkillYaml {
     ...(p.status ? { Status: p.status } : {}),
   });
 }
+

@@ -242,7 +242,11 @@ export function monsterToMysqlRow(monster: Monster, resolveItemName: ItemNameRes
 		attack_motion: monster.attackMotionMs,
 		damage_motion: monster.damageMotionMs,
 		damage_taken: monster.damageTaken,
-		groupid: monster.groupId,
+		// null, nunca 0: rAthena rejeita GroupId=0 explícito no load da linha
+		// inteira ("Node 'GroupId' needs to be at least 1") — mob_db.cpp exige
+		// ausência (NULL) pra "sem grupo", não zero. Reproduzido ao vivo na
+		// Fase 3 (docs/audit/fase3-testes/monstros.md).
+		groupid: monster.groupId ?? null,
 		title: monster.title ?? null,
 		ai: monster.ai,
 		class: upperFirst(monster.class),

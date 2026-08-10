@@ -11,3 +11,10 @@ map_port: 5122
 // evita editar qualquer arquivo dentro de rathena/.
 npc: npc/game-project/devmenu.txt
 npc: npc/game-project/panel.txt
+
+// Mapas customizados (Fase 3, testes funcionais reais). `map:` é o que faz
+// ESTE map-server hospedar o mapa (map_addmap, map.cpp); sem esta linha o
+// mapindex conhece o nome/id (rathena-db-import/map_index.txt) mas nenhum
+// servidor responde por ele — o cliente trava em "conectando ao mapa".
+map: gpqa01
+npc: npc/game-project/mobs/gpqa01.txt

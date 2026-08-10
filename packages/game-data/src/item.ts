@@ -124,6 +124,19 @@ export const ItemSchema = z.object({
   onUse: EffectListSchema.optional(),
   onEquip: EffectListSchema.optional(),
   onUnequip: EffectListSchema.optional(),
+
+  /** Texto cru do script legado (Script/EquipScript/UnEquipScript do
+   * item_db) — a fonte real que o rAthena roda; `onUse`/`onEquip`/`onUnequip`
+   * acima são só leitura estruturada (EffectsEditor, A9). Sem estes 3 campos
+   * aqui, `ItemSchema.safeParse` no `PUT /items/:id` descartava o texto
+   * digitado no `RawScriptField` do admin ANTES de chegar no
+   * `MysqlItemRepository` — o operador editava o script, via de fato salvava,
+   * mas o valor nunca saía do formulário (achado ao vivo, Fase 3, ver
+   * docs/audit/fase3-testes/itens.md). Só o backend MySQL usa (`MysqlItem`,
+   * `mysql-item-row.ts`); Supabase/JSON ignoram por não terem script legado. */
+  rawScript: z.string().optional(),
+  rawEquipScript: z.string().optional(),
+  rawUnequipScript: z.string().optional(),
 });
 export type Item = z.infer<typeof ItemSchema>;
 
