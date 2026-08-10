@@ -34,10 +34,18 @@ export function EffectsEditor({
   label,
   value,
   onChange,
+  /** A9: `onUse`/`onEquip`/`onUnequip` não têm write-path nenhum sob o
+   * backend MySQL ativo (`mysql-item-row.ts` nunca lê nem grava esses
+   * campos — só `rawScript`/`rawEquipScript`/`rawUnequipScript`, o texto
+   * cru, persiste de verdade). Sem trava, o componente deixava editar
+   * livremente algo que o Save descarta em silêncio — obrigatório, não
+   * opcional, pra todo chamador decidir isto de propósito. */
+  readOnly,
 }: {
   label: string;
   value: EffectList | undefined;
   onChange: (v: EffectList | undefined) => void;
+  readOnly: boolean;
 }) {
   const list: EffectList = value ?? { effects: [], unmappedEffects: [] };
 
@@ -51,7 +59,7 @@ export function EffectsEditor({
   }
 
   return (
-    <div className="rounded-md border border-zinc-800 p-3">
+    <fieldset disabled={readOnly} className="rounded-md border border-zinc-800 p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase text-zinc-400">{label}</span>
         <Button
@@ -241,6 +249,6 @@ export function EffectsEditor({
           </ul>
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }

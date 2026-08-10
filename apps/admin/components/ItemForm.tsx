@@ -532,9 +532,9 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
 
       <Section title="Efeitos reconhecidos (leitura)">
         <div className="space-y-3">
-          <EffectsEditor label="Ao usar" value={item.onUse} onChange={(v) => set("onUse", v)} />
-          <EffectsEditor label="Ao equipar" value={item.onEquip} onChange={(v) => set("onEquip", v)} />
-          <EffectsEditor label="Ao desequipar" value={item.onUnequip} onChange={(v) => set("onUnequip", v)} />
+          <EffectsEditor label="Ao usar" value={item.onUse} onChange={(v) => set("onUse", v)} readOnly />
+          <EffectsEditor label="Ao equipar" value={item.onEquip} onChange={(v) => set("onEquip", v)} readOnly />
+          <EffectsEditor label="Ao desequipar" value={item.onUnequip} onChange={(v) => set("onUnequip", v)} readOnly />
         </div>
       </Section>
 
