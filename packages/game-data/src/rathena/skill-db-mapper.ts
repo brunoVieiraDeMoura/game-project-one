@@ -182,8 +182,13 @@ export function skillToParsedEntry(
   }
 
   const hit = REV_HIT[skill.hitType];
-  if (skill.hitType === "critical") {
-    warnings.push(`hitType "critical" não existe como constante exportada no rAthena (DMG_CRITICAL) — Hit não foi alterado`);
+  // A13: SkillDbHitSchema/REV_HIT só têm Single/Multi_Hit — "critical" já
+  // avisava, "normal" não (achado na auditoria: 279/1635 = 17% do catálogo
+  // real usa "normal", e cada um delas perdia o Hit: em silêncio no save).
+  if (skill.hitType === "critical" || skill.hitType === "normal") {
+    warnings.push(
+      `hitType "${skill.hitType}" não tem representação em skill_db.yml (só Single/Multi_Hit) — Hit não foi gravado`,
+    );
   }
 
   // mesma regra de `expandToThirteen`: níveis 1..max vêm do Skill, 11-13

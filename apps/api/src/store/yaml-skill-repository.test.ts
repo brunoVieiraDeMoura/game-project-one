@@ -196,6 +196,20 @@ describe("YamlSkillRepository — Writer schema-first (Parser+Mapper+Validator j
     );
     expect(warnings.some((w) => w.includes("damageFormula"))).toBe(true);
   });
+
+  it("A13: hitType \"normal\" agora avisa (antes só \"critical\" avisava) — Hit some do YAML nos dois casos", async () => {
+    const { warnings } = await repo.writeOverride(bash({ hitType: "normal" }));
+    expect(warnings.some((w) => w.includes('hitType "normal"'))).toBe(true);
+
+    const raw = await readFile(importPath, "utf8");
+    const entry = RawSkillYamlSchema.parse((parseYamlText(raw) as { Body: unknown[] }).Body[0]);
+    expect(entry.Hit).toBeUndefined();
+  });
+
+  it("A13: hitType \"critical\" continua avisando (comportamento preexistente, não regrediu)", async () => {
+    const { warnings } = await repo.writeOverride(bash({ hitType: "critical" }));
+    expect(warnings.some((w) => w.includes('hitType "critical"'))).toBe(true);
+  });
 });
 
 describe("YamlSkillRepository — ItemCost/Equipment resolvem itemId → aegisName (achado A21)", () => {
