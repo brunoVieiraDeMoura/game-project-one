@@ -12,7 +12,8 @@ import {
   type StatusEffectDef,
 } from "@ragnarok/game-data";
 import { createStatus, updateStatus } from "@/lib/api";
-import { Badge, Button, Field, Input, Section, Select } from "./ui";
+import { Badge, Button, Field, Input, NumberField, Section, Select, TokenListField } from "./ui";
+import { STATUS_LIMITS } from "@/lib/field-limits";
 
 /** Form do catálogo de statuses (soul.txt §5.3). */
 
@@ -22,37 +23,6 @@ const EMPTY: StatusEffectDef = StatusEffectDefSchema.parse({
   id: "novo_status",
   name: "Novo Status",
 });
-
-function TokenListField({
-  label,
-  values,
-  onChange,
-  className,
-}: {
-  label: string;
-  values: string[];
-  onChange: (v: string[]) => void;
-  className?: string;
-}) {
-  const [text, setText] = useState(values.join(", "));
-  return (
-    <Field label={label} className={className}>
-      <Input
-        className="font-mono text-xs"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          onChange(
-            e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          );
-        }}
-      />
-    </Field>
-  );
-}
 
 /**
  * Painel de detalhe (pedido do usuário: Descrição/Tipo/Duração/Afeta/
@@ -124,7 +94,6 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
 
   const set = <K extends keyof StatusEffectDef>(key: K, value: StatusEffectDef[K]) =>
     setSt((p) => ({ ...p, [key]: value }));
-  const optNum = (v: string) => (v === "" ? undefined : Number(v));
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -232,15 +201,24 @@ export function StatusForm({ initial, mode }: { initial?: StatusEffectDef; mode:
               onChange={(e) => set("durationLookupSkill", e.target.value === "" ? undefined : e.target.value)}
             />
           </Field>
-          <Field label="Duração padrão (ms)">
-            <Input type="number" value={st.defaultDurationMs ?? ""} onChange={(e) => set("defaultDurationMs", optNum(e.target.value))} />
-          </Field>
-          <Field label="Taxa mínima (10000 = 100%)">
-            <Input type="number" value={st.minRate ?? ""} onChange={(e) => set("minRate", optNum(e.target.value))} />
-          </Field>
-          <Field label="Duração mínima (ms)">
-            <Input type="number" value={st.minDurationMs ?? ""} onChange={(e) => set("minDurationMs", optNum(e.target.value))} />
-          </Field>
+          <NumberField
+            label="Duração padrão (ms)"
+            value={st.defaultDurationMs}
+            onChange={(v) => set("defaultDurationMs", v)}
+            {...STATUS_LIMITS.defaultDurationMs}
+          />
+          <NumberField
+            label="Taxa mínima (10000 = 100%)"
+            value={st.minRate}
+            onChange={(v) => set("minRate", v)}
+            {...STATUS_LIMITS.minRate}
+          />
+          <NumberField
+            label="Duração mínima (ms)"
+            value={st.minDurationMs}
+            onChange={(v) => set("minDurationMs", v)}
+            {...STATUS_LIMITS.minDurationMs}
+          />
         </div>
       </Section>
 

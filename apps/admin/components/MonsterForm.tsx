@@ -4,8 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ELEMENT_LABELS,
+  MONSTER_AI_CODE_LABELS,
   MONSTER_AI_MODE_LABELS,
   MONSTER_CLASS_LABELS,
+  MONSTER_MODE_OPTIONS,
+  MONSTER_RACE_GROUP_OPTIONS,
   MonsterSchema,
   RACE_LABELS,
   SIZE_LABELS,
@@ -13,7 +16,8 @@ import {
   type Monster,
 } from "@ragnarok/game-data";
 import { createMonster, updateMonster } from "@/lib/api";
-import { Button, Checkbox, Field, Input, Section, Select } from "./ui";
+import { Button, Checkbox, Field, Input, MultiSelectField, NumberField, Section, Select } from "./ui";
+import { MONSTER_LIMITS } from "@/lib/field-limits";
 
 /** Full-coverage monster form (soul.txt §5.4). */
 
@@ -48,37 +52,6 @@ const EMPTY: Monster = MonsterSchema.parse({
   size: "small",
 });
 
-function TokenListField({
-  label,
-  values,
-  onChange,
-  className = "",
-}: {
-  label: string;
-  values: string[];
-  onChange: (v: string[]) => void;
-  className?: string;
-}) {
-  const [text, setText] = useState(values.join(", "));
-  return (
-    <Field label={label} className={className}>
-      <Input
-        className="font-mono text-xs"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          onChange(
-            e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          );
-        }}
-      />
-    </Field>
-  );
-}
-
 function DropRows({
   title,
   drops,
@@ -102,17 +75,19 @@ function DropRows({
       <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
         {drops.map((d, i) => (
           <div key={i} className="flex items-end gap-2">
-            <Field label="Item ID" className="w-28">
-              <Input type="number" value={d.itemId} onChange={(e) => update(i, { itemId: Number(e.target.value) })} />
-            </Field>
-            <Field label="Taxa (%)" className="w-28">
-              <Input
-                type="number"
-                step="0.01"
-                value={d.rate}
-                onChange={(e) => update(i, { rate: Number(e.target.value) })}
-              />
-            </Field>
+            <NumberField
+              label="Item ID"
+              className="w-28"
+              value={d.itemId}
+              onChange={(v) => update(i, { itemId: v as number })}
+            />
+            <NumberField
+              label="Taxa (%)"
+              className="w-28"
+              value={d.rate}
+              onChange={(v) => update(i, { rate: v as number })}
+              {...MONSTER_LIMITS.dropRate}
+            />
             <Field label="Grupo de opção aleatória" className="flex-1">
               <Input
                 value={d.randomOptionGroup ?? ""}
@@ -190,27 +165,33 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
           <Field label="Título">
             <Input value={mob.title ?? ""} onChange={(e) => set("title", e.target.value === "" ? undefined : e.target.value)} />
           </Field>
-          <Field label="Nível">
-            <Input type="number" value={mob.level} onChange={(e) => set("level", num(e.target.value))} />
-          </Field>
-          <Field label="HP">
-            <Input type="number" value={mob.hp} onChange={(e) => set("hp", num(e.target.value))} />
-          </Field>
-          <Field label="SP">
-            <Input type="number" value={mob.sp} onChange={(e) => set("sp", num(e.target.value))} />
-          </Field>
-          <Field label="Grupo (GroupId)">
-            <Input type="number" value={mob.groupId} onChange={(e) => set("groupId", num(e.target.value))} />
-          </Field>
-          <Field label="EXP base">
-            <Input type="number" value={mob.baseExp} onChange={(e) => set("baseExp", num(e.target.value))} />
-          </Field>
-          <Field label="EXP de job">
-            <Input type="number" value={mob.jobExp} onChange={(e) => set("jobExp", num(e.target.value))} />
-          </Field>
-          <Field label="EXP de MVP">
-            <Input type="number" value={mob.mvpExp} onChange={(e) => set("mvpExp", num(e.target.value))} />
-          </Field>
+          <NumberField label="Nível" value={mob.level} onChange={(v) => set("level", v as Monster["level"])} {...MONSTER_LIMITS.level} />
+          <NumberField label="HP" value={mob.hp} onChange={(v) => set("hp", v as Monster["hp"])} {...MONSTER_LIMITS.hp} />
+          <NumberField label="SP" value={mob.sp} onChange={(v) => set("sp", v as Monster["sp"])} {...MONSTER_LIMITS.sp} />
+          <NumberField
+            label="Grupo (GroupId)"
+            value={mob.groupId}
+            onChange={(v) => set("groupId", v as Monster["groupId"])}
+            {...MONSTER_LIMITS.groupId}
+          />
+          <NumberField
+            label="EXP base"
+            value={mob.baseExp}
+            onChange={(v) => set("baseExp", v as Monster["baseExp"])}
+            {...MONSTER_LIMITS.baseExp}
+          />
+          <NumberField
+            label="EXP de job"
+            value={mob.jobExp}
+            onChange={(v) => set("jobExp", v as Monster["jobExp"])}
+            {...MONSTER_LIMITS.jobExp}
+          />
+          <NumberField
+            label="EXP de MVP"
+            value={mob.mvpExp}
+            onChange={(v) => set("mvpExp", v as Monster["mvpExp"])}
+            {...MONSTER_LIMITS.mvpExp}
+          />
           <div className="flex items-end pb-2">
             <Checkbox label="MVP" checked={mob.mvp} onChange={(v) => set("mvp", v)} />
           </div>
@@ -220,82 +201,120 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
       <Section title="Atributos">
         <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
           {STAT_KEYS.map((k) => (
-            <Field key={k} label={k.toUpperCase()}>
-              <Input
-                type="number"
-                value={mob.stats[k]}
-                onChange={(e) => set("stats", { ...mob.stats, [k]: num(e.target.value) })}
-              />
-            </Field>
+            <NumberField
+              key={k}
+              label={k.toUpperCase()}
+              value={mob.stats[k]}
+              onChange={(v) => set("stats", { ...mob.stats, [k]: v as number })}
+              {...MONSTER_LIMITS.stat}
+            />
           ))}
         </div>
       </Section>
 
       <Section title="Combate (renewal: ATK/MATK base)">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Field label="ATK base">
-            <Input type="number" value={mob.attack} onChange={(e) => set("attack", num(e.target.value))} />
-          </Field>
-          <Field label="MATK base">
-            <Input type="number" value={mob.magicAttack} onChange={(e) => set("magicAttack", num(e.target.value))} />
-          </Field>
-          <Field label="DEF">
-            <Input type="number" value={mob.defense} onChange={(e) => set("defense", num(e.target.value))} />
-          </Field>
-          <Field label="MDEF">
-            <Input type="number" value={mob.magicDefense} onChange={(e) => set("magicDefense", num(e.target.value))} />
-          </Field>
-          <Field label="RES">
-            <Input type="number" value={mob.resistance} onChange={(e) => set("resistance", num(e.target.value))} />
-          </Field>
-          <Field label="MRES">
-            <Input type="number" value={mob.magicResistance} onChange={(e) => set("magicResistance", num(e.target.value))} />
-          </Field>
-          <Field label="Alcance de ataque">
-            <Input type="number" value={mob.attackRange} onChange={(e) => set("attackRange", num(e.target.value))} />
-          </Field>
-          <Field label="Alcance de skill">
-            <Input type="number" value={mob.skillRange} onChange={(e) => set("skillRange", num(e.target.value))} />
-          </Field>
-          <Field label="Alcance de perseguição">
-            <Input type="number" value={mob.chaseRange} onChange={(e) => set("chaseRange", num(e.target.value))} />
-          </Field>
-          <Field label="Velocidade (ms/célula)">
-            <Input type="number" value={mob.walkSpeed} onChange={(e) => set("walkSpeed", num(e.target.value))} />
-          </Field>
-          <Field label="Delay de ataque (ms)">
-            <Input type="number" value={mob.attackDelayMs} onChange={(e) => set("attackDelayMs", num(e.target.value))} />
-          </Field>
-          <Field label="Animação de ataque (ms)">
-            <Input type="number" value={mob.attackMotionMs} onChange={(e) => set("attackMotionMs", num(e.target.value))} />
-          </Field>
-          <Field label="Animação de dano (ms)">
-            <Input type="number" value={mob.damageMotionMs} onChange={(e) => set("damageMotionMs", num(e.target.value))} />
-          </Field>
-          <Field label="Dano recebido (%)">
-            <Input type="number" value={mob.damageTaken} onChange={(e) => set("damageTaken", num(e.target.value))} />
-          </Field>
-          <Field label="Flee (override, vazio = derivado)">
-            <Input
-              type="number"
-              value={mob.fleeOverride ?? ""}
-              onChange={(e) => set("fleeOverride", e.target.value === "" ? undefined : Number(e.target.value))}
-            />
-          </Field>
-          <Field label="Hit (override, vazio = derivado)">
-            <Input
-              type="number"
-              value={mob.hitOverride ?? ""}
-              onChange={(e) => set("hitOverride", e.target.value === "" ? undefined : Number(e.target.value))}
-            />
-          </Field>
+          <NumberField label="ATK base" value={mob.attack} onChange={(v) => set("attack", v as Monster["attack"])} {...MONSTER_LIMITS.attack} />
+          <NumberField
+            label="MATK base"
+            value={mob.magicAttack}
+            onChange={(v) => set("magicAttack", v as Monster["magicAttack"])}
+            {...MONSTER_LIMITS.magicAttack}
+          />
+          <NumberField label="DEF" value={mob.defense} onChange={(v) => set("defense", v as Monster["defense"])} {...MONSTER_LIMITS.defense} />
+          <NumberField
+            label="MDEF"
+            value={mob.magicDefense}
+            onChange={(v) => set("magicDefense", v as Monster["magicDefense"])}
+            {...MONSTER_LIMITS.magicDefense}
+          />
+          <NumberField
+            label="RES"
+            value={mob.resistance}
+            onChange={(v) => set("resistance", v as Monster["resistance"])}
+            {...MONSTER_LIMITS.resistance}
+          />
+          <NumberField
+            label="MRES"
+            value={mob.magicResistance}
+            onChange={(v) => set("magicResistance", v as Monster["magicResistance"])}
+            {...MONSTER_LIMITS.magicResistance}
+          />
+          <NumberField
+            label="Alcance de ataque"
+            value={mob.attackRange}
+            onChange={(v) => set("attackRange", v as Monster["attackRange"])}
+            {...MONSTER_LIMITS.attackRange}
+          />
+          <NumberField
+            label="Alcance de skill"
+            value={mob.skillRange}
+            onChange={(v) => set("skillRange", v as Monster["skillRange"])}
+            {...MONSTER_LIMITS.skillRange}
+          />
+          <NumberField
+            label="Alcance de perseguição"
+            value={mob.chaseRange}
+            onChange={(v) => set("chaseRange", v as Monster["chaseRange"])}
+            {...MONSTER_LIMITS.chaseRange}
+          />
+          <NumberField
+            label="Velocidade (ms/célula)"
+            value={mob.walkSpeed}
+            onChange={(v) => set("walkSpeed", v as Monster["walkSpeed"])}
+            {...MONSTER_LIMITS.walkSpeed}
+          />
+          <NumberField
+            label="Delay de ataque (ms)"
+            value={mob.attackDelayMs}
+            onChange={(v) => set("attackDelayMs", v as Monster["attackDelayMs"])}
+            {...MONSTER_LIMITS.attackDelayMs}
+          />
+          <NumberField
+            label="Animação de ataque (ms)"
+            value={mob.attackMotionMs}
+            onChange={(v) => set("attackMotionMs", v as Monster["attackMotionMs"])}
+            {...MONSTER_LIMITS.attackMotionMs}
+          />
+          <NumberField
+            label="Animação de dano (ms)"
+            value={mob.damageMotionMs}
+            onChange={(v) => set("damageMotionMs", v as Monster["damageMotionMs"])}
+            {...MONSTER_LIMITS.damageMotionMs}
+          />
+          <NumberField
+            label="Dano recebido (%)"
+            value={mob.damageTaken}
+            onChange={(v) => set("damageTaken", v as Monster["damageTaken"])}
+            {...MONSTER_LIMITS.damageTaken}
+          />
+          <NumberField
+            label="Flee (override, vazio = derivado)"
+            value={mob.fleeOverride}
+            onChange={(v) => set("fleeOverride", v)}
+          />
+          <NumberField
+            label="Hit (override, vazio = derivado)"
+            value={mob.hitOverride}
+            onChange={(v) => set("hitOverride", v)}
+          />
         </div>
       </Section>
 
       <Section title="Comportamento e classificação">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Field label="Código AI (Aegis, fonte da verdade)">
-            <Input className="font-mono" value={mob.ai} onChange={(e) => set("ai", e.target.value)} />
+            {/* NÃO deriva aiMode/chasesAttacker automaticamente — os 3 campos
+             * ficam editáveis de forma independente até A5 (docs/audit/
+             * risk-report.md) ser decidido pelo usuário. */}
+            <Select value={mob.ai} onChange={(e) => set("ai", e.target.value)}>
+              {!(mob.ai in MONSTER_AI_CODE_LABELS) && <option value={mob.ai}>{mob.ai} (fora do catálogo!)</option>}
+              {Object.keys(MONSTER_AI_CODE_LABELS).map((code) => (
+                <option key={code} value={code}>
+                  {labelOf(MONSTER_AI_CODE_LABELS, code)}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="Modo de IA (derivado)">
             <Select value={mob.aiMode} onChange={(e) => set("aiMode", e.target.value as Monster["aiMode"])}>
@@ -331,15 +350,12 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
               ))}
             </Select>
           </Field>
-          <Field label="Nível do elemento (1-4)">
-            <Input
-              type="number"
-              min={1}
-              max={4}
-              value={mob.element.level}
-              onChange={(e) => set("element", { ...mob.element, level: num(e.target.value) })}
-            />
-          </Field>
+          <NumberField
+            label="Nível do elemento (1-4)"
+            value={mob.element.level}
+            onChange={(v) => set("element", { ...mob.element, level: v as number })}
+            {...MONSTER_LIMITS.elementLevel}
+          />
           <Field label="Tamanho">
             <Select value={mob.size} onChange={(e) => set("size", e.target.value as Monster["size"])}>
               {SIZES.map((s) => (
@@ -349,8 +365,18 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
           </Field>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <TokenListField label="Modos (detector, teleport_block, ignore_melee, ...)" values={mob.modes} onChange={(v) => set("modes", v)} />
-          <TokenListField label="Grupos de raça (goblin, treasure, biolab, ...)" values={mob.raceGroups} onChange={(v) => set("raceGroups", v)} />
+          <MultiSelectField
+            label="Modos (MD_*)"
+            values={mob.modes}
+            options={MONSTER_MODE_OPTIONS}
+            onChange={(v) => set("modes", v)}
+          />
+          <MultiSelectField
+            label="Grupos de raça (RC2_*)"
+            values={mob.raceGroups}
+            options={MONSTER_RACE_GROUP_OPTIONS}
+            onChange={(v) => set("raceGroups", v)}
+          />
         </div>
       </Section>
 
@@ -375,15 +401,27 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
               <Field label="Mapa" className="w-36">
                 <Input className="font-mono text-xs" value={s.mapId} onChange={(e) => updateSpawn(i, { mapId: e.target.value })} />
               </Field>
-              <Field label="Qtd" className="w-20">
-                <Input type="number" value={s.amount} onChange={(e) => updateSpawn(i, { amount: num(e.target.value) })} />
-              </Field>
-              <Field label="Respawn (ms)" className="w-32">
-                <Input type="number" value={s.respawnTimeMs} onChange={(e) => updateSpawn(i, { respawnTimeMs: num(e.target.value) })} />
-              </Field>
-              <Field label="Variação (ms)" className="w-32">
-                <Input type="number" value={s.respawnVarianceMs} onChange={(e) => updateSpawn(i, { respawnVarianceMs: num(e.target.value) })} />
-              </Field>
+              <NumberField
+                label="Qtd"
+                className="w-20"
+                min={1}
+                value={s.amount}
+                onChange={(v) => updateSpawn(i, { amount: v as number })}
+              />
+              <NumberField
+                label="Respawn (ms)"
+                className="w-32"
+                min={0}
+                value={s.respawnTimeMs}
+                onChange={(v) => updateSpawn(i, { respawnTimeMs: v as number })}
+              />
+              <NumberField
+                label="Variação (ms)"
+                className="w-32"
+                min={0}
+                value={s.respawnVarianceMs}
+                onChange={(v) => updateSpawn(i, { respawnVarianceMs: v as number })}
+              />
               <Field label="Área x,y,xs,ys (vazio = mapa todo)" className="flex-1">
                 <Input
                   className="font-mono text-xs"

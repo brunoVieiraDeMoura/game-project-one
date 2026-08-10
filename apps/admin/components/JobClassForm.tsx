@@ -8,7 +8,8 @@ import {
   type JobClass,
 } from "@ragnarok/game-data";
 import { createJobClass, updateJobClass } from "@/lib/api";
-import { Button, Field, Input, Section, Select } from "./ui";
+import { Button, Field, Input, NumberField, Section, Select } from "./ui";
+import { JOB_LIMITS } from "@/lib/field-limits";
 
 /** Full-coverage job class form (soul.txt §5.2). */
 
@@ -117,35 +118,41 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
           <Field label="Nome">
             <Input value={jc.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
-          <Field label="Classe pai (ID, vazio = nenhuma)">
-            <Input
-              type="number"
-              value={jc.parentClassId ?? ""}
-              onChange={(e) => set("parentClassId", e.target.value === "" ? null : Number(e.target.value))}
-            />
-          </Field>
-          <Field label="Nível base máximo">
-            <Input type="number" value={jc.maxBaseLevel} onChange={(e) => set("maxBaseLevel", num(e.target.value))} />
-          </Field>
-          <Field label="Nível de job máximo">
-            <Input type="number" value={jc.maxJobLevel} onChange={(e) => set("maxJobLevel", num(e.target.value))} />
-          </Field>
-          <Field label="Peso máximo">
-            <Input type="number" value={jc.maxWeight} onChange={(e) => set("maxWeight", num(e.target.value))} />
-          </Field>
+          <NumberField
+            label="Classe pai (ID, vazio = nenhuma)"
+            value={jc.parentClassId ?? undefined}
+            onChange={(v) => set("parentClassId", (v ?? null) as JobClass["parentClassId"])}
+          />
+          <NumberField
+            label="Nível base máximo"
+            value={jc.maxBaseLevel}
+            onChange={(v) => set("maxBaseLevel", v as JobClass["maxBaseLevel"])}
+            {...JOB_LIMITS.maxBaseLevel}
+          />
+          <NumberField
+            label="Nível de job máximo"
+            value={jc.maxJobLevel}
+            onChange={(v) => set("maxJobLevel", v as JobClass["maxJobLevel"])}
+            {...JOB_LIMITS.maxJobLevel}
+          />
+          <NumberField
+            label="Peso máximo"
+            value={jc.maxWeight}
+            onChange={(v) => set("maxWeight", v as JobClass["maxWeight"])}
+            {...JOB_LIMITS.maxWeight}
+          />
         </div>
       </Section>
 
       <Section title="Atributos iniciais">
         <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
           {STAT_KEYS.map((k) => (
-            <Field key={k} label={k.toUpperCase()}>
-              <Input
-                type="number"
-                value={jc.baseStats[k]}
-                onChange={(e) => set("baseStats", { ...jc.baseStats, [k]: num(e.target.value) })}
-              />
-            </Field>
+            <NumberField
+              key={k}
+              label={k.toUpperCase()}
+              value={jc.baseStats[k]}
+              onChange={(v) => set("baseStats", { ...jc.baseStats, [k]: v as number })}
+            />
           ))}
         </div>
       </Section>
@@ -165,21 +172,22 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
         <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
           {jc.bonusStatsPerLevel.map((b, i) => (
             <div key={i} className="flex items-end gap-2">
-              <Field label="Nível" className="w-20">
-                <Input type="number" value={b.level} onChange={(e) => updateBonus(i, { level: num(e.target.value) })} />
-              </Field>
+              <NumberField
+                label="Nível"
+                className="w-20"
+                value={b.level}
+                onChange={(v) => updateBonus(i, { level: v as number })}
+                {...JOB_LIMITS.bonusStatsLevel}
+              />
               {STAT_KEYS.map((k) => (
-                <Field key={k} label={k.toUpperCase()} className="w-16">
-                  <Input
-                    type="number"
-                    value={b.stats[k] ?? ""}
-                    onChange={(e) =>
-                      updateBonus(i, {
-                        stats: { ...b.stats, [k]: e.target.value === "" ? undefined : Number(e.target.value) },
-                      })
-                    }
-                  />
-                </Field>
+                <NumberField
+                  key={k}
+                  label={k.toUpperCase()}
+                  className="w-16"
+                  value={b.stats[k]}
+                  onChange={(v) => updateBonus(i, { stats: { ...b.stats, [k]: v } })}
+                  {...JOB_LIMITS.bonusStat}
+                />
               ))}
               {b.traits && Object.keys(b.traits).length > 0 && (
                 <span className="pb-2 text-xs text-amber-400">
@@ -230,12 +238,19 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
         <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
           {jc.skills.map((s, i) => (
             <div key={i} className="flex items-end gap-2">
-              <Field label="Skill ID" className="w-28">
-                <Input type="number" value={s.skillId} onChange={(e) => updateSkill(i, { skillId: num(e.target.value) })} />
-              </Field>
-              <Field label="Nível máx" className="w-24">
-                <Input type="number" value={s.maxLevel} onChange={(e) => updateSkill(i, { maxLevel: num(e.target.value) })} />
-              </Field>
+              <NumberField
+                label="Skill ID"
+                className="w-28"
+                value={s.skillId}
+                onChange={(v) => updateSkill(i, { skillId: v as number })}
+              />
+              <NumberField
+                label="Nível máx"
+                className="w-24"
+                value={s.maxLevel}
+                onChange={(v) => updateSkill(i, { maxLevel: v as number })}
+                {...JOB_LIMITS.skillMaxLevel}
+              />
               <Field label="Pré-requisitos (id:nível, id:nível)" className="flex-1">
                 <Input
                   value={s.requires.map((r) => `${r.skillId}:${r.level}`).join(", ")}
@@ -288,9 +303,13 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
                   ))}
                 </Select>
               </Field>
-              <Field label="ASPD" className="w-20">
-                <Input type="number" value={a.baseAspd} onChange={(e) => updateAspd(i, { baseAspd: num(e.target.value) })} />
-              </Field>
+              <NumberField
+                label="ASPD"
+                className="w-20"
+                value={a.baseAspd}
+                onChange={(v) => updateAspd(i, { baseAspd: v as number })}
+                {...JOB_LIMITS.aspdModifierBaseAspd}
+              />
               <Button
                 type="button"
                 variant="ghost"

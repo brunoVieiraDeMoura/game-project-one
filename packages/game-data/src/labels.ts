@@ -224,6 +224,91 @@ export const STATUS_STATE_LABELS: Record<string, string> = {
 };
 
 /**
+ * Código de IA do monstro (`Ai` no `mob_db.yml`, `"MONSTER_TYPE_"+s`).
+ * Lista fechada real do rAthena (`src/map/mob.hpp:151-182`,
+ * `script_constants.hpp:3557-3579`) — qualquer string fora daqui é
+ * rejeitada pelo loader (`"Unknown monster AI %s, defaulting to 06."`).
+ * Chave é o próprio código (é isso que o schema guarda em `Monster.ai`,
+ * `string().default("06")` — não é um enum TS, por isso `Record<string,…>`).
+ */
+export const MONSTER_AI_CODE_LABELS: Record<string, string> = {
+  "01": "01 — agressivo simples",
+  "02": "02 — agressivo com perseguição",
+  "03": "03 — agressivo, muda de alvo",
+  "04": "04 — agressivo, persegue e muda de alvo",
+  "05": "05 — passivo com perseguição",
+  "06": "06 — passivo (planta, não revida)",
+  "07": "07 — passivo, muda de alvo ao ser atacado",
+  "08": "08 — passivo, persegue e muda de alvo",
+  "09": "09 — agressivo, ignora esquiva",
+  "10": "10 — agressivo com perseguição, ignora esquiva",
+  "11": "11 — agressivo, muda de alvo, ignora esquiva",
+  "12": "12 — agressivo completo, ignora esquiva",
+  "13": "13 — passivo com perseguição, ignora esquiva",
+  "17": "17 — variante 17",
+  "19": "19 — variante 19",
+  "20": "20 — variante 20",
+  "21": "21 — variante 21",
+  "24": "24 — variante 24",
+  "25": "25 — variante 25",
+  "26": "26 — variante 26",
+  "27": "27 — variante 27",
+  ABR_PASSIVE: "Abrasgard — passivo",
+  ABR_OFFENSIVE: "Abrasgard — ofensivo",
+};
+
+/**
+ * `DropEffect` do item (`flags.dropEffect`, `"DROPEFFECT_"+s`). Lista
+ * fechada real (`src/map/itemdb.hpp:3263-3291`) — o valor é gravado
+ * VERBATIM na coluna `flag_dropeffect` (`mysql-item-row.ts:204,337`, sem
+ * tradução), então a chave aqui já é a grafia exata que o rAthena espera.
+ * `White_Pillar`/`Orange_Pillar` só valem em PACKETVER < 20200304;
+ * `Green_Pillar`/`Red_Pillar` só em >= 20200304 — mantidos os 2 pares
+ * porque o projeto não amarra um PACKETVER único de cliente aqui.
+ */
+export const ITEM_DROP_EFFECT_LABELS: Record<string, string> = {
+  None: "Nenhum",
+  Client: "Padrão do cliente",
+  White_Pillar: "Pilar branco",
+  Blue_Pillar: "Pilar azul",
+  Yellow_Pillar: "Pilar amarelo",
+  Purple_Pillar: "Pilar roxo",
+  Orange_Pillar: "Pilar laranja",
+  Green_Pillar: "Pilar verde",
+  Red_Pillar: "Pilar vermelho",
+};
+
+/**
+ * `Requires.State` da skill (`"ST_"+s`), 20 valores fechados
+ * (`skill.hpp:697-718`, espelhados em `SkillDbStateSchema` de
+ * `packages/game-data/src/rathena/skill-db-yaml.ts`). Chave aqui é
+ * `toSnake(PascalCase)` — o mesmo formato que `Skill.requirements.
+ * requiredState` já guarda hoje (ver `skill-db-mapper.ts: REV_STATE`).
+ */
+export const SKILL_REQUIRED_STATE_LABELS: Record<string, string> = {
+  none: "Nenhum",
+  hidden: "Escondido",
+  riding: "Montado (Peco/Grand Peco)",
+  falcon: "Com falcão",
+  cart: "Com carrinho",
+  shield: "Com escudo",
+  recover_weight_rate: "Taxa de recuperação de peso",
+  move_enable: "Pode se mover",
+  water: "Na água",
+  ridingdragon: "Montado em dragão",
+  wug: "Com wug",
+  ridingwug: "Montado em wug",
+  mado: "Em Madogear",
+  elementalspirit: "Com espírito elemental",
+  elementalspirit2: "Com espírito elemental (nível 2)",
+  peco: "Montado em Peco Peco",
+  sunstance: "Postura do Sol",
+  moonstance: "Postura da Lua",
+  starstance: "Postura da Estrela",
+  universestance: "Postura do Universo",
+};
+
+/**
  * Rótulo de um valor de enum. Valor desconhecido volta como veio — nunca
  * adivinhado (mesma regra de `classeDaSkill`).
  */

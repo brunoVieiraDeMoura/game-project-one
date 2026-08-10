@@ -61,7 +61,10 @@ export interface MysqlMonsterRow {
 	[column: string]: unknown;
 }
 
-const MODE_COLUMNS = [
+/** Exportado só pra `mysql-monster-row.test.ts` provar que
+ * `MONSTER_MODES` (game-data, opções do admin) nunca dessincroniza desta
+ * lista real de colunas. */
+export const MODE_COLUMNS = [
 	"canmove",
 	"looter",
 	"aggressive",

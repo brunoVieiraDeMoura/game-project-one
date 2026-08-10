@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   CharacterVariantSchema,
   EquipLocationSchema,
+  ITEM_DROP_EFFECT_LABELS,
   ITEM_SUBTYPE_LABELS,
   ITEM_TYPE_LABELS,
   ItemSchema,
@@ -14,8 +15,9 @@ import {
   type Item,
 } from "@ragnarok/game-data";
 import { createItem, updateItem } from "@/lib/api";
-import { Button, Checkbox, Field, Input, Label, Select, Section } from "./ui";
+import { Button, Checkbox, Field, Input, Label, NumberField, Select, Section } from "./ui";
 import { EffectsEditor } from "./EffectsEditor";
+import { ITEM_LIMITS } from "@/lib/field-limits";
 
 /** Full-coverage item form (soul.txt §5: all entity fields, not a subset). */
 
@@ -154,43 +156,64 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
               ))}
             </Select>
           </Field>
-          <Field label="Sprite (view id)">
-            <Input type="number" value={item.viewSprite} onChange={(e) => set("viewSprite", num(e.target.value))} />
-          </Field>
+          <NumberField
+            label="Sprite (view id)"
+            value={item.viewSprite}
+            // v pode ficar `undefined` (campo limpo) mesmo o tipo dizendo
+            // `number` — de propósito: o zod reaplica `.default(0)` no
+            // submit (`ItemSchema.safeParse`), então "limpo" não vira 0
+            // na hora, vira 0 só se ainda estiver vazio ao salvar.
+            onChange={(v) => set("viewSprite", v as Item["viewSprite"])}
+            {...ITEM_LIMITS.viewSprite}
+          />
         </div>
       </Section>
 
       <Section title="Comércio e peso">
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Preço de compra (zeny)">
-            <Input type="number" value={item.buyPrice} onChange={(e) => set("buyPrice", num(e.target.value))} />
-          </Field>
-          <Field label="Preço de venda (zeny)">
-            <Input type="number" value={item.sellPrice} onChange={(e) => set("sellPrice", num(e.target.value))} />
-          </Field>
-          <Field label="Peso (10 = 1.0)">
-            <Input type="number" value={item.weight} onChange={(e) => set("weight", num(e.target.value))} />
-          </Field>
+          <NumberField
+            label="Preço de compra (zeny)"
+            value={item.buyPrice}
+            onChange={(v) => set("buyPrice", v as Item["buyPrice"])}
+            {...ITEM_LIMITS.buyPrice}
+          />
+          <NumberField
+            label="Preço de venda (zeny)"
+            value={item.sellPrice}
+            onChange={(v) => set("sellPrice", v as Item["sellPrice"])}
+            {...ITEM_LIMITS.sellPrice}
+          />
+          <NumberField
+            label="Peso (10 = 1.0)"
+            value={item.weight}
+            onChange={(v) => set("weight", v as Item["weight"])}
+            {...ITEM_LIMITS.weight}
+          />
         </div>
       </Section>
 
       <Section title="Combate">
         <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
-          <Field label="ATK">
-            <Input type="number" value={item.attack} onChange={(e) => set("attack", num(e.target.value))} />
-          </Field>
-          <Field label="MATK">
-            <Input type="number" value={item.magicAttack} onChange={(e) => set("magicAttack", num(e.target.value))} />
-          </Field>
-          <Field label="Defesa">
-            <Input type="number" value={item.defense} onChange={(e) => set("defense", num(e.target.value))} />
-          </Field>
-          <Field label="Alcance">
-            <Input type="number" value={item.range} onChange={(e) => set("range", num(e.target.value))} />
-          </Field>
-          <Field label="Slots (0-4)">
-            <Input type="number" min={0} max={4} value={item.slots} onChange={(e) => set("slots", num(e.target.value))} />
-          </Field>
+          <NumberField label="ATK" value={item.attack} onChange={(v) => set("attack", v as Item["attack"])} {...ITEM_LIMITS.attack} />
+          <NumberField
+            label="MATK"
+            value={item.magicAttack}
+            onChange={(v) => set("magicAttack", v as Item["magicAttack"])}
+            {...ITEM_LIMITS.magicAttack}
+          />
+          <NumberField
+            label="Defesa"
+            value={item.defense}
+            onChange={(v) => set("defense", v as Item["defense"])}
+            {...ITEM_LIMITS.defense}
+          />
+          <NumberField label="Alcance" value={item.range} onChange={(v) => set("range", v as Item["range"])} {...ITEM_LIMITS.range} />
+          <NumberField
+            label="Slots (0-4)"
+            value={item.slots}
+            onChange={(v) => set("slots", v as Item["slots"])}
+            {...ITEM_LIMITS.slots}
+          />
         </div>
       </Section>
 
@@ -239,12 +262,18 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
               </Select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Nível mín.">
-                <Input type="number" value={item.equipLevelMin} onChange={(e) => set("equipLevelMin", num(e.target.value))} />
-              </Field>
-              <Field label="Nível máx. (0 = sem)">
-                <Input type="number" value={item.equipLevelMax} onChange={(e) => set("equipLevelMax", num(e.target.value))} />
-              </Field>
+              <NumberField
+                label="Nível mín."
+                value={item.equipLevelMin}
+                onChange={(v) => set("equipLevelMin", v as Item["equipLevelMin"])}
+                {...ITEM_LIMITS.equipLevelMin}
+              />
+              <NumberField
+                label="Nível máx. (0 = sem)"
+                value={item.equipLevelMax}
+                onChange={(v) => set("equipLevelMax", v as Item["equipLevelMax"])}
+                {...ITEM_LIMITS.equipLevelMax}
+              />
             </div>
           </div>
         </div>
@@ -266,20 +295,18 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
               </div>
             </Field>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Field label="Nível da arma (1-5)">
-                <Input
-                  type="number"
-                  value={item.weaponLevel ?? ""}
-                  onChange={(e) => set("weaponLevel", e.target.value === "" ? undefined : num(e.target.value))}
-                />
-              </Field>
-              <Field label="Nível da armadura (1-2)">
-                <Input
-                  type="number"
-                  value={item.armorLevel ?? ""}
-                  onChange={(e) => set("armorLevel", e.target.value === "" ? undefined : num(e.target.value))}
-                />
-              </Field>
+              <NumberField
+                label="Nível da arma (1-5)"
+                value={item.weaponLevel}
+                onChange={(v) => set("weaponLevel", v)}
+                {...ITEM_LIMITS.weaponLevel}
+              />
+              <NumberField
+                label="Nível da armadura (1-2)"
+                value={item.armorLevel}
+                onChange={(v) => set("armorLevel", v)}
+                {...ITEM_LIMITS.armorLevel}
+              />
               <div className="flex items-end pb-1.5">
                 <Checkbox label="Refinável" checked={item.refineable} onChange={(v) => set("refineable", v)} />
               </div>
@@ -320,10 +347,20 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
               />
             ))}
             <Field label="Drop effect" className="w-40">
-              <Input
+              <Select
                 value={item.flags.dropEffect ?? ""}
                 onChange={(e) => set("flags", { ...item.flags!, dropEffect: e.target.value || undefined })}
-              />
+              >
+                <option value="">—</option>
+                {item.flags.dropEffect && !(item.flags.dropEffect in ITEM_DROP_EFFECT_LABELS) && (
+                  <option value={item.flags.dropEffect}>{item.flags.dropEffect} (fora do catálogo!)</option>
+                )}
+                {Object.keys(ITEM_DROP_EFFECT_LABELS).map((v) => (
+                  <option key={v} value={v}>
+                    {labelOf(ITEM_DROP_EFFECT_LABELS, v)}
+                  </option>
+                ))}
+              </Select>
             </Field>
           </div>
         ) : (
@@ -341,9 +378,12 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
       >
         {item.delay ? (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Duração (ms)">
-              <Input type="number" value={item.delay.durationMs} onChange={(e) => set("delay", { ...item.delay!, durationMs: num(e.target.value) })} />
-            </Field>
+            <NumberField
+              label="Duração (ms)"
+              value={item.delay.durationMs}
+              onChange={(v) => set("delay", { ...item.delay!, durationMs: v as number })}
+              {...ITEM_LIMITS.delayDurationMs}
+            />
             <Field label="Status de controle (opcional)">
               <Input value={item.delay.statusId ?? ""} onChange={(e) => set("delay", { ...item.delay!, statusId: e.target.value || undefined })} />
             </Field>
@@ -367,9 +407,13 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
       >
         {item.stack ? (
           <div className="flex flex-wrap items-end gap-4">
-            <Field label="Quantidade máx." className="w-32">
-              <Input type="number" value={item.stack.amount} onChange={(e) => set("stack", { ...item.stack!, amount: num(e.target.value) })} />
-            </Field>
+            <NumberField
+              label="Quantidade máx."
+              className="w-32"
+              value={item.stack.amount}
+              onChange={(v) => set("stack", { ...item.stack!, amount: v as number })}
+              {...ITEM_LIMITS.stackAmount}
+            />
             {(
               [
                 ["inventory", "Inventário"],
@@ -396,9 +440,13 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
       >
         {item.noUse ? (
           <div className="flex items-end gap-4">
-            <Field label="Nível de grupo p/ ignorar" className="w-40">
-              <Input type="number" value={item.noUse.overrideGroupLevel} onChange={(e) => set("noUse", { ...item.noUse!, overrideGroupLevel: num(e.target.value) })} />
-            </Field>
+            <NumberField
+              label="Nível de grupo p/ ignorar"
+              className="w-40"
+              value={item.noUse.overrideGroupLevel}
+              onChange={(v) => set("noUse", { ...item.noUse!, overrideGroupLevel: v as number })}
+              {...ITEM_LIMITS.noUseOverrideGroupLevel}
+            />
             <Checkbox label="Bloqueado sentado" checked={item.noUse.sitting} onChange={(v) => set("noUse", { ...item.noUse!, sitting: v })} />
           </div>
         ) : (
@@ -416,9 +464,13 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
       >
         {item.trade ? (
           <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
-            <Field label="Nível de grupo p/ ignorar" className="w-40">
-              <Input type="number" value={item.trade.overrideGroupLevel} onChange={(e) => set("trade", { ...item.trade!, overrideGroupLevel: num(e.target.value) })} />
-            </Field>
+            <NumberField
+              label="Nível de grupo p/ ignorar"
+              className="w-40"
+              value={item.trade.overrideGroupLevel}
+              onChange={(v) => set("trade", { ...item.trade!, overrideGroupLevel: v as number })}
+              {...ITEM_LIMITS.tradeOverrideGroupLevel}
+            />
             {(
               [
                 ["noDrop", "Não dropa"],

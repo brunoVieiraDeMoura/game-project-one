@@ -3,17 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  SKILL_CAST_FLAG_OPTIONS,
+  SKILL_DAMAGE_FLAG_OPTIONS,
   SKILL_DAMAGE_NATURE_LABELS,
+  SKILL_ELEMENT_LABELS,
+  SKILL_FLAG_OPTIONS,
   SKILL_HIT_TYPE_LABELS,
+  SKILL_REQUIRED_AMMO_OPTIONS,
+  SKILL_REQUIRED_STATE_LABELS,
+  SKILL_REQUIRED_WEAPON_OPTIONS,
   SKILL_TARGET_LABELS,
   SKILL_TYPE_LABELS,
   SkillSchema,
   labelOf,
+  type DamageFormula,
   type Skill,
   type StatusEffectDef,
 } from "@ragnarok/game-data";
 import { createSkill, updateSkill, listAllStatuses } from "@/lib/api";
-import { Button, Checkbox, Field, Input, Section, Select } from "./ui";
+import { Button, Checkbox, Field, Input, MultiSelectField, NumberField, Section, Select, TokenListField } from "./ui";
+import { SKILL_LIMITS } from "@/lib/field-limits";
 
 /** Full-coverage skill form (soul.txt §5.3). Statuses são escolhidos por
  * dropdown do catálogo — nunca texto livre. */
@@ -66,38 +75,6 @@ function PerLevelField({
             .map(Number)
             .filter((n) => !Number.isNaN(n));
           if (nums.length > 0) onChange(nums.length === 1 ? nums[0]! : nums);
-        }}
-      />
-    </Field>
-  );
-}
-
-/** CSV editor pra arrays de tokens snake_case (flags). */
-function TokenListField({
-  label,
-  values,
-  onChange,
-  className = "",
-}: {
-  label: string;
-  values: string[];
-  onChange: (v: string[]) => void;
-  className?: string;
-}) {
-  const [text, setText] = useState(values.join(", "));
-  return (
-    <Field label={label} className={className}>
-      <Input
-        className="font-mono text-xs"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          onChange(
-            e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          );
         }}
       />
     </Field>
@@ -223,9 +200,12 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
           <Field label="Nome">
             <Input value={sk.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
-          <Field label="Nível máximo">
-            <Input type="number" value={sk.maxLevel} onChange={(e) => set("maxLevel", num(e.target.value))} />
-          </Field>
+          <NumberField
+            label="Nível máximo"
+            value={sk.maxLevel}
+            onChange={(v) => set("maxLevel", v as Skill["maxLevel"])}
+            {...SKILL_LIMITS.maxLevel}
+          />
           <Field label="Tipo">
             <Select value={sk.type} onChange={(e) => set("type", e.target.value as Skill["type"])}>
               {TYPES.map((t) => (
@@ -257,13 +237,13 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
         </div>
         <div className="mt-3 flex items-center gap-6">
           <Checkbox label="Cast interrompível ao tomar dano" checked={sk.interruptible} onChange={(v) => set("interruptible", v)} />
-          <Field label="Redução de DEF no cast (%)" className="w-52">
-            <Input
-              type="number"
-              value={sk.castDefenseReduction ?? ""}
-              onChange={(e) => set("castDefenseReduction", e.target.value === "" ? undefined : Number(e.target.value))}
-            />
-          </Field>
+          <NumberField
+            label="Redução de DEF no cast (%)"
+            className="w-52"
+            value={sk.castDefenseReduction}
+            onChange={(v) => set("castDefenseReduction", v)}
+            {...SKILL_LIMITS.castDefenseReduction}
+          />
         </div>
       </Section>
 
@@ -274,11 +254,31 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
             values={Array.isArray(sk.element) ? sk.element : [sk.element]}
             onChange={(v) => set("element", (v.length === 1 ? v[0]! : v) as Skill["element"])}
           />
-          <TokenListField label="Flags de dano (splash, no_damage, ...)" values={sk.damageFlags} onChange={(v) => set("damageFlags", v)} />
-          <TokenListField label="Flags de info (is_quest, is_trap, ...)" values={sk.flags} onChange={(v) => set("flags", v)} />
+          <MultiSelectField
+            label="Flags de dano (NK_*)"
+            values={sk.damageFlags}
+            options={SKILL_DAMAGE_FLAG_OPTIONS}
+            onChange={(v) => set("damageFlags", v)}
+          />
+          <MultiSelectField
+            label="Flags de info (INF2_*)"
+            values={sk.flags}
+            options={SKILL_FLAG_OPTIONS}
+            onChange={(v) => set("flags", v)}
+          />
           <div className="grid grid-cols-2 gap-3">
-            <TokenListField label="Flags de cast time" values={sk.castTimeFlags} onChange={(v) => set("castTimeFlags", v)} />
-            <TokenListField label="Flags de delay" values={sk.castDelayFlags} onChange={(v) => set("castDelayFlags", v)} />
+            <MultiSelectField
+              label="Flags de cast time"
+              values={sk.castTimeFlags}
+              options={SKILL_CAST_FLAG_OPTIONS}
+              onChange={(v) => set("castTimeFlags", v)}
+            />
+            <MultiSelectField
+              label="Flags de delay"
+              values={sk.castDelayFlags}
+              options={SKILL_CAST_FLAG_OPTIONS}
+              onChange={(v) => set("castDelayFlags", v)}
+            />
           </div>
         </div>
       </Section>
@@ -322,15 +322,37 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
           <PerLevelField label="Custo em zeny" value={req.zenyCost} onChange={(v) => setReq("zenyCost", v)} />
           <PerLevelField label="Qtd de munição" value={req.ammoAmount} onChange={(v) => setReq("ammoAmount", v)} />
           <Field label="Estado exigido (riding, hiding, ...)">
-            <Input
+            <Select
               value={req.requiredState ?? ""}
               onChange={(e) => setReq("requiredState", e.target.value === "" ? undefined : e.target.value)}
-            />
+            >
+              <option value="">—</option>
+              {req.requiredState && !(req.requiredState in SKILL_REQUIRED_STATE_LABELS) && (
+                <option value={req.requiredState}>{req.requiredState} (fora do catálogo!)</option>
+              )}
+              {Object.keys(SKILL_REQUIRED_STATE_LABELS).map((v) => (
+                <option key={v} value={v}>
+                  {labelOf(SKILL_REQUIRED_STATE_LABELS, v)}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <TokenListField label="Armas exigidas (1h_sword, dagger, ... vazio = qualquer)" values={req.requiredWeapons} onChange={(v) => setReq("requiredWeapons", v as typeof req.requiredWeapons)} />
-          <TokenListField label="Munição exigida (arrow, bullet, ...)" values={req.requiredAmmo} onChange={(v) => setReq("requiredAmmo", v)} />
+          <MultiSelectField
+            label="Armas exigidas (vazio = qualquer)"
+            values={req.requiredWeapons}
+            options={SKILL_REQUIRED_WEAPON_OPTIONS}
+            emptyMeans="qualquer arma"
+            onChange={(v) => setReq("requiredWeapons", v as typeof req.requiredWeapons)}
+          />
+          <MultiSelectField
+            label="Munição exigida (vazio = qualquer)"
+            values={req.requiredAmmo}
+            options={SKILL_REQUIRED_AMMO_OPTIONS}
+            emptyMeans="qualquer munição"
+            onChange={(v) => setReq("requiredAmmo", v)}
+          />
           <TokenListField label="Equipamentos exigidos (IDs de item)" values={req.requiredEquipment.map(String)} onChange={(v) => setReq("requiredEquipment", v.map(Number).filter((n) => !Number.isNaN(n)))} />
         </div>
         <div className="mt-3">
@@ -378,19 +400,26 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
           <div className="space-y-1">
             {req.itemsConsumed.map((c, i) => (
               <div key={i} className="flex items-end gap-2">
-                <Field label="Item ID" className="w-28">
-                  <Input type="number" value={c.itemId} onChange={(e) => updateItemCost(i, { itemId: num(e.target.value) })} />
-                </Field>
-                <Field label="Qtd (0 = só exige possuir)" className="w-40">
-                  <Input type="number" value={c.amount} onChange={(e) => updateItemCost(i, { amount: num(e.target.value) })} />
-                </Field>
-                <Field label="Só no nível (vazio = todos)" className="w-40">
-                  <Input
-                    type="number"
-                    value={c.level ?? ""}
-                    onChange={(e) => updateItemCost(i, { level: e.target.value === "" ? undefined : Number(e.target.value) })}
-                  />
-                </Field>
+                <NumberField
+                  label="Item ID"
+                  className="w-28"
+                  value={c.itemId}
+                  onChange={(v) => updateItemCost(i, { itemId: v as number })}
+                />
+                <NumberField
+                  label="Qtd (0 = só exige possuir)"
+                  className="w-40"
+                  value={c.amount}
+                  onChange={(v) => updateItemCost(i, { amount: v as number })}
+                  {...SKILL_LIMITS.itemsConsumedAmount}
+                />
+                <NumberField
+                  label="Só no nível (vazio = todos)"
+                  className="w-40"
+                  value={c.level}
+                  onChange={(v) => updateItemCost(i, { level: v })}
+                  {...SKILL_LIMITS.itemsConsumedLevel}
+                />
                 <Button type="button" variant="ghost" onClick={() => setReq("itemsConsumed", req.itemsConsumed.filter((_, j) => j !== i))}>
                   ✕
                 </Button>
@@ -415,6 +444,23 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
                   value={sk.damageFormula.expression}
                   onChange={(e) => set("damageFormula", { ...sk.damageFormula!, expression: e.target.value })}
                 />
+              </Field>
+              <Field label="Elemento do dano">
+                {/* Campo existia no schema mas nunca teve controle nenhum —
+                 * ficava cravado em "weapon" desde a criação. */}
+                <Select
+                  value={sk.damageFormula.element}
+                  onChange={(e) => set("damageFormula", { ...sk.damageFormula!, element: e.target.value as DamageFormula["element"] })}
+                >
+                  {!(sk.damageFormula.element in SKILL_ELEMENT_LABELS) && (
+                    <option value={sk.damageFormula.element}>{sk.damageFormula.element} (fora do catálogo!)</option>
+                  )}
+                  {Object.keys(SKILL_ELEMENT_LABELS).map((v) => (
+                    <option key={v} value={v}>
+                      {labelOf(SKILL_ELEMENT_LABELS, v)}
+                    </option>
+                  ))}
+                </Select>
               </Field>
               <div className="flex items-end gap-4 pb-1">
                 <Checkbox
@@ -472,9 +518,13 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
                   ))}
                 </Select>
               </Field>
-              <Field label="Chance %" className="w-24">
-                <Input type="number" value={a.chance} onChange={(e) => updateApplied(i, { chance: num(e.target.value) })} />
-              </Field>
+              <NumberField
+                label="Chance %"
+                className="w-24"
+                value={a.chance}
+                onChange={(v) => updateApplied(i, { chance: v as number })}
+                {...SKILL_LIMITS.appliedStatusChance}
+              />
               <PerLevelField label="Duração (ms)" value={a.durationMs} onChange={(v) => updateApplied(i, { durationMs: v })} className="flex-1" />
               <Field label="Em quem" className="w-28">
                 <Select value={a.appliesTo} onChange={(e) => updateApplied(i, { appliesTo: e.target.value as AppliedRow["appliesTo"] })}>

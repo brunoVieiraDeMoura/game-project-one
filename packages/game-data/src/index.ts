@@ -13,6 +13,8 @@ export * from "./labels";
 export * from "./skill-class";
 export * from "./rathena/skill-db-yaml";
 export * from "./rathena/skill-db-mapper";
+export * from "./rathena/skill-flag-options";
+export * from "./rathena/mob-db-enums";
 export * from "./rathena/skill-db-validator";
 export * from "./rathena/job-stats-yaml";
 export * from "./rathena/skill-tree-yaml";
