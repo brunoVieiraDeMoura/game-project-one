@@ -205,9 +205,13 @@ function itemFlagsFrom(row: MysqlItemRow): Item["flags"] | undefined {
 	};
 }
 
+/** A19: a coluna real (`Delay.Duration`, `itemdb.cpp:765-777`) é em SEGUNDOS
+ * (`doc/item_db.txt:250`, literal "Duration of delay in seconds") — o schema/UI
+ * falam em `durationMs`, então a conversão mora só nesta fronteira MySQL. Sem
+ * ela, todo delay salvo por este admin ficava 1000× o valor mostrado. */
 function itemDelayFrom(row: MysqlItemRow): Item["delay"] | undefined {
 	if (row.delay_duration === null && row.delay_status === null) return undefined;
-	return { durationMs: row.delay_duration ?? 0, statusId: row.delay_status ?? undefined };
+	return { durationMs: (row.delay_duration ?? 0) * 1000, statusId: row.delay_status ?? undefined };
 }
 
 function itemStackFrom(row: MysqlItemRow): Item["stack"] | undefined {
@@ -335,7 +339,8 @@ export function itemToMysqlRow(item: MysqlItem): MysqlItemRow {
 		flag_dropannounce: item.flags?.dropAnnounce ? 1 : item.flags ? 0 : null,
 		flag_noconsume: item.flags?.noConsume ? 1 : item.flags ? 0 : null,
 		flag_dropeffect: item.flags?.dropEffect ?? null,
-		delay_duration: item.delay?.durationMs ?? null,
+		// A19: ms (schema/UI) → segundos (coluna real) — ver itemDelayFrom acima.
+		delay_duration: item.delay ? Math.round(item.delay.durationMs / 1000) : null,
 		delay_status: item.delay?.statusId ?? null,
 		stack_amount: item.stack?.amount ?? null,
 		stack_inventory: item.stack ? (item.stack.inventory ? 1 : 0) : null,

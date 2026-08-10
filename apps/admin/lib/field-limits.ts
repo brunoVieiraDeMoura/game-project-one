@@ -83,7 +83,7 @@ export const ITEM_LIMITS: Record<string, FieldLimit> = {
   delayDurationMs: {
     min: 0,
     int: true,
-    hint: "unidade real do rAthena é SEGUNDOS, não ms — conferir conversão no writer (risk-report A19)",
+    hint: "coluna real (delay_duration) é em SEGUNDOS — mysql-item-row.ts converte ms↔s nesta fronteira (A19, corrigido)",
     source: "itemdb.cpp:765-777 (Delay.Duration, uint32 segundos)",
   },
   stackAmount: { min: 1, max: 65535, int: true, source: "itemdb.cpp:806-823" },

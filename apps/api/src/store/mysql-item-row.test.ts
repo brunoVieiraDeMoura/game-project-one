@@ -84,6 +84,13 @@ describe("mysql-item-row: flags/delay/stack/trade/noUse sobrevivem ao round-trip
     expect(back.delay).toEqual({ durationMs: 5000, statusId: "postponed" });
   });
 
+  it("A19: delay_duration na coluna real é SEGUNDOS, não o ms cru (doc/item_db.txt:250) — sem isso o servidor real aplica 1000× o delay pretendido", () => {
+    const row = itemToMysqlRow({ ...BASE, delay: { durationMs: 5000 } } as MysqlItem);
+    expect(row.delay_duration).toBe(5); // 5000ms == 5s, NUNCA 5000 gravado cru
+    const back = mysqlRowToItem(row);
+    expect(back.delay?.durationMs).toBe(5000); // volta a bater com o que o admin mostra
+  });
+
   it("stack: quantidade e os 4 destinos (inventário/carrinho/armazém/guilda)", () => {
     const item: Item = {
       ...BASE,
