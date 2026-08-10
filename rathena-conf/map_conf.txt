@@ -11,6 +11,9 @@ map_port: 5122
 // evita editar qualquer arquivo dentro de rathena/.
 npc: npc/game-project/devmenu.txt
 npc: npc/game-project/panel.txt
+// NPCs criados pelo admin (Fase 3.4, POST /npcs) — arquivo próprio, nunca
+// mistura com script escrito à mão; ver npc-idle/admin-created.txt.
+npc: npc/game-project/admin-created.txt
 
 // Mapas customizados (Fase 3, testes funcionais reais). `map:` é o que faz
 // ESTE map-server hospedar o mapa (map_addmap, map.cpp); sem esta linha o

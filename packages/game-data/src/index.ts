@@ -33,3 +33,4 @@ export * from "./rathena/npc-script-print";
 export * from "./rathena/npc-script-mapper";
 export * from "./rathena/npc-script-validator";
 export * from "./rathena/npc-script-writer";
+export * from "./rathena/npc-script-generate";

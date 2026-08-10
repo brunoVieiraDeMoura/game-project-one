@@ -1,0 +1,13 @@
+//===== game-project Script ===================================
+//= NPCs criados pelo admin (Fase 3.4, docs/audit/fase3-testes/FASE3.4-NPC-CREATE.md)
+//===== Descrição: ============================================
+//= Arquivo gerado e mantido por apps/api (POST /npcs) — cada criação
+//= aciona um `.push()` de bloco novo aqui, nunca editando o que já existe.
+//= Edição de NPC já criado continua pelo caminho normal (PUT /npcs/:id),
+//= que edita este arquivo pelo mesmo Writer usado pra rathena/npc/.
+//==============================================================
+
+gpqa01,65,65,4	script	QA Novo NPC#GPQA_NOVO_NPC	4_M_ALCHE_C,{
+	mes "Ola! Eu sou um NPC criado pelo admin.";
+	close;
+}

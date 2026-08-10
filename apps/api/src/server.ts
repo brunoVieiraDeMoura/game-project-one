@@ -72,6 +72,12 @@ export interface ServerDeps {
    * integração inteira (PUT vira CRUD puro, como antes dela existir) —
    * default é `join(REPO_ROOT, "rathena")`, undefined usa esse default. */
   npcScriptRoot?: string | null;
+  /** raiz de NPC CRIADO pelo admin (Fase 3.4, `docs/audit/fase3-testes/
+   * FASE3.4-NPC-CREATE.md`) — nunca `rathena/`; default `join(REPO_ROOT,
+   * "npc-idle")`, o mesmo diretório de `devmenu.txt`/`panel.txt`. null
+   * desliga só a CRIAÇÃO (edição de NPC migrado continua funcionando via
+   * `npcScriptRoot`). */
+  npcCreateRoot?: string | null;
 }
 
 function defaultItemRepository(): ItemRepository {
@@ -271,15 +277,16 @@ export async function buildServer(deps: ServerDeps = {}) {
   // env pode ter MySQL configurado enquanto o repo em uso é outro.
   const monsterSpawnsWritable = !(monsterRepository instanceof MysqlMonsterRepository);
   await app.register(monsterRoutes(monsterRepository, security, monsterSpawnsWritable), { prefix: "/monsters" });
+  const mapRepository = deps.mapRepository ?? defaultMapRepository();
+  await app.register(mapRoutes(mapRepository, security), { prefix: "/maps" });
   const npcRepository = deps.npcRepository ?? defaultNpcRepository();
   const npcScriptRoot = deps.npcScriptRoot === undefined ? join(REPO_ROOT, "rathena") : deps.npcScriptRoot;
-  await app.register(npcRoutes(npcRepository, security, npcScriptRoot), { prefix: "/npcs" });
+  const npcCreateRoot = deps.npcCreateRoot === undefined ? join(REPO_ROOT, "npc-idle") : deps.npcCreateRoot;
+  await app.register(npcRoutes(npcRepository, security, npcScriptRoot, npcCreateRoot, mapRepository), { prefix: "/npcs" });
   const serverConfigRepository = deps.serverConfigRepository ?? defaultServerConfigRepository();
   await app.register(serverConfigRoutes(serverConfigRepository, security), { prefix: "/server-config" });
   const userRepository = deps.userRepository ?? defaultUserRepository();
   await app.register(userRoutes(userRepository, security), { prefix: "/users" });
-  const mapRepository = deps.mapRepository ?? defaultMapRepository();
-  await app.register(mapRoutes(mapRepository, security), { prefix: "/maps" });
   // controle do servidor (recarregar bases sem reiniciar) — só existe com o
   // MariaDB do rAthena configurado
   if (hasRoDatabase()) {

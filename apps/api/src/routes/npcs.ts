@@ -2,10 +2,24 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { NpcKindSchema, NpcOriginSchema, NpcSchema } from "@ragnarok/game-data";
 import type { NpcRepository } from "../store/npc-repository";
+import type { MapRepository } from "../store/map-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
 import { applyNpcScriptEdit, rollbackAppliedWrite } from "../store/npc-script-sync";
+import { applyNpcScriptCreate, rollbackNpcScriptCreate, ADMIN_CREATED_NPC_FILE } from "../store/npc-script-create";
 import { queueReload } from "../store/mysql-item-repository.js";
+
+/** checagem POSITIVA e exata (não uma heurística de prefixo tipo "começa
+ * com npc/") — só um `legacyRef` que bate literalmente com o arquivo que
+ * `applyNpcScriptCreate` usa vai pra `npcCreateRoot`; qualquer outra coisa
+ * (todo NPC migrado real, E toda fixture de teste com nome de arquivo
+ * arbitrário) cai em `npcScriptRoot`, exatamente como sempre foi. Um
+ * heurística por prefixo ("npc/") já causou um achado real nesta mesma
+ * tarefa: fixture de teste sem esse prefixo ia parar, por engano, no
+ * arquivo de verdade do admin — corrigido antes de chegar em produção. */
+function scriptRootFor(legacyRef: string, npcScriptRoot: string, npcCreateRoot: string): string {
+  return legacyRef.startsWith(`${ADMIN_CREATED_NPC_FILE}:`) ? npcCreateRoot : npcScriptRoot;
+}
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -18,7 +32,13 @@ const ListQuerySchema = z.object({
 
 const IdParamSchema = z.object({ id: z.string().trim().min(1).max(128) });
 
-export function npcRoutes(repo: NpcRepository, security: SecurityContext | null = null, npcScriptRoot: string | null = null) {
+export function npcRoutes(
+  repo: NpcRepository,
+  security: SecurityContext | null = null,
+  npcScriptRoot: string | null = null,
+  npcCreateRoot: string | null = null,
+  mapRepository: MapRepository | null = null,
+) {
   return async function registerNpcRoutes(app: FastifyInstance) {
     app.get("/", async (req, reply) => {
       const q = ListQuerySchema.safeParse(req.query);
@@ -39,21 +59,80 @@ export function npcRoutes(repo: NpcRepository, security: SecurityContext | null 
       if (admin === undefined) return;
       const body = NpcSchema.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: body.error.issues });
+
+      const existing = await repo.get(body.data.id);
+      if (existing) return reply.code(409).send({ error: `npc ${body.data.id} already exists` });
+
+      // `legacyRef` JÁ presente no payload = registrar no catálogo um NPC
+      // cujo script JÁ existe em algum lugar (o caminho usado pra reimportar/
+      // ressemear NPC migrado — uso pré-Fase 3.4, preservado tal qual: nunca
+      // tentar gerar script pra algo que o cliente afirma já ter um). Só
+      // quando `legacyRef` está AUSENTE é que isto é uma criação de verdade
+      // (Fase 3.4) e o writer entra em ação.
+      if (body.data.legacyRef) {
+        try {
+          const savedNpc = await repo.create(body.data);
+          if (admin && security) {
+            await security.audit({ actor: admin, action: "create", targetType: "npc", targetId: savedNpc.id, payload: savedNpc });
+          }
+          return reply.code(201).send(savedNpc);
+        } catch (err) {
+          const status = (err as { statusCode?: number }).statusCode ?? 500;
+          return reply.code(status).send({ error: (err as Error).message });
+        }
+      }
+
+      const requested = body.data;
+
+      if (mapRepository) {
+        const map = await mapRepository.get(requested.mapId);
+        if (!map) return reply.code(400).send({ error: "invalid-map", message: `mapa "${requested.mapId}" não existe no catálogo` });
+        const [x, y] = requested.position;
+        if (x < 0 || x >= map.size.width || y < 0 || y >= map.size.height) {
+          return reply.code(400).send({
+            error: "invalid-position",
+            message: `posição (${x},${y}) fora dos limites de "${requested.mapId}" (${map.size.width}x${map.size.height})`,
+          });
+        }
+      }
+
+      if (!npcCreateRoot) {
+        return reply.code(501).send({ error: "not-configured", message: "criação de NPC não está configurada neste ambiente (npcCreateRoot ausente)" });
+      }
+      const created = applyNpcScriptCreate(npcCreateRoot, requested);
+      if (created.kind === "refused") {
+        return reply.code(created.httpStatus).send({ error: created.error, message: created.message, ...(created.code ? { code: created.code } : {}) });
+      }
+
+      const withRef = { ...requested, legacyRef: created.legacyRef };
       try {
-        const created = await repo.create(body.data);
+        const savedNpc = await repo.create(withRef);
         if (admin && security) {
           await security.audit({
             actor: admin,
             action: "create",
             targetType: "npc",
-            targetId: created.id,
-            payload: created,
+            targetId: savedNpc.id,
+            payload: savedNpc,
           });
         }
-        return reply.code(201).send(created);
-      } catch (err) {
-        const status = (err as { statusCode?: number }).statusCode ?? 500;
-        return reply.code(status).send({ error: (err as Error).message });
+        await queueReload("script");
+        return reply.code(201).send(savedNpc);
+      } catch (dbErr) {
+        // arquivo já foi escrito com sucesso mas o banco falhou — mesma
+        // janela de divergência do PUT (Node não tem transação entre
+        // arquivo e banco). Melhor esforço: restaura o arquivo antes de
+        // propagar o erro, pra não deixar um bloco órfão sem registro.
+        try {
+          rollbackNpcScriptCreate(created.absPath, created.previousText);
+        } catch (rollbackErr) {
+          return reply.code(500).send({
+            error: "operational",
+            message: `banco falhou e o rollback do arquivo TAMBÉM falhou — estado pode ter ficado divergente: ${(rollbackErr as Error).message}`,
+          });
+        }
+        const status = (dbErr as { statusCode?: number }).statusCode ?? 500;
+        return reply.code(status).send({ error: (dbErr as Error).message });
       }
     });
 
@@ -74,8 +153,9 @@ export function npcRoutes(repo: NpcRepository, security: SecurityContext | null 
         // campos do mesmo request (nome/posição/warp/shop) fossem válidos.
         let rollbackFile: (() => void) | null = null;
         let scriptFileChanged = false;
-        if (npcScriptRoot) {
-          const sync = applyNpcScriptEdit(npcScriptRoot, current, body.data);
+        const editRoot = current.legacyRef ? scriptRootFor(current.legacyRef, npcScriptRoot ?? "", npcCreateRoot ?? "") : npcScriptRoot;
+        if (editRoot) {
+          const sync = applyNpcScriptEdit(editRoot, current, body.data);
           if (sync.kind === "refused") {
             return reply.code(sync.httpStatus).send({
               error: sync.error,

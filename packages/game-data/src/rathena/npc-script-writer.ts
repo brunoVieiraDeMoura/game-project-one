@@ -228,12 +228,12 @@ function wiringOf(node: DialogueNode): unknown {
   };
 }
 
-function escapeString(s: string): string {
+export function escapeString(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 /** inverso PARCIAL do Mapper — só pros kinds que `isLeafNode` aceita. */
-function printLeaf(node: DialogueNode): string | null {
+export function printLeaf(node: DialogueNode): string | null {
   if (node.kind === "say") {
     const lines = (node.text ?? "").split("\n");
     return lines.map((l) => `mes "${escapeString(l)}";`).join("\n");
