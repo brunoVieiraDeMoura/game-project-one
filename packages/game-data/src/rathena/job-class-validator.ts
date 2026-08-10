@@ -1,5 +1,6 @@
 import type { JobClass } from "../job-class";
 import type { JobIdResolver, SkillIdResolver } from "./job-class-mapper";
+import { RATHENA_JOB_NAME_LOOKUP } from "./job-names";
 
 /**
  * Validator do domínio Classes (leia1.txt, aprovação 2026-08-07) — roda ANTES
@@ -27,6 +28,17 @@ export interface JobValidationIssue {
 
 export function validateJobClassEntry(jc: JobClass): string[] {
   const issues: string[] = [];
+
+  // achado Fase 3.3 (docs/audit/fase3-testes/FASE3.3-FECHAMENTO.md): um
+  // nome que não corresponde a nenhum `JOB_<nome>` real NÃO é rejeitado com
+  // graça pelo loader do rAthena — ele derruba o map-server inteiro
+  // (`terminate called ... check failed: ch != NONE`) ao processar
+  // `job_stats.yml`. Skills/Status têm o mesmo tipo de nome livre, mas o
+  // loader deles recusa a entrada sem crashar; Classes não tem essa rede de
+  // segurança no C++, então tem que ter aqui.
+  if (!RATHENA_JOB_NAME_LOOKUP.isValid(jc.name)) {
+    issues.push(`Jobs: "${jc.name}" não corresponde a nenhum JOB_${jc.name.toUpperCase()} real (enum e_job, mmo.hpp) — o rAthena derruba o map-server inteiro ao carregar um nome de classe desconhecido, não recusa a entrada com segurança`);
+  }
 
   if (jc.maxBaseLevel < 1 || jc.maxBaseLevel > RATHENA_MAX_LEVEL) {
     issues.push(`MaxBaseLevel ${jc.maxBaseLevel} fora de 1..${RATHENA_MAX_LEVEL} (MAX_LEVEL, map.hpp)`);

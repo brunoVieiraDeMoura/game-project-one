@@ -20,6 +20,7 @@ export * from "./rathena/job-stats-yaml";
 export * from "./rathena/skill-tree-yaml";
 export * from "./rathena/job-class-mapper";
 export * from "./rathena/job-class-validator";
+export * from "./rathena/job-names";
 export * from "./rathena/case-insensitive-lookup";
 export * from "./rathena/status-db-yaml";
 export * from "./rathena/status-db-mapper";
