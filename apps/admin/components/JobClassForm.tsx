@@ -7,7 +7,7 @@ import {
   JobClassSchema,
   type JobClass,
 } from "@ragnarok/game-data";
-import { createJobClass, getSkill, listSkills, updateJobClass } from "@/lib/api";
+import { createJobClass, getJobClass, getSkill, listJobClasses, listSkills, updateJobClass } from "@/lib/api";
 import { Button, CatalogPickerField, Field, Input, NumberField, Section, Select, type CatalogOption } from "./ui";
 import { JOB_LIMITS } from "@/lib/field-limits";
 
@@ -26,6 +26,21 @@ async function resolveSkillLabel(value: string): Promise<string | undefined> {
   if (!Number.isFinite(id)) return undefined;
   const s = await getSkill(id);
   return `${s.name} (${s.id})`;
+}
+
+/** A22: `skillTreeInherit[]` (não `parentClassId`) é a fonte real que
+ * `jobClassToSkillTreeEntry` usa pra gerar `Inherit:` no skill_tree.yml —
+ * mesmo padrão de picker de `skills[].skillId` acima, agora sobre classes. */
+async function searchJobClassesForPicker(query: string): Promise<CatalogOption[]> {
+  if (!query.trim()) return [];
+  const res = await listJobClasses(1, 20, query);
+  return res.jobClasses.map((j) => ({ value: String(j.id), label: `${j.name} (${j.id})` }));
+}
+async function resolveJobClassLabel(value: string): Promise<string | undefined> {
+  const id = Number(value);
+  if (!Number.isFinite(id)) return undefined;
+  const j = await getJobClass(id);
+  return `${j.name} (${j.id})`;
 }
 
 /** Full-coverage job class form (soul.txt §5.2). */
@@ -116,6 +131,15 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
     set("skills", jc.skills.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const updateAspd = (i: number, patch: Partial<AspdRow>) =>
     set("aspdModifiers", jc.aspdModifiers.map((a, j) => (j === i ? { ...a, ...patch } : a)));
+  /** troca só o índice `i`, preservando a ordem dos demais — ordem importa de
+   * verdade pro rAthena (SkillTreeDatabase::loadingFinished: skill repetido
+   * em mais de um pai, o ÚLTIMO da lista vence). Bloqueia duplicar o mesmo
+   * pai em duas linhas. */
+  const updateInherit = (i: number, v: string | undefined) => {
+    const parentId = v ? Number(v) : (undefined as unknown as number);
+    if (v && jc.skillTreeInherit.some((p, j) => j !== i && p === parentId)) return;
+    set("skillTreeInherit", jc.skillTreeInherit.map((p, j) => (j === i ? parentId : p)));
+  };
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -135,11 +159,12 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
           <Field label="Nome">
             <Input value={jc.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
-          <NumberField
-            label="Classe pai (ID, vazio = nenhuma)"
-            value={jc.parentClassId ?? undefined}
-            onChange={(v) => set("parentClassId", (v ?? null) as JobClass["parentClassId"])}
-          />
+          <Field label="Classe pai (metadado, não editável)">
+            <p className="flex min-h-[2.25rem] items-center px-2.5 text-sm text-zinc-500">
+              {jc.parentClassId ?? "—"} — só exibição/agrupamento; quem gera a
+              herança de skills é "Herança de Skill Tree" abaixo.
+            </p>
+          </Field>
           <NumberField
             label="Nível base máximo"
             value={jc.maxBaseLevel}
@@ -288,6 +313,47 @@ export function JobClassForm({ initial, mode }: { initial?: JobClass; mode: "cre
                 />
               </Field>
               <Button type="button" variant="ghost" onClick={() => set("skills", jc.skills.filter((_, j) => j !== i))}>
+                ✕
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section
+        title={`Herança de Skill Tree — Inherit (${jc.skillTreeInherit.length})`}
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => set("skillTreeInherit", [...jc.skillTreeInherit, -1])}
+          >
+            + Herança
+          </Button>
+        }
+      >
+        <p className="mb-2 text-xs text-zinc-500">
+          Fonte real do <code>Inherit:</code> gravado em skill_tree.yml (não a
+          "Classe pai" acima). Ordem importa: se o mesmo skill existe em mais
+          de um pai com config diferente, o ÚLTIMO da lista vence (rAthena,
+          SkillTreeDatabase::loadingFinished).
+        </p>
+        <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+          {jc.skillTreeInherit.map((parentId, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <CatalogPickerField
+                label={`Pai ${i + 1}`}
+                className="w-64"
+                value={String(parentId)}
+                onChange={(v) => updateInherit(i, v)}
+                search={searchJobClassesForPicker}
+                resolveLabel={resolveJobClassLabel}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => set("skillTreeInherit", jc.skillTreeInherit.filter((_, j) => j !== i))}
+              >
                 ✕
               </Button>
             </div>
