@@ -17,7 +17,7 @@ coverage/
 pw.txt
 
 # --- fonte upstream do rAthena (105 MB, re-obtido com git clone) ---
-rathena/
+/rathena/
 
 # --- packs de asset brutos (177 MB, licenciados; as cópias usadas vivem em apps/game/public) ---
 assets-new/
