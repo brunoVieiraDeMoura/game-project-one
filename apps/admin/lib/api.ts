@@ -293,6 +293,13 @@ export function getMonster(id: number): Promise<Monster> {
   return fetch(`${API_URL}/monsters/${id}`).then((r) => handle<Monster>(r));
 }
 
+/** achado A23: sob backend MySQL, `spawns[]` não tem write-path
+ * (`mysql-monster-row.ts` não tem coluna pra isso) — o form usa isto pra
+ * avisar/travar a seção em vez de deixar a edição sumir em silêncio. */
+export function getMonsterCapabilities(): Promise<{ spawnsWritable: boolean }> {
+  return fetch(`${API_URL}/monsters/capabilities`).then((r) => handle<{ spawnsWritable: boolean }>(r));
+}
+
 export async function createMonster(monster: Monster): Promise<Monster> {
   const res = await fetch(`${API_URL}/monsters`, {
     method: "POST",

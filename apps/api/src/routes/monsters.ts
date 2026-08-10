@@ -18,13 +18,26 @@ const ListQuerySchema = z.object({
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-export function monsterRoutes(repo: MonsterRepository, security: SecurityContext | null = null) {
+export function monsterRoutes(
+  repo: MonsterRepository,
+  security: SecurityContext | null = null,
+  /** achado A23: `spawns[]` só é persistido pelo repositório JSON/Supabase —
+   * `mysql-monster-row.ts`/`mysql-monster-repository.ts` não têm coluna pra
+   * isso (spawn real do rAthena é script NPC, não linha de `mob_db_re`). Sob
+   * MySQL, editar spawn no admin salva "com sucesso" e descarta em silêncio.
+   * `spawnsWritable` deixa o admin avisar/travar a seção em vez de mentir. */
+  spawnsWritable = true,
+) {
   return async function registerMonsterRoutes(app: FastifyInstance) {
     app.get("/", async (req, reply) => {
       const q = ListQuerySchema.safeParse(req.query);
       if (!q.success) return reply.code(400).send({ error: q.error.issues });
       return repo.list(q.data);
     });
+
+    /** Registrada ANTES de `/:id` de propósito — rota estática não pode
+     * competir com o parâmetro, mesmo o Fastify já priorizando estático. */
+    app.get("/capabilities", async () => ({ spawnsWritable }));
 
     app.get("/:id", async (req, reply) => {
       const p = IdParamSchema.safeParse(req.params);

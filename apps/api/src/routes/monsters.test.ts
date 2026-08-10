@@ -42,6 +42,12 @@ describe("monsters API", () => {
     });
   });
 
+  it("A23: /capabilities reporta spawnsWritable=true quando o repositório injetado NÃO é o MySQL (checa a instância, não o env cru — hasRoDatabase() pode ser true no ambiente e o repo em uso ser outro)", async () => {
+    const res = await app.inject({ method: "GET", url: "/monsters/capabilities" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ spawnsWritable: true });
+  });
+
   it("creates, reads, pages and searches", async () => {
     for (const [id, name, aegis] of [
       [1001, "Scorpion", "SCORPION"],

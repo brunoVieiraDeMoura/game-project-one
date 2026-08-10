@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ELEMENT_LABELS,
@@ -15,7 +15,7 @@ import {
   labelOf,
   type Monster,
 } from "@ragnarok/game-data";
-import { createMonster, getItem, listItems, updateMonster } from "@/lib/api";
+import { createMonster, getItem, getMonsterCapabilities, listItems, updateMonster } from "@/lib/api";
 import { Button, CatalogPickerField, Checkbox, Field, Input, MultiSelectField, NumberField, Section, Select, type CatalogOption } from "./ui";
 import { MONSTER_LIMITS } from "@/lib/field-limits";
 
@@ -131,6 +131,16 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
   const [mob, setMob] = useState<Monster>(initial ?? EMPTY);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  /** achado A23: default otimista (não trava a seção enquanto a sonda não
+   * respondeu) — mesma regra de degradar sem bloquear já usada nos pickers
+   * de catálogo (`.catch(() => setStatuses([]))` no SkillForm). */
+  const [spawnsWritable, setSpawnsWritable] = useState(true);
+
+  useEffect(() => {
+    getMonsterCapabilities()
+      .then((c) => setSpawnsWritable(c.spawnsWritable))
+      .catch(() => {});
+  }, []);
 
   const set = <K extends keyof Monster>(key: K, value: Monster[K]) => setMob((p) => ({ ...p, [key]: value }));
   const num = (v: string) => (v === "" ? 0 : Number(v));
@@ -408,13 +418,21 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
           <Button
             type="button"
             variant="outline"
+            disabled={!spawnsWritable}
             onClick={() => set("spawns", [...mob.spawns, { mapId: "prontera", amount: 1, respawnTimeMs: 5000, respawnVarianceMs: 0, boss: false }])}
           >
             + Spawn
           </Button>
         }
       >
-        <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+        {!spawnsWritable && (
+          <p className="mb-2 rounded bg-amber-950/60 px-3 py-2 text-xs text-amber-300">
+            Este servidor lê monstros direto do MySQL (mob_db_re), que não tem
+            coluna pra spawn — spawn real do rAthena é script NPC. Editar aqui
+            não é gravado; a seção está travada pra não fingir que salvou.
+          </p>
+        )}
+        <fieldset disabled={!spawnsWritable} className="max-h-72 space-y-1 overflow-y-auto pr-1">
           {mob.spawns.map((s, i) => (
             <div key={i} className="flex items-end gap-2">
               <Field label="Mapa" className="w-36">
@@ -463,7 +481,7 @@ export function MonsterForm({ initial, mode }: { initial?: Monster; mode: "creat
               </Button>
             </div>
           ))}
-        </div>
+        </fieldset>
       </Section>
 
       <div className="flex justify-end gap-2">

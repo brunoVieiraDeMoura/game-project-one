@@ -266,7 +266,11 @@ export async function buildServer(deps: ServerDeps = {}) {
   await app.register(skillRoutes(skillRepository, security), { prefix: "/skills" });
   await app.register(statusRoutes(statusRepository, security), { prefix: "/statuses" });
   const monsterRepository = deps.monsterRepository ?? defaultMonsterRepository();
-  await app.register(monsterRoutes(monsterRepository, security), { prefix: "/monsters" });
+  // achado A23: checado na INSTÂNCIA de verdade (não em `hasRoDatabase()` cru)
+  // pra bater com `deps.monsterRepository` injetado (testes, overrides) — o
+  // env pode ter MySQL configurado enquanto o repo em uso é outro.
+  const monsterSpawnsWritable = !(monsterRepository instanceof MysqlMonsterRepository);
+  await app.register(monsterRoutes(monsterRepository, security, monsterSpawnsWritable), { prefix: "/monsters" });
   const npcRepository = deps.npcRepository ?? defaultNpcRepository();
   const npcScriptRoot = deps.npcScriptRoot === undefined ? join(REPO_ROOT, "rathena") : deps.npcScriptRoot;
   await app.register(npcRoutes(npcRepository, security, npcScriptRoot), { prefix: "/npcs" });
