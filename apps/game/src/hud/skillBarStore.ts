@@ -18,13 +18,20 @@ export const SKILL_SLOTS = 27;
 
 /**
  * `id` é a chave de identidade de cada tipo — skill id do rAthena para
- * `"skill"`, `itemId` do catálogo para `"item"` — NUNCA o índice do
+ * `"skill"`, `itemId` do catálogo para `"item"`/`"ammo"` — NUNCA o índice do
  * inventário: o índice é volátil (o mesmo item pode reaparecer noutro slot da
  * bolsa depois de um stack zerar e ser pego de novo), e a skill já guardava
- * por id pela mesma razão. `id: 0` é o vazio, para os dois tipos.
+ * por id pela mesma razão. `id: 0` é o vazio, para os três tipos.
+ *
+ * `"ammo"` é um tipo À PARTE de `"item"`, mesmo os dois sendo "coisa achada
+ * no inventário por itemId": o gatilho é DIFERENTE (equipar, não usar/
+ * consumir — `SkillBar.trigger`) e não pode ser confundido com o de item
+ * comum, que manda `CZ.USE_ITEM`. Munição continua item de verdade (tipo
+ * `IT_AMMO`, categoria Etc no inventário) — só o SLOT DA BARRA é um tipo
+ * próprio, para o clique saber que ação tomar sem checar `item.type` de novo.
  */
 export interface SkillBarSlot {
-  kind: "skill" | "item";
+  kind: "skill" | "item" | "ammo";
   id: number;
 }
 
@@ -36,6 +43,8 @@ interface SkillBarState {
   assign: (slot: number, skillId: number) => void;
   /** slot vira item (consumível arrastado do inventário) */
   assignItem: (slot: number, itemId: number) => void;
+  /** slot vira munição (arraste do Etc — clique EQUIPA, não usa) */
+  assignAmmo: (slot: number, itemId: number) => void;
   clear: (slot: number) => void;
   swap: (from: number, to: number) => void;
   reset: () => void;
@@ -79,6 +88,15 @@ export const useSkillBar = create<SkillBarState>()(
           const previous = slots.findIndex((x) => x.kind === "item" && x.id === itemId);
           if (previous !== -1) slots[previous] = { ...SLOT_VAZIO };
           slots[slot] = { kind: "item", id: itemId };
+          return { slots };
+        }),
+
+      assignAmmo: (slot, itemId) =>
+        set((s) => {
+          const slots = s.slots.map((x) => ({ ...x }));
+          const previous = slots.findIndex((x) => x.kind === "ammo" && x.id === itemId);
+          if (previous !== -1) slots[previous] = { ...SLOT_VAZIO };
+          slots[slot] = { kind: "ammo", id: itemId };
           return { slots };
         }),
 
@@ -148,4 +166,16 @@ usePlayerStore.subscribe((estado, anterior) => {
   bar.slots.forEach((slot, i) => {
     if (slot.kind === "item" && slot.id !== 0 && !presentes.has(slot.id)) bar.clear(i);
   });
+  // "ammo" fica de FORA de propósito: a pilha pode zerar e voltar (comprou
+  // mais, pegou no chão), e o atalho tem que continuar apontando pro mesmo
+  // itemId quando isso acontecer — é o "quick-switch" pedido, não um slot de
+  // usar-e-sumir como os itens comuns.
 });
+
+// mesmo espírito do __world/__player/__basico: "o atalho ainda está
+// configurado?" é a pergunta que a tela sozinha não responde quando o slot
+// está vazio (a pilha zerou) — sem isto, "o atalho sumiu" e "a pilha zerou"
+// pareciam a mesma coisa de fora.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __hotbar?: () => SkillBarSlot[] }).__hotbar = () => useSkillBar.getState().slots;
+}

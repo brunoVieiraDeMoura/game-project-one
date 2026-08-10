@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { gateway, type EntitySnapshot, type InventoryItemPayload, type SkillPayload } from "./gateway";
-import { useWorldStore } from "./worldStore";
+import { interpolatedCell, useWorldStore } from "./worldStore";
 import { useAttackStore } from "./attackStore";
 import { useSkillTargetStore } from "./skillTargetStore";
 import { useSessionStore } from "./sessionStore";
 import { usePlayerStore } from "./playerStore";
 import { damageKind, useDamageFeed } from "./damageFeed";
 import { useVfxStore } from "../vfx/vfxStore";
+import { useProjectileStore, duracaoDoProjetil } from "../vfx/projectileStore";
 import { useNpcStore } from "./npcStore";
 import { useCastStore } from "./castStore";
 import { useGroundItems } from "./GroundItems";
@@ -15,7 +16,7 @@ import { useLootStore } from "../hud/lootStore";
 import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
-import { clearEquipPending, settleStatusWatch } from "./equipmentStore";
+import { clearEquipPending, settleStatusWatch, alcanceDaArma } from "./equipmentStore";
 import { useCardStore } from "./cardStore";
 
 /**
@@ -92,6 +93,38 @@ export function useWorldEvents(): void {
       // e o golpe é a deixa da animação de ataque de QUEM bateu — próprio
       // personagem ou qualquer outra entidade (ver `net/combatAnim`)
       marcarAtaque(p.gid, performance.now());
+      /**
+       * Projétil do PRÓPRIO ataque à distância.
+       *
+       * O rAthena não simula voo de flecha — `ZC_NOTIFY_ACT` já chega com o
+       * golpe RESOLVIDO (acerto/erro/dano, tudo decidido). O "projétil
+       * viajando" é só o cliente desenhando o intervalo entre o clique e o
+       * impacto que já aconteceu — daí nascer aqui, no MESMO pacote que o
+       * número de dano, em vez de simular um "tempo de voo" que o servidor
+       * não conhece.
+       *
+       * Só para o PRÓPRIO personagem: é o único de quem se sabe a arma
+       * equipada (`equipmentStore.alcanceDaArma`) — mob e outro jogador não
+       * têm o inventário sincronizado no cliente. `> 1` é "não é corpo a
+       * corpo" (Knife/Rod, sem arma nenhuma: `range` cai no piso 1 do
+       * item_db/`status_calc_pc_`, status.cpp:4216).
+       */
+      if (p.gid === selfGid && alcanceDaArma() > 1) {
+        const mundo = useWorldStore.getState();
+        const alvo = mundo.entities[p.targetGid];
+        if (alvo) {
+          const agora = performance.now();
+          const de = interpolatedCell(mundo.self, agora);
+          const para = interpolatedCell(alvo, agora);
+          const dist = Math.hypot(para.x - de.x, para.y - de.y);
+          useProjectileStore.getState().spawn({
+            fromCell: { x: de.x, y: de.y },
+            toCell: { x: para.x, y: para.y },
+            startedAt: agora,
+            durationMs: duracaoDoProjetil(dist),
+          });
+        }
+      }
       useDamageFeed.getState().push({
         gid: p.targetGid,
         value: p.damage,
@@ -132,6 +165,27 @@ export function useWorldEvents(): void {
      */
     const onAtaqueLonge = (p: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) =>
       useAttackStore.getState().perseguir(p);
+
+    /**
+     * "Sem flechas!" DO SERVIDOR — a correção autoritativa para a corrida que
+     * o pré-check local (`equipmentStore.precisaDeMunicaoSemTer`, checado
+     * ANTES de emitir `action:attack`) não cobre: a ÚLTIMA flecha pode ter
+     * sido consumida por um golpe anterior ainda em voo quando o clique
+     * seguinte já tinha passado no pré-check. `parar()` encerra a ordem —
+     * sem isso `perseguirAlvo` (`NetPlayer.tsx`) reinsistiria a cada
+     * `REENVIO_ATAQUE_MS`, batendo na mesma recusa pra sempre.
+     */
+    const onSemMunicao = () => {
+      useAttackStore.getState().parar();
+      useDamageFeed.getState().push({
+        gid: useWorldStore.getState().selfGid,
+        value: 0,
+        crit: false,
+        miss: false,
+        onSelf: true,
+        text: "Sem flechas!",
+      });
+    };
 
     // o alvo morreu ou saiu de vista: não há mais quem perseguir nem em quem castar
     const onVanishAlvo = (p: { gid: number }) => {
@@ -285,6 +339,7 @@ export function useWorldEvents(): void {
     socket.on("self:move", onSelfMove);
     socket.on("self:warp", onSelfWarp);
     socket.on("attack:too-far", onAtaqueLonge);
+    socket.on("attack:no-ammo", onSemMunicao);
     socket.on("entity:vanish", onVanishAlvo);
     socket.on("self:stat", onStat);
     socket.on("self:status", onStatus);
@@ -329,6 +384,7 @@ export function useWorldEvents(): void {
       socket.off("self:move", onSelfMove);
       socket.off("self:warp", onSelfWarp);
       socket.off("attack:too-far", onAtaqueLonge);
+      socket.off("attack:no-ammo", onSemMunicao);
       socket.off("entity:vanish", onVanishAlvo);
       socket.off("self:stat", onStat);
       socket.off("self:status", onStatus);
@@ -357,6 +413,7 @@ export function useWorldEvents(): void {
       zerarRelogioDoServidor();
       useDamageFeed.getState().reset();
       useVfxStore.getState().reset();
+      useProjectileStore.getState().reset();
       useNpcStore.getState().close();
       useGroundItems.getState().clear();
       // o gid é RECICLADO pelo servidor: guardar "quem me bateu" entre mapas

@@ -15,11 +15,21 @@ import { diffStats, useStatusDelta } from "./statusDeltaStore";
  *
  * Os dez slots clássicos do RO, exceto CALÇA (ainda não existe no jogo — item
  * 6/7 do pedido: a chave fica de fora até o dia em que existir, em vez de
- * apontar para um bit que não representa nada) e AMMO (sem slot na arte
- * atual; o bit já está aqui pronto para o dia em que a Fase 5 desenhar o
- * terceiro slotzinho perto do escudo).
+ * apontar para um bit que não representa nada). AMMO ganhou slot próprio
+ * (`ui/status.ts: ST_SLOTS`, ao lado do escudo) — ícone gerado em silhueta
+ * simples (não havia arte de flecha no pacote de UI).
  */
-export type EquipSlotKey = "helmet" | "face" | "body" | "coat" | "foot" | "ring1" | "ring2" | "weapon" | "shield";
+export type EquipSlotKey =
+  | "helmet"
+  | "face"
+  | "body"
+  | "coat"
+  | "foot"
+  | "ring1"
+  | "ring2"
+  | "weapon"
+  | "shield"
+  | "ammo";
 
 /**
  * Bitmask EQP_* (rathena/src/common/mmo.hpp:336-353) — CONFERIDO no source,
@@ -38,10 +48,8 @@ export const EQUIP_SLOT_BITS: Record<EquipSlotKey, number> = {
   ring2: 0x0080, // EQP_ACC_L
   weapon: 0x0002, // EQP_HAND_R
   shield: 0x0020, // EQP_HAND_L
+  ammo: 0x8000, // EQP_AMMO
 };
-
-/** reservado para a Fase 5 (flecha) — não tem slot na arte ainda */
-export const EQP_AMMO = 0x8000;
 
 /**
  * Um item de arma de DUAS MÃOS carrega HAND_R|HAND_L ao mesmo tempo — por
@@ -64,6 +72,42 @@ export function useEquipment(): Partial<Record<EquipSlotKey, InventoryItem>> {
   const inventory = usePlayerStore((s) => s.inventory);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => equippedBySlot(inventory), [inventory]);
+}
+
+/**
+ * Alcance de ataque BÁSICO, em células — `playerStore.stats.atkRange`, o
+ * `SP_ATTACKRANGE` que o PRÓPRIO rAthena manda (`status.cpp:6653`, ver o
+ * comentário do campo). Não é mais calculado aqui: já foi (item_db da arma +
+ * Vulture's Eye + carta + refino + buff, `status_calc_pc_`), e o cliente não
+ * tem como reproduzir essa soma sem arriscar divergir dela.
+ *
+ * Fora de componente de propósito: `net/acoes.atacar()` roda de um handler de
+ * clique, não de um render — usa `getState()`, não um hook.
+ */
+export function alcanceDaArma(): number {
+  return usePlayerStore.getState().stats.atkRange || 1;
+}
+
+/**
+ * A arma equipada PRECISA de munição e não há nenhuma no slot de Ammo?
+ *
+ * No rAthena quem exige munição é o TIPO da arma (`sd->state.arrow_atk`,
+ * `battle.cpp:7163`: `status.weapon == W_BOW ||` (Revólver..Granada) —
+ * Bow/armas de fogo, não Whip/Musical, que também têm alcance mas não gastam
+ * flecha). O cliente não tem o subtipo da arma (só o `range` do item_db), e
+ * este projeto só implementa Bow até agora — então "alcance > 1" é o proxy:
+ * toda arma corpo a corpo tem `range` 1 (o piso do `status_calc_pc_`), então
+ * qualquer coisa acima disso é, hoje, sempre um Bow. Se um dia entrar Whip ou
+ * arma de fogo, este proxy vai precisar do subtipo de verdade — documentado
+ * aqui de propósito, não escondido.
+ *
+ * Fora de componente, mesma razão de `alcanceDaArma`.
+ */
+export function precisaDeMunicaoSemTer(): boolean {
+  const equipados = equippedBySlot(usePlayerStore.getState().inventory);
+  if (!equipados.weapon) return false;
+  if (alcanceDaArma() <= 1) return false;
+  return !equipados.ammo;
 }
 
 /**

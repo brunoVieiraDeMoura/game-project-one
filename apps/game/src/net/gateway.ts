@@ -127,6 +127,14 @@ export interface ServerEvents {
    * do cliente, e é o que o cliente oficial faz.
    */
   "attack:too-far": (p: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void;
+  /**
+   * O servidor recusou o DISPARO por falta de flecha (`ZC_ACTION_FAILURE`,
+   * `ARROWFAIL_NO_AMMO`) — a correção autoritativa para a corrida que o
+   * pré-check local (`equipmentStore.precisaDeMunicaoSemTer`, checado ANTES
+   * de emitir) não cobre: a última flecha pode ter sumido entre o clique e o
+   * pacote chegar ao mapa-servidor.
+   */
+  "attack:no-ammo": () => void;
   "self:stat": (p: { name: string; id: number; value: number; bonus?: number }) => void;
   "self:status": (p: Record<string, number>) => void;
   "inv:list": (p: InventoryItemPayload[]) => void;

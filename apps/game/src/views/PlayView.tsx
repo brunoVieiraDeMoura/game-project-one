@@ -24,6 +24,7 @@ import { TriggerRuntime } from "../play/TriggerRuntime";
 import { GroundInteract, markerRadiusFor, PROPS_GROUP } from "../play/GroundInteract";
 import { TERRAIN_GROUP, temLinhaDeVisada } from "../play/pickGround";
 import { AimPreview } from "../play/AimPreview";
+import { AttackRangeCircle } from "../play/AttackRangeCircle";
 import { AlvoPorTab } from "../play/AlvoPorTab";
 import { melhorAlvo, RAIO_ASSIST_PX, type Candidato } from "../play/aimAssist";
 import { useSoftLockStore } from "../play/softLockStore";
@@ -60,6 +61,7 @@ import { NetPlayer } from "../net/NetPlayer";
 import { NetEntities } from "../net/NetEntity";
 import { NetDamageNumbers } from "../net/NetDamageNumbers";
 import { SkillVfx } from "../vfx/SkillVfx";
+import { Projectile } from "../vfx/Projectile";
 import { GroundItems, useGroundItems } from "../net/GroundItems";
 import { preloadAssets } from "../assets";
 import { preloadPropsDoMapa } from "../props/registry";
@@ -986,6 +988,8 @@ function Scene({
           <NetDamageNumbers map={map} mapping={mapping} />
           {/* efeitos de skill: todos nascem de pacote do servidor */}
           <SkillVfx map={map} mapping={mapping} cellSize={moveCell} terrain={world.terrain} />
+          {/* projétil de ataque à distância (flecha etc): nasce do próprio ZC.NOTIFY_ACT, ver net/useWorldEvents */}
+          <Projectile map={map} mapping={mapping} cellSize={moveCell} />
         </>
       ) : (
         <DamageNumbers />
@@ -1018,6 +1022,8 @@ function Scene({
       )}
       {/* skill de área mirando: onde ela cai e de onde dá para lançá-la */}
       <AimPreview playerPos={playerPos} hoverPos={hoverChao} cellSize={moveCell} terrain={world.terrain} />
+      {/* alcance do ataque básico, enquanto houver alvo selecionado */}
+      <AttackRangeCircle playerPos={playerPos} cellSize={moveCell} terrain={world.terrain} />
       {/* filtro retrô (16 bits) — pós-processamento, ver scene/RetroFilter */}
       <RetroFilter
         retroMode={(RETRO_OVERRIDE as typeof gameplay.retroMode) ?? gameplay.retroMode}

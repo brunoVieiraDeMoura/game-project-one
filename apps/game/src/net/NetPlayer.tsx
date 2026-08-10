@@ -31,13 +31,14 @@ import {
 } from "../core/diagnostics/flightRecorder";
 import { desvioDoRelogio } from "./relogioDoServidor";
 import { celulaParaEncostar, useAttackStore } from "./attackStore";
+import { registrarParadaDeMovimento } from "./pararMovimentoDeAcao";
 import { usePickupStore } from "./pickupStore";
 import { useGroundItems } from "./GroundItems";
 import { usePlayerStore } from "./playerStore";
 import { useAimStore } from "./aimStore";
 import { estaCastando } from "./castStore";
 import { useAtaqueBasico } from "./ataqueBasico";
-import { alcanceDaSkill } from "./skillCatalog";
+import { alcanceEfetivoDaSkill } from "./skillCatalog";
 import { celulaNoAlcance, dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
 import { useSkillTargetStore } from "./skillTargetStore";
 import { pulsoDe } from "./combatAnim";
@@ -347,6 +348,35 @@ export function NetPlayer({
     destinoFinal.current = null;
     emitir(alvo, origem, caminho.length);
   };
+
+  /**
+   * PARA de andar — o freio que ESC precisa e que nenhum clique fornece
+   * sozinho (ver `net/pararMovimentoDeAcao.ts` para o porquê do truque).
+   *
+   * Pede `move:to` para a PRÓPRIA célula atual: é o mesmo `move:to` de
+   * sempre, só que com destino = origem, o que faz `unit_walktoxy`
+   * (unit.cpp:894-899) redirecionar o que já estava em voo para um caminho de
+   * comprimento zero. Limpa os três destinos de ordem (ataque, skill de
+   * célula, skill de alvo) — sem isso a ordem cancelada voltaria a pedir
+   * caminhada no quadro seguinte, porque só o `pendente` dela foi desarmado,
+   * não o destino que ela já tinha em voo.
+   */
+  const pararNoLugar = () => {
+    const de = interpolatedCell(useWorldStore.getState().self, performance.now());
+    const aqui = { x: Math.round(de.x), y: Math.round(de.y) };
+    destinoFinal.current = null;
+    destinoDaSkill.current = null;
+    destinoDoCast.current = null;
+    pedirMovimento(aqui);
+  };
+  // registrado no RENDER (idem `setPathfinder`) e de novo no efeito abaixo —
+  // sem os dois, o StrictMode desliga o freio a sessão inteira.
+  registrarParadaDeMovimento(pararNoLugar);
+  useEffect(() => {
+    registrarParadaDeMovimento(pararNoLugar);
+    return () => registrarParadaDeMovimento(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Manda o pedido e ABRE UMA JANELA DE RESPOSTA.
@@ -703,7 +733,7 @@ export function NetPlayer({
        * execução, não outra decisão. Mesma natureza da ida até o mob para bater
        * (`attackStore`) e até o item para pegar (`pickupStore`).
        */
-      const raio = alcanceDaSkill(aiming.id);
+      const raio = alcanceEfetivoDaSkill(aiming.id);
       const meu = interpolatedCell(useWorldStore.getState().self, performance.now());
       const eu = { x: Math.round(meu.x), y: Math.round(meu.y) };
       if (dentroDoAlcance(eu, cell, raio)) {

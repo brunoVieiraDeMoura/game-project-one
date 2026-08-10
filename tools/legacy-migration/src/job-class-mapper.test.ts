@@ -138,7 +138,8 @@ describe("Mapper de Classes — JobClass ↔ 5 formatos oficiais", () => {
     const statsOut = jobClassToJobStatsEntry(jc, jobName, statsEntry);
     const basepointsOut = jobClassToJobBasepointsEntry(jc, jobName, basepointsEntry);
     const expOut = jobClassToJobExpEntry(jc, jobName, expEntry);
-    const aspdOut = jobClassToJobAspdEntry(jc, jobName, aspdEntry);
+    const aspdWarnings: string[] = [];
+    const aspdOut = jobClassToJobAspdEntry(jc, jobName, aspdEntry, aspdWarnings);
     const treeWarnings: string[] = [];
     const treeOut = jobClassToSkillTreeEntry(jc, jobName, jobs, skills, treeWarnings);
 
@@ -147,6 +148,7 @@ describe("Mapper de Classes — JobClass ↔ 5 formatos oficiais", () => {
     expect(RawJobBodyEntrySchema.safeParse(basepointsOut).success).toBe(true);
     expect(RawJobBodyEntrySchema.safeParse(expOut).success).toBe(true);
     expect(RawJobBodyEntrySchema.safeParse(aspdOut).success).toBe(true);
+    expect(aspdWarnings).toEqual([]); // dado real do Swordman: todo weaponType já está nos 25 reais
 
     // reparseia raw→JobClassPart de novo a partir do que foi ESCRITO e compara com o original
     const rtWarnings: string[] = [];

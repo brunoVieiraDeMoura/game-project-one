@@ -78,6 +78,8 @@ export interface ServerEvents {
 	"self:warp": (payload: Cell) => void;
 	/** o alvo está longe demais: o rAthena NÃO persegue por você (unit.cpp:3259) */
 	"attack:too-far": (payload: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void;
+	/** o servidor recusou o disparo por falta de flecha (`ZC_ACTION_FAILURE`, `ARROWFAIL_NO_AMMO`) */
+	"attack:no-ammo": () => void;
 	"self:stat": (payload: { name: string; id: number; value: number; bonus?: number }) => void;
 	"self:status": (payload: StatusBlock) => void;
 	"inv:list": (payload: InventoryItem[]) => void;

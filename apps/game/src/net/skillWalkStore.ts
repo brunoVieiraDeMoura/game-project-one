@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { distanciaDeAtaque } from "./attackStore";
+import { distanciaDeAtaque, pontoNoCirculo } from "./attackStore";
 
 /**
  * "Vou até lá e lanço a magia" — a terceira ordem de vários quadros.
@@ -88,12 +88,5 @@ export function celulaNoAlcance(
   raio: number,
 ): { x: number; y: number } | null {
   if (dentroDoAlcance(eu, alvo, raio)) return null;
-  const dx = eu.x - alvo.x;
-  const dy = eu.y - alvo.y;
-  const d = Math.hypot(dx, dy);
-  // em cima do alvo e fora de alcance é impossível (d = 0 só com raio < 0, que
-  // `raioDeAlcance` já converte em 0) — mas dividir por zero, nunca
-  if (d === 0) return { ...alvo };
-  const k = raio / d;
-  return { x: Math.round(alvo.x + dx * k), y: Math.round(alvo.y + dy * k) };
+  return pontoNoCirculo(eu, alvo, raio);
 }

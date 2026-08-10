@@ -102,6 +102,8 @@ export declare interface RoSession {
 		event: "attack-too-far",
 		listener: (payload: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void,
 	): this;
+	/** o servidor recusou o disparo por falta de flecha (`ARROWFAIL_NO_AMMO`) */
+	on(event: "attack-no-ammo", listener: () => void): this;
 	on(
 		event: "stat",
 		listener: (payload: { name: string; id: number; value: number; bonus?: number }) => void,
@@ -706,6 +708,26 @@ export class RoSession extends EventEmitter {
 			});
 		}
 
+		/**
+		 * ZC_ATTACK_RANGE (0x013a) — "até onde você pode atacar", mandado no
+		 * login (`clif_initialstatus`, clif.cpp:4171) e de novo toda vez que
+		 * `status_calc_pc_` recalcula e `rhw.range` MUDA (status.cpp:6653-6654,
+		 * o mesmo diff-e-avisa de HP/ATK/DEF). Cobre arma, passiva (Vulture's
+		 * Eye), carta, refino e buff de uma vez, porque é o PRÓPRIO servidor
+		 * quem soma tudo isso em `rhw.range` — não uma tabela nossa tentando
+		 * adivinhar bônus.
+		 *
+		 * Entra pelo MESMO cano do resto dos stats (`pushStat`/`self:stat`):
+		 * sobrevive a `world:ready` (reenviado do snapshot) e o cliente não
+		 * precisa de um canal novo para um número que é, no fundo, mais um
+		 * atributo do personagem.
+		 */
+		if (PACKET.ZC.ATTACK_RANGE) {
+			conn.hook(PACKET.ZC.ATTACK_RANGE, (pkt: any) => {
+				this.pushStat({ name: statName(1000), id: 1000, value: pkt.currentAttRange });
+			});
+		}
+
 		conn.hook(PACKET.ZC.NOTIFY_VANISH, (pkt: any) => {
 			this.entities.delete(pkt.GID);
 			this.emit("entity-vanish", { gid: pkt.GID, reason: pkt.type });
@@ -874,6 +896,14 @@ export class RoSession extends EventEmitter {
 				// result !== 0 = não pegou (peso, inventário cheio…)
 				if (pkt.result !== 0) return;
 				const item = toInventoryItem(pkt);
+				// `pkt.location` aqui é `pc_equippoint(sd,n)` (clif.cpp:2859) — o
+				// bitmask de ONDE O ITEM CABE, não onde está vestido. Item pego do
+				// chão NUNCA está equipado (o RO não veste sozinho); sem isto uma
+				// arma ou carta pega do chão chegava com `equipped: true` (mesma
+				// armadilha do `toInventoryItem`, achada testando Cartas ao vivo —
+				// ali era a lista NORMAL, aqui é o próprio ACK de pickup).
+				item.equipped = false;
+				item.location = 0;
 				const existing = this.inventory.find((i) => i.index === item.index);
 				if (existing) existing.amount += item.amount;
 				else this.inventory.push(item);
@@ -887,8 +917,21 @@ export class RoSession extends EventEmitter {
 			});
 		}
 		if (PACKET.ZC.DELETE_ITEM_FROM_BODY) {
+			/**
+			 * `PACKET_ZC_DELETE_ITEM_FROM_BODY` (PacketStructure.js:9669) lê os
+			 * campos com MAIÚSCULA — `this.Index`/`this.Count`, diferente de todo
+			 * outro pacote de item deste arquivo (USE_ITEM_ACK, ITEM_THROW_ACK)
+			 * que usa minúscula. Ler `pkt.index`/`pkt.count` aqui dava sempre
+			 * `undefined` — silencioso, porque `forgetItem(undefined, undefined)`
+			 * não encontra item nenhum pelo índice e o `item-remove` sai vazio
+			 * (`JSON.stringify({index:undefined,...})` → `{}`). Era a causa raiz
+			 * de "flecha consumida no servidor, inventário nunca desce no
+			 * cliente" — este pacote é o ÚNICO caminho de `pc_delitem` para
+			 * consumo de munição (`battle_consume_ammo`, battle.cpp:2666) e de
+			 * skill (skill.cpp:4262/4618/5461).
+			 */
 			conn.hook(PACKET.ZC.DELETE_ITEM_FROM_BODY, (pkt: any) => {
-				this.forgetItem(pkt.index, pkt.count);
+				this.forgetItem(pkt.Index ?? pkt.index, pkt.Count ?? pkt.count);
 			});
 		}
 
@@ -959,6 +1002,58 @@ export class RoSession extends EventEmitter {
 		}
 
 		/**
+		 * Munição é o ÚNICO tipo de equip cujo SUCESSO não passa pelo ACK
+		 * genérico acima — confirmado no source (`pc.cpp:12163-12166`):
+		 * `if(pos==EQP_AMMO) { clif_arrowequip(*sd); clif_arrow_fail(*sd,
+		 * ARROWFAIL_SUCCESS); }` no lugar de `clif_equipitemack`. A FALHA de
+		 * flecha (classe errada, nível baixo etc) continua saindo pelo ACK
+		 * normal — pc_isequip roda ANTES dessa bifurcação — só o SUCESSO tem
+		 * pacote próprio. Sem este hook, todo `item:equip` de munição parecia
+		 * "sem resposta" pro cliente: o rAthena equipava de verdade
+		 * (confirmado no log do servidor, `equip <id> (<n>) <pos>:<pos>` sem
+		 * erro seguinte) e o item ficava com a flecha carregada, mas a UI
+		 * nunca soube — o slot no Alt+Q não acendia e o pedido "expirava".
+		 *
+		 * `ZC_EQUIP_ARROW` (0x013c) só traz o ÍNDICE (client_index já
+		 * aplicado pelo rAthena, `clif.cpp:4212`) — location é sempre
+		 * EQP_AMMO, não vem no pacote porque só existe UM slot possível.
+		 */
+		conn.hook(PACKET.ZC.EQUIP_ARROW, (pkt: any) => {
+			const item = this.inventory.find((i) => i.index === pkt.index);
+			if (item) {
+				item.location = 0x8000; // EQP_AMMO
+				item.equipped = true;
+			}
+			this.emit("item-equip-result", {
+				index: pkt.index,
+				success: true,
+				equipped: item?.equipped ?? true,
+				location: item?.location ?? 0x8000,
+			});
+		});
+
+		/**
+		 * ZC_ACTION_FAILURE (0x13b) — o servidor tentou atirar e não pôde.
+		 * `e_action_failure` (clif.hpp:798) só tem 4 valores e o único que nos
+		 * interessa é `ARROWFAIL_NO_AMMO = 0` (`battle.cpp:7171`, dentro de
+		 * `battle_weapon_attack`, quando `equip_index[EQI_AMMO] < 0`).
+		 *
+		 * Existe pelo mesmo motivo do pré-check no cliente (`equipmentStore.
+		 * precisaDeMunicaoSemTer`, checado ANTES de mandar `action:attack`) NÃO
+		 * bastar sozinho: entre o clique e o pacote chegar ao servidor, a
+		 * última flecha pode ter sido consumida por um golpe anterior que
+		 * ainda estava em voo — o pré-check local vê munição que já não existe
+		 * mais no personagem real. Este pacote é a correção AUTORITATIVA para
+		 * essa corrida, e cobre também qualquer outro caminho de ataque que o
+		 * pré-check não tenha coberto.
+		 */
+		if (PACKET.ZC.ACTION_FAILURE) {
+			conn.hook(PACKET.ZC.ACTION_FAILURE, (pkt: any) => {
+				if (pkt.errorCode === 0) this.emit("attack-no-ammo");
+			});
+		}
+
+		/**
 		 * Cartas (clif.cpp:7070-7142): duplo clique pede a LISTA de equipamentos
 		 * compatíveis (0x17a→0x17b) — o rAthena escreve os índices já em
 		 * formato de FIO (`i+2`, o mesmo de `this.inventory[].index` em todo o
@@ -997,6 +1092,19 @@ export class RoSession extends EventEmitter {
 						const slot = equip.cards.findIndex((c) => c === 0);
 						if (slot !== -1) equip.cards[slot] = pending.itemId;
 					}
+					/**
+					 * A carta CONSUMIDA não gera pacote nenhum próprio — confirmado
+					 * no source, não suposto: `pc_insert_card` chama `pc_delitem(sd,
+					 * idx_card, 1, 1, 0, ...)` com `type=1`, e `pc_delitem` só manda
+					 * `clif_delitem` (o DELETE_ITEM_FROM_BODY que o resto deste
+					 * arquivo escuta) quando `!(type&1)` — pc.cpp:6120-6121. Com
+					 * type=1 essa notificação é PULADA de propósito; o cliente
+					 * original deduz a remoção pelo sucesso do próprio ACK, e é
+					 * exatamente isso que este bloco faz no lugar dele (achado
+					 * testando ao vivo: sem isto a carta ficava fantasma na bolsa
+					 * mesmo já composta de verdade no equipamento).
+					 */
+					this.forgetItem(pkt.cardIndex, 1);
 				}
 				this.emit("card-result", {
 					equipIndex: pkt.equipIndex,
@@ -1893,10 +2001,26 @@ function toSkill(raw: any): PlayerSkill {
  * aqui em vez de espalhar `??` pelo cliente.
  */
 function toInventoryItem(raw: any): InventoryItem {
-	// WearState/location é o bitmask EQP_* de ONDE está equipado (0 = nenhum
-	// lugar) — guardado inteiro, não só o booleano, para o equipmentStore saber
-	// QUAL slot (anel 1 vs anel 2, por exemplo) sem adivinhar.
-	const location = raw.WearState ?? raw.location ?? 0;
+	/**
+	 * `WearState` existe nos DOIS pacotes de inventário (clif.cpp:2258-2263,
+	 * `NORMALITEM_INFO`/`EQUIPITEM_INFO`), mas com significados DIFERENTES:
+	 * - equipamento (ZC_EQUIPMENT_ITEMLIST e variantes): `p->WearState =
+	 *   it->equip` (clif.cpp:2946) — o bitmask EQP_* de ONDE ESTÁ EQUIPADO
+	 *   AGORA, do item de INSTÂNCIA. É o que o `equipmentStore` precisa.
+	 * - normal (ZC_NORMAL_ITEMLIST e variantes — consumível, etc, CARTA):
+	 *   `p->WearState = id->equip` (clif.cpp:3001) — o bitmask de ONDE O ITEM
+	 *   CABE, da DEFINIÇÃO estática (`id`, não `it`). Uma carta de arma tem
+	 *   `equip = EQP_HAND_R` sempre, mesmo solta na bolsa — não é "equipado".
+	 *
+	 * A distinção não dá pra fazer pelo TIPO do item (a normal list carrega
+	 * carta, mas também item tipo "etc" que por acaso tem `equip` zerado, o
+	 * que escondia o bug): é a PRESENÇA do campo `location` que diferencia os
+	 * dois pacotes — só o de equipamento tem essa struct (`EQUIPITEM_INFO`),
+	 * a normal nunca escreve `location` nenhum. Achado testando Cartas ao
+	 * vivo: toda carta chegava com "(equipado)" no tooltip mesmo solta.
+	 */
+	const deEquipamento = raw.location !== undefined;
+	const location = deEquipamento ? (raw.WearState ?? raw.location ?? 0) : 0;
 	return {
 		index: raw.index ?? raw.Index ?? 0,
 		itemId: raw.ITID ?? 0,
@@ -1904,7 +2028,7 @@ function toInventoryItem(raw: any): InventoryItem {
 		type: raw.type ?? 0,
 		identified: Boolean(raw.IsIdentified ?? 1),
 		refine: raw.RefiningLevel ?? 0,
-		equipped: location !== 0,
+		equipped: deEquipamento && location !== 0,
 		location,
 		cards: [raw.slot?.card1 ?? 0, raw.slot?.card2 ?? 0, raw.slot?.card3 ?? 0, raw.slot?.card4 ?? 0],
 	};

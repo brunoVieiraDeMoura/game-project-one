@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { usePlayerStore } from "./playerStore";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
@@ -112,10 +113,22 @@ export function skillLabel(id: number, fallback: string): string {
 /**
  * Alcance da skill em CÉLULAS, tratando as duas convenções do rAthena.
  *
- * Negativo quer dizer "o alcance da arma" e não uma distância; zero, numa skill
- * usada no próprio personagem, é ausência de alcance. Nos dois casos não há
- * fronteira a desenhar nem distância a percorrer — inventar uma seria mentir
- * sobre o que o servidor aceita.
+ * Negativo (`Range: -9` da AC_DOUBLE/Double Strafe, por exemplo) é "alcance
+ * FIXO desse valor absoluto" na configuração PADRÃO — confirmado em
+ * `skill_get_range2` (rathena/src/map/skill.cpp:328-334): `if (range < 0) {
+ * if (battle_config.use_weapon_skill_range & bl->type) return
+ * status_get_range(bl); range *= -1; }`. A flag (`skillrange_from_weapon`,
+ * battle.cpp:8270) tem padrão DESLIGADO para todo tipo de unidade (`BL_NUL`)
+ * e não está religada em `rathena-conf/battle_conf.txt` — então o caminho que
+ * roda de verdade neste servidor é sempre o segundo, `abs(range)`, nunca o
+ * alcance da arma equipada.
+ *
+ * Tratar negativo como "sem alcance" (0, que aqui também quer dizer "sem
+ * restrição a respeitar") fazia uma skill como Double Strafe lançar na hora,
+ * não importa a distância — sem WALK-TO-RANGE nenhum — e o servidor recusava
+ * calado (skill de alvo tem a MESMA recusa silenciosa do ataque básico,
+ * `battle_check_range`, battle.cpp:8226). Zero numa skill usada no próprio
+ * personagem continua ausência de alcance, sem inverter nada.
  *
  * Mora aqui, junto do campo que ela interpreta, porque DOIS lugares dependem de
  * concordar: o aro que o `play/AimPreview` desenha e a distância que o
@@ -123,11 +136,53 @@ export function skillLabel(id: number, fallback: string): string {
  * ponto diferente daquele em que o disco deixa de ser vermelho.
  */
 export function raioDeAlcance(range: number | undefined): number {
-  return range !== undefined && range > 0 ? range : 0;
+  if (range === undefined || range === 0) return 0;
+  return Math.abs(range);
 }
 
 /** o alcance da skill que está no catálogo, já em células (0 = sem alcance) */
 export function alcanceDaSkill(id: number): number {
+  return raioDeAlcance(useSkillCatalog.getState().byId[id]?.range);
+}
+
+/**
+ * Alcance REAL da skill, para o personagem AGORA — não o número cravado do
+ * skill_db.
+ *
+ * Confirmado no rAthena: quem calcula o alcance de uma skill é
+ * `skill_get_range2` (skill.cpp:324-365), e não o `range` cru do banco. Duas
+ * coisas ele faz que o `alcanceDaSkill` acima (lê o catálogo estático da
+ * nossa API) não sabe:
+ *
+ *  1. `range` negativo (Double Strafe: `Range: -9`) não é "alcance da arma" a
+ *     não ser que `skillrange_from_weapon` esteja ligado
+ *     (`battle_config.use_weapon_skill_range`, conf/battle/skill.conf:83 =
+ *     `0` por padrão, e não está religado em `rathena-conf/battle_conf.txt`)
+ *     — no nosso servidor ele SEMPRE cai no `else` (`skill.cpp:333`,
+ *     `range *= -1`), então o alcance-base de Double Strafe é `abs(-9)` = 9.
+ *  2. Skill com `INF2_ALTERRANGEVULTURE` (Double Strafe, Arrow Shower — o
+ *     `Flags: AlterRangeVulture: true` do skill_db) SOMA o NÍVEL de Vulture's
+ *     Eye por cima (`skill.cpp:344`: `range += pc_checkskill(bl,
+ *     AC_VULTURE)`) — SEPARADO do bônus que Vulture's Eye já dá ao ataque
+ *     básico (`status.cpp:4490`: `rhw.range += skill`, que soma na arma). Os
+ *     dois usam o MESMO número (o nível da passiva) mas em bases diferentes
+ *     (9 da skill vs 5 do Bow) — não é o mesmo alcance, e por isso Double
+ *     Strafe NÃO herda `rhw.range`/`atkRange`: ela tem alcance PRÓPRIO.
+ *
+ * A boa notícia: o rAthena já manda o resultado final PRONTO. `ZC.
+ * SKILLINFO_LIST`/`ZC.ADD_SKILL` carregam `range2` — literalmente
+ * `skill_get_range2(&sd, id, lv, false)` (clif.cpp:5736/5790), o MESMO
+ * cálculo acima, já resolvido pelo servidor — e o gateway já grava isso em
+ * `PlayerSkill.range` (`session.ts: toSkill`, campo `attackRange` do
+ * pacote). Não tem cálculo nenhum a duplicar aqui: é só ler o valor que já
+ * chegou, em vez do catálogo estático (que só conhece o `-9` cru do banco).
+ */
+export function alcanceEfetivoDaSkill(id: number): number {
+  const viva = usePlayerStore.getState().skills.find((s) => s.id === id);
+  if (viva) return Math.max(0, viva.range);
+  // skill que o personagem não tem na lista (não deveria acontecer para uma
+  // que ele está tentando lançar) — o catálogo estático é o único palpite que
+  // sobra, melhor que travar sem alcance nenhum.
   return raioDeAlcance(useSkillCatalog.getState().byId[id]?.range);
 }
 

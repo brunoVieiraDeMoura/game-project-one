@@ -41,12 +41,22 @@ const caixa = (r: { x: number; y: number; w: number; h: number }) => ({
 
 /**
  * Categorias do inventário do RO por `type` do item_db
- * (rathena/src/map/itemdb.hpp, enum item_types): 0 healing, 2 usable, 11 delay
- * consume, 18 cash → consumível; 4 armor, 5 weapon, 8 ammo → equipamento; o
- * resto (3 etc, 6 card, 7 pet egg, 10 pet armor) cai em Outros.
+ * (rathena/src/common/mmo.hpp:224-237, enum item_types): 0 healing, 2 usable,
+ * 11 delay consume, 18 cash → consumível; 4 armor, 5 weapon → equipamento; o
+ * resto (3 etc, 6 card, 7 pet egg, 8 pet armor, 10 ammo, 12 shadow gear) cai
+ * em Outros. `8` era tratado como munição por engano — é IT_PETARMOR (equipa
+ * no PET, outro sistema, ainda não existe aqui).
+ *
+ * `10 = IT_AMMO` fica de FORA da categoria visual "Equipamentos" de
+ * propósito: no RO a flecha sempre foi listada em Etc, mesmo podendo ser
+ * equipada — categoria de inventário e "dá pra equipar" são coisas
+ * DIFERENTES (por isso `EQUIPABLE_TYPES`, abaixo, é um conjunto à parte:
+ * inclui ammo, e é ELE que decide duplo-clique/tooltip, não `EQUIP_TYPES`).
  */
 const CONSUMABLE_TYPES = new Set([0, 2, 11, 18]);
-const EQUIP_TYPES = new Set([4, 5, 8]);
+const EQUIP_TYPES = new Set([4, 5]);
+/** IT_AMMO (mmo.hpp:234) entra aqui, não em `EQUIP_TYPES` — ver comentário acima */
+const EQUIPABLE_TYPES = new Set([4, 5, 10]);
 /** IT_CARD (rathena/src/common/mmo.hpp:230) — cai em Outros, duplo clique compõe */
 const CARD_TYPE = 6;
 
@@ -97,7 +107,7 @@ export function InventoryWindow() {
   };
 
   const equipar = (item: (typeof inventory)[number]) => {
-    if (!EQUIP_TYPES.has(item.type)) return;
+    if (!EQUIPABLE_TYPES.has(item.type)) return;
     // Duplo clique repetido enquanto o pedido anterior ainda não voltou não
     // manda um segundo `CZ.REQ_WEAR_EQUIP` — o slot fica preso até o ACK
     // (sucesso OU falha) chegar, nunca por um relógio do cliente.
@@ -209,7 +219,7 @@ export function InventoryWindow() {
               titulo={
                 it
                   ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — ${
-                      EQUIP_TYPES.has(it.type)
+                      EQUIPABLE_TYPES.has(it.type)
                         ? "duplo clique equipa"
                         : it.type === CARD_TYPE
                           ? "duplo clique compõe num equipamento"
@@ -220,7 +230,7 @@ export function InventoryWindow() {
               onClick={it && CONSUMABLE_TYPES.has(it.type) ? () => usar(it) : undefined}
               onDoubleClick={
                 it
-                  ? EQUIP_TYPES.has(it.type)
+                  ? EQUIPABLE_TYPES.has(it.type)
                     ? () => equipar(it)
                     : it.type === CARD_TYPE
                       ? () => useCardStore.getState().abrir(it.index)

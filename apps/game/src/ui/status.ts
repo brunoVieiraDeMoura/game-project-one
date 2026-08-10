@@ -27,6 +27,15 @@ export const ST_ART = {
   ring: `${BASE}/icon-ring.png`,
   shield: `${BASE}/icon-shield.png`,
   weapon: `${BASE}/icon-weapon.png`,
+  /**
+   * Não veio no pacote `ui_definitiva/status` (busca confirmada: nenhum
+   * ícone de flecha/munição em todo o projeto). Gerado por rasterização
+   * própria (`scripts/` não — script one-off, não fica no repo), silhueta
+   * simples no mesmo tratamento monocromático dos outros nove: gradiente
+   * metálico claro→escuro, contorno de tinta, sombra suave. 300×300 RGBA,
+   * igual aos demais.
+   */
+  ammo: `${BASE}/icon-ammo.png`,
 } as const;
 
 /** tamanho nativo do fundo — origem de todas as medidas abaixo */
@@ -96,6 +105,21 @@ export const ST_SLOTS = [
   { key: "ring2", art: ST_ART.ring, label: "Acessório 2", cx: 234, cy: 273 },
   { key: "weapon", art: ST_ART.weapon, label: "Arma", cx: 122, cy: 315 },
   { key: "shield", art: ST_ART.shield, label: "Escudo", cx: 178, cy: 315 },
+  /**
+   * Terceiro slotzinho ao lado do escudo (intenção já registrada em
+   * `equipmentStore.ts` desde a Fase 5) — MENOR que os outros nove
+   * (`d: ST_SLOT_D_AMMO`, 60% do diâmetro comum), como no RO de referência:
+   * munição não é peça de equipamento no mesmo peso visual de arma/armadura.
+   *
+   * Posição: mesma folga de borda-a-borda que já separa arma↔escudo (13px —
+   * `178 − 43/2 − 122 − 43/2`), só que com o raio MENOR do lado da munição —
+   * `178 + 43/2 + 13 + 26/2 = 226`. Medido pixel a pixel na cena de floresta
+   * (`status-background.png`): a borda direita do slot (`226 + 13 = 239`) fica
+   * bem dentro de onde a cena transiciona pro painel escuro (x=264) — não
+   * esbarra na moldura, com folga de sobra (o dobro da que já valia com o
+   * slot no tamanho cheio).
+   */
+  { key: "ammo", art: ST_ART.ammo, label: "Munição", cx: 226, cy: 315, d: 26 },
 ] as const;
 
 export const ST_SLOT_D = 43;

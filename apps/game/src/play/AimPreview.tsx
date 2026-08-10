@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { TerrainQuery } from "@ragnarok/engine-core";
 import { useAimStore } from "../net/aimStore";
 import { distanciaDeAtaque } from "../net/attackStore";
-import { raioDeAlcance, useSkillCatalog } from "../net/skillCatalog";
+import { alcanceEfetivoDaSkill, useSkillCatalog } from "../net/skillCatalog";
 import { moldarMalhaTerreno } from "./pickGround";
 
 /**
@@ -22,8 +22,11 @@ import { moldarMalhaTerreno } from "./pickGround";
  *  • **área** — um disco na célula apontada, no raio `areaRadius`. É o que vai
  *    ser atingido.
  *
- * Os dois vêm do catálogo (`net/skillCatalog`), que já resolve os campos por
- * NÍVEL — a área da Storm Gust nível 1 não é a do nível 10.
+ * A ÁREA vem do catálogo (`net/skillCatalog`), que já resolve por NÍVEL — a
+ * área da Storm Gust nível 1 não é a do nível 10. O ALCANCE não: ele vem de
+ * `alcanceEfetivoDaSkill`, o `range2` que o PRÓPRIO rAthena computa e manda
+ * (`skill_get_range2`) — já com bônus de passiva tipo Vulture's Eye somado.
+ * O catálogo só tem o `range` cru do skill_db, sem esse bônus.
  *
  * Skill sem área (`areaRadius` 0) mostra só o alcance: inventar um disco de uma
  * célula sugeriria uma área que ela não tem.
@@ -140,7 +143,7 @@ export function AimPreview({
    */
   const areaEm = useRef<string | null>(null);
   const alcanceEm = useRef<string | null>(null);
-  const raio = raioDeAlcance(info?.range);
+  const raio = mirando ? alcanceEfetivoDaSkill(mirando.id) : 0;
   const raioArea = Math.max(0, info?.areaRadius ?? 0);
   // raio mudou (trocou de skill/nível): a malha antiga tem outra extensão —
   // sem isto ela ficaria com a forma da skill anterior até o hover mudar de

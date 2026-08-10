@@ -77,6 +77,12 @@ export const STAT_NAMES: Record<number, string> = {
 	231: "traitPoint",
 	232: "ap",
 	233: "maxAp",
+	// SP_ATTACKRANGE (map.hpp:536) — o `rhw.range` DE VERDADE, já com toda
+	// passiva/buff/carta/item somados (status.cpp:6653-6654 manda de novo toda
+	// vez que ele muda). Não chega por este dispatch genérico — tem pacote
+	// PRÓPRIO (0x013a, ver `session.ts`) — mas o NOME entra aqui para o valor
+	// cair no mesmo `pushStat`/`playerStore.applyStat` que todo o resto usa.
+	1000: "atkRange",
 };
 
 export function statName(varId: number): string {

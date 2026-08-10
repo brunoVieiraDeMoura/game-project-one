@@ -69,6 +69,7 @@ io.on("connection", (socket) => {
 		ro.on("self-move", (payload) => socket.emit("self:move", payload));
 		ro.on("self-warp", (payload) => socket.emit("self:warp", payload));
 		ro.on("attack-too-far", (payload) => socket.emit("attack:too-far", payload));
+		ro.on("attack-no-ammo", () => socket.emit("attack:no-ammo"));
 		ro.on("entity-spawn", (entity) => socket.emit("entity:spawn", entity));
 		ro.on("entity-move", (payload) => socket.emit("entity:move", payload));
 		ro.on("entity-stop", (payload) => socket.emit("entity:stop", payload));

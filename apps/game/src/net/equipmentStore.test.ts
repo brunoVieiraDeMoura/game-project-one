@@ -56,6 +56,11 @@ describe("equippedBySlot — bitmask EQP_* conferido no source do rAthena", () =
     expect(out.ring2).toBe(anelEsquerdo);
   });
 
+  it("EQP_AMMO cai no slot ammo (flecha/munição, ao lado do escudo na tela)", () => {
+    const flecha = item({ index: 11, type: 10, location: 0x8000 }); // EQP_AMMO
+    expect(equippedBySlot([flecha])).toEqual({ ammo: flecha });
+  });
+
   it("location 0 (não equipado) não aparece em slot nenhum", () => {
     const naBolsa = item({ index: 5, location: 0, equipped: false });
     expect(equippedBySlot([naBolsa])).toEqual({});

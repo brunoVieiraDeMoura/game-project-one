@@ -1,138 +1,79 @@
-## Próxima etapa — Integrar o Writer ao Admin/API
+Aprovado o protocolo da Fase 3 exatamente como descrito.
 
-O reseed do novo pipeline de NPCs foi concluído e validado.
+Agora EXECUTE a bateria de testes funcionais reais.
 
-### Estado confirmado
+Não altere o escopo nem transforme o plano em implementação. Siga a ordem definida no relatório:
 
-* 24.133 NPCs no banco.
-* 0 IDs perdidos.
-* `duplicateOf`, `warp`, `shop` e `legacyRef` preservados.
-* 4.074 NPCs com `eventHandlers`, totalizando 11.649 handlers.
-* 24.133/24.133 passam no `NpcSchema`.
-* Comparação campo a campo contra `output/npcs-v2-compare.json`: 0 divergências.
-* Writer no-op: 9.206/9.206 byte-identical.
-* 159/159 testes legacy-migration.
-* `pnpm -r typecheck`: 9/9.
-* Nenhum `.txt` do rAthena foi alterado pelo reseed.
-* O Writer já foi testado funcionalmente e aprovado.
+1. Preparação e backups.
+2. Mapa `gpqa01`.
+3. Monstro novo + monstro rAthena.
+4. XP + drops + skills de monstro.
+5. Itens.
+6. Equipamentos.
+7. Skills.
+8. Status.
+9. Classes.
+10. NPCs.
+11. Verificação final.
 
-### Objetivo desta etapa
+Para cada teste, siga obrigatoriamente as 3 camadas:
 
-Integrar o Writer existente ao fluxo real de edição de NPCs no Admin/API.
+PERSISTÊNCIA → RUNTIME → `/play`
 
-O objetivo é fazer uma edição realizada pelo painel chegar ao `planNpcWrite` e, quando aprovada pelo Writer, alterar o `.txt` correspondente no rAthena de forma segura.
+E registre a evidência correspondente.
 
-### Regras obrigatórias
+Regras importantes:
 
-1. **Não ampliar as capacidades do Writer nesta etapa.**
+* Não considere banco/API como prova de funcionamento do jogo.
+* Não considere typecheck/teste unitário como prova funcional.
+* Toda capacidade que chegar ao `/play` deve ser testada de fato.
+* Quando o Admin não possuir write-path, não implemente durante esta bateria: registre o bloqueio e teste o comportamento pelo caminho real do rAthena quando possível.
+* Quando encontrar A9/A13/A21/A22/A23 ou qualquer outro achado do `risk-report.md`, confirme experimentalmente o comportamento antes de classificá-lo.
+* Não corrija limitações de produto/write-path nesta etapa.
+* Corrija somente regressões reais ou registros de configuração mínimos previstos no protocolo.
+* Não faça redesign.
+* Não altere `rathena/`.
+* Não reinicie serviços desnecessariamente.
+* Preserve todo WIP que já estava presente antes da Fase 3.
+* Não faça commit de alterações que pertençam ao WIP anterior do usuário.
 
-   * Não liberar edição direta de `legacyScript`.
-   * Não liberar adição, remoção ou reordenação de nós.
-   * Não liberar adição ou remoção de handlers inteiros.
-   * Não criar novas regras de reconstrução.
-   * Usar exatamente as capacidades que o Writer já possui e que já foram testadas.
+Se um teste falhar, NÃO pule imediatamente para o próximo. Primeiro:
 
-2. **Não fazer bypass do Writer.**
+1. reproduza;
+2. registre a evidência;
+3. identifique a camada da falha;
+4. classifique como bug, limitação ou bloqueio;
+5. somente então decida se existe correção permitida pelo escopo;
+6. repita o teste após eventual correção.
 
-   * Nenhuma edição deve escrever diretamente no `.txt`.
-   * Toda escrita deve passar pelas validações e recusas existentes do Writer.
+Para conteúdo criado especificamente para QA, use IDs/nomes claramente identificáveis como QA e remova/restaure ao final quando isso não prejudicar a evidência.
 
-3. **Não quebrar o CRUD existente de NPCs.**
+No final, produza:
 
-   * Antes de alterar qualquer fluxo, mapear exatamente como GET/PUT funcionam hoje.
-   * Identificar quais dados o Admin envia e quais dados o Writer precisa.
-   * Não assumir que `legacyRef` sozinho é suficiente sem verificar como o arquivo real pode ser localizado com segurança.
+`docs/audit/fase3-testes/RELATORIO.md`
 
-4. **Preservar o banco como fonte dos dados editados pelo Admin**, mas garantir que a escrita no `.txt` e a atualização do banco não possam ficar silenciosamente inconsistentes.
+com:
 
-5. **Não escrever em rathena/ durante a implementação**, exceto nos testes funcionais explicitamente planejados para validar o fluxo.
+* tabela Área × Criar × Editar × Antigo × `/play` × Persistência × Status;
+* total de PASSOU;
+* total de FALHOU;
+* total de BLOQUEADO;
+* total de NÃO APLICÁVEL;
+* cada falha com causa raiz;
+* cada correção realizada;
+* evidência de cada achado;
+* arquivos alterados;
+* dados criados;
+* dados restaurados;
+* migrations aplicadas;
+* estado final dos servidores;
+* resultado dos testes automatizados;
+* `git diff` final;
+* confirmação de que `rathena/` permaneceu intocado;
+* commit final, somente se houver alterações pertencentes exclusivamente à Fase 3.
 
-### O que investigar antes de alterar código
+Não declare uma área como "funcionando" apenas porque a configuração foi salva. O objetivo desta fase é provar o caminho completo:
 
-Mapear o fluxo completo:
+ADMIN → PERSISTÊNCIA → RUNTIME → `/play`
 
-`NpcForm.tsx → Admin API client → PUT /npcs/:id → API route → repository → Supabase/JSON`
-
-e determinar:
-
-* como o NPC é carregado no Admin;
-* qual representação é editada pelo formulário;
-* como o `before` deve ser obtido do `.txt` real;
-* como o `after` deve ser construído a partir da edição;
-* como o arquivo é identificado;
-* como impedir edição de um NPC caso o arquivo original tenha mudado desde o carregamento;
-* como lidar com Writer recusando uma edição;
-* como garantir que uma falha na escrita do `.txt` não seja apresentada ao usuário como sucesso;
-* como garantir que uma atualização do banco não ocorra quando a escrita necessária no `.txt` falhar;
-* como representar no Admin uma recusa do Writer e seu motivo.
-
-### Concorrência / stale data
-
-Verificar explicitamente o risco de:
-
-1. Admin carrega NPC.
-2. Arquivo `.txt` muda externamente.
-3. Admin salva uma versão baseada no estado antigo.
-
-A integração não deve aplicar silenciosamente uma edição contra uma versão diferente daquela carregada pelo usuário.
-
-Se o sistema atual não possui informação suficiente para detectar isso com segurança, **não inventar uma solução silenciosa**. Identificar o bloqueio e parar para aprovação.
-
-### Testes obrigatórios
-
-Antes de conectar ao fluxo real, criar testes que comprovem:
-
-* GET → edição válida → PUT → Writer aceita;
-* edição recusada pelo Writer não altera `.txt`;
-* erro ao localizar o `.txt` não altera o banco;
-* erro de validação não altera `.txt`;
-* edição válida altera somente o trecho permitido;
-* conteúdo não editado continua byte-identical;
-* `eventHandlers` não relacionados permanecem intactos;
-* `legacyScript` vizinho permanece intacto;
-* múltiplos NPCs não interferem entre si;
-* concorrência/stale source é tratada explicitamente;
-* resposta da API diferencia sucesso de recusa do Writer e erro operacional.
-
-### Teste funcional
-
-Depois dos testes unitários/integrados, usar **um NPC real em arquivo temporário**, não um `.txt` de produção do rAthena, para provar o fluxo completo:
-
-`Admin/API → before real → after → Writer → arquivo → reparse → validação`
-
-Somente depois dessa prova, e mediante aprovação separada, considerar um teste controlado contra um arquivo real do rAthena.
-
-### Limites
-
-Não fazer nesta etapa:
-
-* redesign do `NpcSchema`;
-* novo sistema de AST;
-* expansão do Mapper;
-* expansão do Validator;
-* novas capacidades de edição do Writer;
-* edição de `legacyScript`;
-* criação/remoção de nós;
-* criação/remoção de event handlers;
-* alteração de scripts de `function script`;
-* reload do servidor real;
-* alteração permanente de NPC real.
-
-### Critério de parada
-
-Se existir qualquer decisão arquitetural não determinada pelo código existente — especialmente sobre atomicidade banco ↔ `.txt`, identificação do arquivo, concorrência ou comportamento do Admin — **não escolher arbitrariamente**.
-
-Mapear o problema, apresentar a decisão necessária e parar.
-
-Ao terminar, reportar:
-
-1. fluxo encontrado;
-2. arquivos alterados;
-3. testes adicionados;
-4. resultados dos testes;
-5. comportamento em caso de Writer rejection;
-6. comportamento em caso de falha de filesystem;
-7. comportamento em caso de stale data;
-8. qualquer risco ou decisão ainda pendente.
-
-Não avançar além da integração do Writer sem nova aprovação.
+Comece pela preparação e prossiga até onde os testes permitirem. Não peça nova aprovação entre as áreas, salvo se encontrar uma operação destrutiva ou uma decisão fora das regras já aprovadas.

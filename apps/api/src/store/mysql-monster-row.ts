@@ -193,7 +193,12 @@ export function mysqlRowToMonster(row: MysqlMonsterRow, resolveItemId: ItemIdRes
 		raceGroups: Object.keys(row)
 			.filter((c) => c.startsWith("racegroup_") && truthy(row[c]))
 			.map((c) => c.replace("racegroup_", "")),
-		groupId: row.groupid ?? 0,
+		// undefined, nunca 0: espelha o writer (linha ~249) — se o GET reintroduz
+		// 0 pra uma linha com groupid NULL, o próximo PUT sem tocar no campo
+		// (ex. editar outro atributo e salvar) grava 0 de volta e reproduz o
+		// crash de boot que a A26 devia ter fechado (auditoria independente da
+		// Fase 3, achado A26b).
+		groupId: row.groupid ?? undefined,
 		title: row.title ?? undefined,
 		race: (row.race ?? "Formless").toLowerCase(),
 		element: {

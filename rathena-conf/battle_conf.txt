@@ -45,3 +45,12 @@ area_size: 60
 mob_spawn_delay: 1
 plant_spawn_delay: 1
 boss_spawn_delay: 1
+
+// ---- equipamento ------------------------------------------------------------
+// Padrão do rAthena (`ammo_unequip: yes`, conf/battle/battle.conf:173) tira a
+// flecha do slot Ammo sempre que a arma de alcance (Bow e afins,
+// `pc.cpp:12461-12481`) é desequipada — é ISSO que fazia "desequipar o Bow
+// também tira a Arrow", sem nenhuma linha de código NOSSA envolvida. O projeto
+// quer trocar arma/flecha em pleno combate sem perder o slot de munição, então
+// os dois equipamentos ficam INDEPENDENTES: desequipar um nunca mexe no outro.
+ammo_unequip: no

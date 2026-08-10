@@ -4,7 +4,9 @@ import { isTyping } from "../play/isTyping";
 import { useAimStore } from "../net/aimStore";
 import { useSkillWalkStore } from "../net/skillWalkStore";
 import { useSkillTargetStore } from "../net/skillTargetStore";
+import { useAttackStore } from "../net/attackStore";
 import { useWorldStore } from "../net/worldStore";
+import { pararMovimentoDeAcao } from "../net/pararMovimentoDeAcao";
 
 /**
  * Atalhos das janelas, no mesmo caminho de dedo do Ragnarok original.
@@ -47,9 +49,23 @@ export function useHudHotkeys(): void {
         // andamento, e ESC é como se desiste dela — o passo vem ANTES de largar
         // o alvo porque é a ordem mais recente, e ESC desfaz da mais nova para
         // a mais velha
-        else if (useSkillWalkStore.getState().pendente) useSkillWalkStore.getState().parar();
-        else if (useSkillTargetStore.getState().pendente) useSkillTargetStore.getState().parar();
-        else if (useWorldStore.getState().target) useWorldStore.getState().setTarget(null);
+        //
+        // Desarmar a ORDEM não é o bastante: o `move:to` que a aproximação já
+        // mandou continua valendo pro rAthena (ele não persegue sozinho, mas
+        // também não pára sozinho — unit.cpp:3259). Sem `pararMovimentoDeAcao`
+        // aqui, ESC cancelava a skill e o personagem continuava andando até o
+        // clique que a tinha aberto — "cancelei e ele foi mesmo assim".
+        else if (useSkillWalkStore.getState().pendente) {
+          useSkillWalkStore.getState().parar();
+          pararMovimentoDeAcao();
+        } else if (useSkillTargetStore.getState().pendente) {
+          useSkillTargetStore.getState().parar();
+          pararMovimentoDeAcao();
+        } else if (useAttackStore.getState().alvo) {
+          // mesma classe de ordem (perseguir pra bater) — mesma regra
+          useAttackStore.getState().parar();
+          pararMovimentoDeAcao();
+        } else if (useWorldStore.getState().target) useWorldStore.getState().setTarget(null);
         // fecha a de CIMA da pilha — a mais nova primeiro, como as ordens acima
         else if (!hud.closeTopWindow()) hud.toggleWindow("settings");
         return;

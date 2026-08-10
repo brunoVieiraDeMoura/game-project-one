@@ -275,13 +275,26 @@ export function jobAspdToJobClassPart(entry: RawJobBodyEntry | undefined, warnin
   return { aspdModifiers };
 }
 
-export function jobClassToJobAspdEntry(jc: JobClass, jobName: string, base?: RawJobBodyEntry): RawJobBodyEntry {
+export function jobClassToJobAspdEntry(
+  jc: JobClass,
+  jobName: string,
+  base: RawJobBodyEntry | undefined,
+  warnings: string[],
+): RawJobBodyEntry {
   let baseAspd: Record<string, number> | undefined;
   if (jc.aspdModifiers.length > 0) {
     baseAspd = {};
     for (const m of jc.aspdModifiers) {
       const key = REV_ASPD_WEAPON[m.weaponType];
-      if (key) baseAspd[key] = m.baseAspd;
+      if (key) {
+        baseAspd[key] = m.baseAspd;
+      } else {
+        // A17: weaponType fora dos 25 reais de JOB_ASPD_WEAPON_KEYS (ex.:
+        // tipos de munição/carta do ItemSubTypeSchema, que o Select oferece
+        // mas BaseASPD não representa) — era descartado sem aviso nenhum;
+        // o lado READ (`jobAspdToJobClassPart` acima) já avisava, o WRITE não.
+        warnings.push(`job ${jobName}: weaponType "${m.weaponType}" sem correspondência em BaseASPD — não gravado`);
+      }
     }
   } else {
     baseAspd = base?.BaseASPD;

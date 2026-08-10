@@ -98,13 +98,46 @@ export function distanciaDeAtaque(dx: number, dy: number): number {
 }
 
 /**
- * Até onde andar para encostar num alvo — a célula AO LADO, não a dele.
+ * Ponto no CÍRCULO de raio `raio` em volta de `alvo`, na direção de `eu` —
+ * primitiva compartilhada por `celulaParaEncostar` (ataque básico) e
+ * `celulaNoAlcance` (`net/skillWalkStore`, skill de alvo).
+ *
+ * NÃO é o offset por EIXO (`alvo + sinalX×raio, alvo + sinalY×raio`) que
+ * `celulaParaEncostar` usava antes: numa aproximação DIAGONAL isso cai a
+ * `raio × 1,41` do alvo, não a `raio` — com alcance 1 (corpo a corpo) o erro
+ * é meio passo e nunca apareceu; com o alcance 15 do Bow (5 base + Vulture's
+ * Eye) são 6+ células de erro, e cada vez que o personagem "chega" ali ainda
+ * está fora do alcance de verdade, o que dispara outro cálculo, outro
+ * destino igualmente errado — o personagem fica preso na borda do alcance,
+ * seguindo o alvo sem nunca entrar em posição de bater. Era o "parece estar
+ * tentando manter a distância máxima" do relato.
+ *
+ * A fração `raio / distância` anda ao longo do SEGMENTO eu↔alvo, então o
+ * destino cai exatamente no círculo — o mesmo raciocínio que
+ * `net/skillWalkStore.ts` já documentava para skill de área.
+ */
+export function pontoNoCirculo(
+  eu: { x: number; y: number },
+  alvo: { x: number; y: number },
+  raio: number,
+): { x: number; y: number } {
+  const dx = eu.x - alvo.x;
+  const dy = eu.y - alvo.y;
+  const d = Math.hypot(dx, dy);
+  if (d === 0) return { ...alvo };
+  const k = raio / d;
+  return { x: Math.round(alvo.x + dx * k), y: Math.round(alvo.y + dy * k) };
+}
+
+/**
+ * Até onde andar para encostar num alvo — um ponto na BORDA do alcance, não
+ * em cima do alvo.
  *
  * Pedir para andar até a célula do próprio monstro faz o personagem SEGUIR o
  * alvo: ele nunca "chega", porque o destino é onde o mob está, e o pedido é
- * refeito a cada volta da fila. Aqui a caminhada mira a célula a `alcance` do
- * mob na direção de quem persegue — e quando o SERVIDOR já se daria por
- * satisfeito, não há caminhada nenhuma a pedir.
+ * refeito a cada volta da fila. Aqui a caminhada mira o círculo de raio
+ * `alcance` ao redor do mob — e quando o SERVIDOR já se daria por satisfeito,
+ * não há caminhada nenhuma a pedir.
  *
  * Devolve `null` quando já dá para bater.
  */
@@ -115,11 +148,7 @@ export function celulaParaEncostar(
 ): { x: number; y: number } | null {
   const passos = Math.max(1, alcance);
   if (distanciaDeAtaque(alvo.x - eu.x, alvo.y - eu.y) <= passos) return null;
-  const passoX = Math.sign(eu.x - alvo.x);
-  const passoY = Math.sign(eu.y - alvo.y);
-  // em cima dele (sinal 0 nos dois eixos) não há "ao lado" que faça sentido
-  if (passoX === 0 && passoY === 0) return { ...alvo };
-  return { x: alvo.x + passoX * passos, y: alvo.y + passoY * passos };
+  return pontoNoCirculo(eu, alvo, passos);
 }
 
 export const useAttackStore = create<AttackState>((set) => ({

@@ -37,8 +37,10 @@ function FloatingNumber({ n, map, mapping }: { n: NetDamage; map: GameMap; mappi
 
   const cell = interpolatedCell(source, performance.now());
   const pos = cellToWorld(map, mapping, cell.x, cell.y);
-  const color = n.onSelf ? "#ef4444" : n.crit ? "#fde047" : "#ffffff";
-  const label = n.miss ? "Miss" : n.crit ? `${n.value}!` : String(n.value);
+  // mensagem de combate (não-número) tem cor de AVISO própria — nem dano
+  // (branco/vermelho) nem crítico (amarelo), pra não parecer que acertou algo
+  const color = n.text ? "#fbbf24" : n.onSelf ? "#ef4444" : n.crit ? "#fde047" : "#ffffff";
+  const label = n.text ?? (n.miss ? "Miss" : n.crit ? `${n.value}!` : String(n.value));
 
   return (
     <Billboard position={[pos.x + (n.id % 2 ? 0.3 : -0.3), pos.y + 1.6, pos.z]}>

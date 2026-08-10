@@ -4,8 +4,10 @@ import { usePickupStore } from "./pickupStore";
 import { interpolatedCell, useWorldStore } from "./worldStore";
 import { dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
 import { useSkillTargetStore } from "./skillTargetStore";
-import { alcanceDaSkill } from "./skillCatalog";
+import { alcanceEfetivoDaSkill } from "./skillCatalog";
 import { useAtaqueBasico } from "./ataqueBasico";
+import { alcanceDaArma, precisaDeMunicaoSemTer } from "./equipmentStore";
+import { useDamageFeed } from "./damageFeed";
 
 /**
  * O que um clique MANDA fazer — num lugar só.
@@ -25,6 +27,29 @@ import { useAtaqueBasico } from "./ataqueBasico";
  * Quem decide acerto, dano e morte continua sendo o map-server.
  */
 export function atacar(gid: number, x: number, y: number): void {
+  /**
+   * SEM MUNIÇÃO NÃO ANDA — nem seleciona, nem persegue, nem pede nada.
+   *
+   * O rAthena só descobriria isso no servidor (silencioso, ou via
+   * `clif_arrow_fail(ARROWFAIL_NO_AMMO)` só no instante do golpe — que nunca
+   * chega, porque o cliente nem entra em alcance sem munição pra atirar). Do
+   * lado de cá não faz sentido esperar esse round-trip: o inventário já diz,
+   * na hora do clique, se há flecha equipada — perguntar ao servidor só pra
+   * descobrir o óbvio faria o personagem correr até o mob pra então ficar
+   * plantado sem atacar, que era exatamente o defeito relatado.
+   */
+  if (precisaDeMunicaoSemTer()) {
+    useDamageFeed.getState().push({
+      gid: useWorldStore.getState().selfGid,
+      value: 0,
+      crit: false,
+      miss: false,
+      onSelf: true,
+      text: "Sem flechas!",
+    });
+    return;
+  }
+
   const agora = performance.now();
   // ordem nova mata a anterior: quem manda bater desistiu de ir lançar a magia.
   // As três (bater, pegar, lançar) duram vários quadros e disputam a MESMA
@@ -33,7 +58,19 @@ export function atacar(gid: number, x: number, y: number): void {
   useWorldStore.getState().setTarget(gid);
   // o pacote de spawn traz só o nome; HP e nível vêm do ACK_REQNAME
   gateway().emit("entity:info", { gid });
-  useAttackStore.getState().perseguir({ gid, x, y, range: 1 });
+  /**
+   * `alcanceDaArma()` já É o alcance de verdade (`playerStore.stats.
+   * atkRange`, o `SP_ATTACKRANGE` que o rAthena manda — ver o comentário do
+   * campo). Não é mais um palpite corrigido depois: antes deste campo
+   * existir, o primeiro clique assumia só o `item_db.range` da arma (sem
+   * Vulture's Eye/carta/buff), então um Hunter com passiva chegava a ANDAR
+   * até dentro do alcance base antes de `attack:too-far` corrigir no
+   * round-trip seguinte — o "vira corpo a corpo por um instante" que não é
+   * o comportamento de um arqueiro. `attackStore.perseguir` continua sendo
+   * chamado de novo por `attack:too-far` como rede de segurança (mira
+   * errada por qualquer outro motivo), mas deixa de ser a ÚNICA fonte.
+   */
+  useAttackStore.getState().perseguir({ gid, x, y, range: alcanceDaArma() });
   useAttackStore.getState().marcarPedido(agora);
   gateway().emit("action:attack", { gid, continuous: true });
 }
@@ -79,7 +116,7 @@ export function castarEmAlvo(skillId: number, level: number, name: string, gid: 
   useSkillWalkStore.getState().parar();
   useWorldStore.getState().setTarget(gid);
 
-  const raio = alcanceDaSkill(skillId);
+  const raio = alcanceEfetivoDaSkill(skillId);
   const cel = interpolatedCell(alvo, performance.now());
   const eu = interpolatedCell(useWorldStore.getState().self, performance.now());
 

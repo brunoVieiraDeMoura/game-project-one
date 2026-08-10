@@ -25,9 +25,17 @@ describe("dentroDoAlcance", () => {
   });
 
   it("alcance 0 é 'sem alcance': vale de qualquer lugar", () => {
-    // `raioDeAlcance` converte negativo ("alcance da arma") e zero em 0
-    expect(raioDeAlcance(-1)).toBe(0);
+    expect(raioDeAlcance(0)).toBe(0);
     expect(dentroDoAlcance(EU, { x: 180, y: 180 }, 0)).toBe(true);
+  });
+
+  it("alcance NEGATIVO (convenção do rAthena, Range: -9 da Double Strafe) vira o valor ABSOLUTO, não 'sem alcance'", () => {
+    // skill_get_range2 (skill.cpp:328-334): com `skillrange_from_weapon`
+    // desligado (padrão, e não religado em battle_conf.txt), `range < 0` vira
+    // `range *= -1` — nunca vira 0. Tratar como 0 fazia a skill lançar de
+    // qualquer distância, sem nunca andar até o alcance real.
+    expect(raioDeAlcance(-9)).toBe(9);
+    expect(dentroDoAlcance(EU, { x: 120, y: 100 }, raioDeAlcance(-9))).toBe(false);
   });
 
   it("longe é longe", () => {

@@ -10,6 +10,7 @@ import { castarEmAlvo } from "../net/acoes";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { useCooldownStore } from "../net/cooldownStore";
 import { useItemCatalog, isUsableItemType } from "../net/itemCatalog";
+import { equipPending, requestEquip } from "../net/equipmentStore";
 import { gateway } from "../net/gateway";
 import { isTyping } from "../play/isTyping";
 import { IconSquare } from "../ui/rpg";
@@ -80,7 +81,7 @@ export function SkillBar() {
   // aberto (barra persiste entre sessões), então o pedido não pode depender
   // do InventoryWindow ter montado.
   useEffect(() => {
-    const ids = slots.filter((s) => s.kind === "item" && s.id !== 0).map((s) => s.id);
+    const ids = slots.filter((s) => (s.kind === "item" || s.kind === "ammo") && s.id !== 0).map((s) => s.id);
     if (ids.length) useItemCatalog.getState().ensure(ids);
   }, [slots]);
 
@@ -111,6 +112,25 @@ export function SkillBar() {
   function trigger(slotIndex: number) {
     const slot = slots[slotIndex];
     if (!slot || slot.id === 0) return;
+
+    /**
+     * Munição: o clique EQUIPA, nunca ataca/usa/move. Achada pelo `itemId`,
+     * nunca por um índice guardado — o slot sobrevive ao índice mudar (a
+     * pilha some do inventário e volta, `net/acoes.atacar` já documenta essa
+     * regra pra flecha) e até ao ITEM sumir de vez (a pilha chegou a zero):
+     * sem achar nada, não faz nada — não desequipa, não ataca, não anda. É a
+     * MESMA função que o duplo clique do Alt+E chama para equipar
+     * (`requestEquip`), então o slot Ammo do Status atualiza sozinho, sem
+     * canal próprio — os dois leem o mesmo `playerStore.inventory`.
+     */
+    if (slot.kind === "ammo") {
+      const item = usePlayerStore.getState().inventory.find((i) => i.itemId === slot.id);
+      if (!item) return; // acabou, ou nunca foi pega — nada a equipar
+      if (item.equipped) return; // já é a munição atual — clique é no-op
+      if (equipPending(item.index)) return; // pedido anterior ainda em voo
+      requestEquip(item.index);
+      return;
+    }
 
     // Item: mesmo caminho que o clique no inventário — `CZ.USE_ITEM` já
     // existente, sem reimplementar consumo. O item é achado pelo itemId (não
@@ -201,7 +221,11 @@ export function SkillBar() {
           const slot: SkillBarSlot = slots[slotIndex] ?? { kind: "skill", id: 0 };
           const basico = slot.kind === "skill" && slot.id === ATAQUE_BASICO_ID;
           const skill = slot.kind === "skill" ? (basico ? ATAQUE_BASICO : skills.find((s) => s.id === slot.id)) : undefined;
-          const item = slot.kind === "item" ? inventory.find((i2) => i2.itemId === slot.id) : undefined;
+          // "item" e "ammo" são achados do MESMO jeito (por itemId, no
+          // inventário vivo) — só o clique (`trigger`) trata os dois
+          // diferente. Reaproveitar a variável evita duplicar toda a lógica
+          // de desenho (ícone, nome, quantidade) abaixo.
+          const item = slot.kind === "item" || slot.kind === "ammo" ? inventory.find((i2) => i2.itemId === slot.id) : undefined;
           const preenchido = Boolean(skill) || Boolean(item);
           return (
             <SkillSlot
@@ -231,8 +255,17 @@ export function SkillBar() {
               quantidade={item && item.amount > 1 ? item.amount : undefined}
               cooldownSkillId={skill && !basico ? skill.id : undefined}
               // o realce de "mirando" serve ao modo LIGADO: são a mesma
-              // pergunta na tela — "este slot está esperando alguma coisa"
-              mirando={basico ? ataqueBasicoAtivo : Boolean(skill) && aiming?.id === skill?.id}
+              // pergunta na tela — "este slot está esperando alguma coisa".
+              // Para munição, "ligado" é "é ESTA a flecha equipada agora" —
+              // sem ele, trocar de flecha pelo teclado não mostrava qual das
+              // duas está valendo sem abrir o Alt+Q.
+              mirando={
+                basico
+                  ? ataqueBasicoAtivo
+                  : slot.kind === "ammo"
+                    ? Boolean(item?.equipped)
+                    : Boolean(skill) && aiming?.id === skill?.id
+              }
               onUse={() => trigger(slotIndex)}
             />
           );
@@ -347,8 +380,16 @@ function SkillSlot({
         if (droppedItemIndex) {
           const item = usePlayerStore.getState().inventory.find((i) => i.index === Number(droppedItemIndex));
           if (!item) return;
-          // Não aceita silenciosamente equipamento/carta/munição/etc — só o
-          // que o catálogo (packages/game-data ItemType) marca como usável.
+          // Munição (IT_AMMO, mmo.hpp:234) vira slot PRÓPRIO — o clique
+          // equipa, não usa (`trigger`, mais abaixo). Checado ANTES do
+          // `isUsableItemType`: ammo nunca é "usável" nesse sentido (não é
+          // `CZ.USE_ITEM`), então cairia no `return` de baixo sem este ramo.
+          if (item.type === 10) {
+            useSkillBar.getState().assignAmmo(slotIndex, item.itemId);
+            return;
+          }
+          // Não aceita silenciosamente equipamento/carta/etc — só o que o
+          // catálogo (packages/game-data ItemType) marca como usável.
           const info = useItemCatalog.getState().byId[item.itemId];
           if (!isUsableItemType(info?.type)) return;
           useSkillBar.getState().assignItem(slotIndex, item.itemId);
@@ -356,7 +397,11 @@ function SkillSlot({
       }}
       draggable={preenchido}
       onDragStart={(e) => e.dataTransfer.setData("application/x-ro-slot", String(slotIndex))}
-      title={nome ? `${nome}${detalhe ? ` ${detalhe}` : ""} — botão direito tira da barra` : "arraste uma habilidade (Alt+S) ou consumível (Alt+E) para cá"}
+      title={
+        nome
+          ? `${nome}${detalhe ? ` ${detalhe}` : ""} — botão direito tira da barra`
+          : "arraste uma habilidade (Alt+S), consumível ou munição (Alt+E) para cá"
+      }
       style={{
         position: "relative",
         flex: 1,

@@ -291,7 +291,9 @@ export class JobDatabaseWriter {
       const statsOut = jobClassToJobStatsEntry(jc, jobName, before);
       const basepointsOut = jobClassToJobBasepointsEntry(jc, jobName, before);
       const expOut = jobClassToJobExpEntry(jc, jobName, before);
-      const aspdOut = jobClassToJobAspdEntry(jc, jobName, before);
+      const aspdWarnings: string[] = [];
+      const aspdOut = jobClassToJobAspdEntry(jc, jobName, before, aspdWarnings);
+      for (const w of aspdWarnings) warnings.push(`${jobName}: ${w}`);
       const treeWarnings: string[] = [];
       const treeOut = jobClassToSkillTreeEntry(jc, jobName, jobs, skills, treeWarnings);
       for (const w of treeWarnings) warnings.push(`${jobName}: ${w}`);

@@ -71,11 +71,14 @@ function resolveConfChain(entry: string, warnings: string[]): string[] {
 function makeSlugger() {
   const used = new Map<string, number>();
   return (fullName: string): string => {
-    const base = fullName
+    const stripped = fullName
       .toLowerCase()
       .replace(/[^a-z0-9#_]+/g, "_")
       .replace(/^_+|_+$/g, "")
       .replace(/#/g, "-");
+    // nome só com pontuação (ex.: "?") esvazia o slug — sem fallback, o id
+    // fica "" e o admin não consegue montar link de edição pra esse NPC
+    const base = stripped || "npc";
     const n = used.get(base) ?? 0;
     used.set(base, n + 1);
     return n === 0 ? base : `${base}_${n + 1}`;

@@ -91,6 +91,17 @@ export interface ServerStats {
   aspd: number;
   class: number;
   speed: number;
+  /**
+   * Alcance de ataque básico REAL (`rhw.range`, `SP_ATTACKRANGE` = 1000,
+   * `map.hpp:536`) — já com arma, passiva (Vulture's Eye), carta, refino e
+   * buff somados pelo PRÓPRIO servidor. É a ÚNICA fonte de verdade do alcance
+   * efetivo: `net/equipmentStore.alcanceDaArma()` e o círculo de alcance
+   * (`play/AttackRangeCircle`) leem este mesmo campo — nenhum dos dois
+   * calcula nada por conta própria. Chega no login e de novo sempre que MUDA
+   * (`status.cpp:6653`), nunca some com o cancelamento de uma ordem de
+   * ataque: ESC cancela a PERSEGUIÇÃO, não o personagem.
+   */
+  atkRange: number;
 }
 
 const EMPTY_STATS: ServerStats = {
@@ -142,6 +153,9 @@ const EMPTY_STATS: ServerStats = {
   aspd: 0,
   class: 0,
   speed: 150,
+  // piso de mão-nua (`status_calc_pc_` nunca deixa `rhw.range` abaixo disto);
+  // vale só até o primeiro `ZC_ATTACK_RANGE` chegar, no login.
+  atkRange: 1,
 };
 
 export interface PlayerSkill {
@@ -320,6 +334,13 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as unknown as { __player?: () => unknown }).__player = () => {
     const s = usePlayerStore.getState();
-    return { conhecido: s.known, nome: s.charName, stats: s.stats, itens: s.inventory.length, skills: s.skills.length };
+    return {
+      conhecido: s.known,
+      nome: s.charName,
+      stats: s.stats,
+      itens: s.inventory.length,
+      inventario: s.inventory,
+      skills: s.skills.length,
+    };
   };
 }

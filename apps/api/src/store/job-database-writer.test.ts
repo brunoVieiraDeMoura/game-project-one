@@ -135,6 +135,20 @@ describe("JobDatabaseWriter — Writer atômico dos 5 arquivos (Mapper+Validator
     void jobStatsToJobClassPart(statsEntry); // schema já provou o round-trip; só confere que não lança
   });
 
+  it("A17: weaponType de ASPD fora dos 25 reais avisa (antes descartava em silêncio, sem warning nenhum)", async () => {
+    const { jobs, skills } = resolvers();
+    const { warnings } = await writer.writeClasses(
+      [jobFixture(), swordman({ aspdModifiers: [{ weaponType: "arrow", baseAspd: 156 }] })],
+      jobs,
+      skills,
+    );
+    expect(warnings.some((w) => w.includes('weaponType "arrow"'))).toBe(true);
+
+    const jobStatsDoc = JobStatsDocSchema.parse(parseYamlText(await readFile(paths.jobStats, "utf8")));
+    const statsEntry = jobStatsDoc.Body.find((e) => e.Jobs.Swordman);
+    expect(statsEntry?.BaseASPD).toEqual({}); // continua descartado — a correção só torna visível
+  });
+
   it("validação estrutural: MaxBaseLevel fora de 1..275 é rejeitado, NENHUM dos arquivos é tocado", async () => {
     const { jobs, skills } = resolvers();
     await expect(writer.writeClasses([jobFixture(), swordman({ maxBaseLevel: 0 })], jobs, skills)).rejects.toMatchObject({

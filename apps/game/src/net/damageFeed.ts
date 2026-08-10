@@ -19,6 +19,14 @@ export interface NetDamage {
   miss: boolean;
   /** true = o alvo é o próprio jogador (número vermelho) */
   onSelf: boolean;
+  /**
+   * Mensagem de combate que NÃO é um número — "Sem flechas!" e afins. Mesmo
+   * mecanismo de texto flutuante, sem inventar um segundo sistema: o rAthena
+   * também usa o mesmo canal visual pra "Miss" (que já é texto, não número) e
+   * pra avisos de ação recusada (`clif_arrow_fail`/ZC_ACTION_FAILURE, "Please
+   * equip the proper ammunition first" — MsgStringTable[242]).
+   */
+  text?: string;
 }
 
 interface DamageFeedState {
@@ -36,6 +44,12 @@ export const useDamageFeed = create<DamageFeedState>((set) => ({
   clear: (id) => set((s) => ({ numbers: s.numbers.filter((n) => n.id !== id) })),
   reset: () => set({ numbers: [] }),
 }));
+
+// mesmo espírito do __world em `net/worldStore` — sem isto, depurar "o aviso
+// de combate apareceu?" vira adivinhação de screenshot cronometrado.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __dano?: () => NetDamage[] }).__dano = () => useDamageFeed.getState().numbers;
+}
 
 /** action do ZC.NOTIFY_ACT → como o número aparece. Valores em clif.cpp (DMG_*). */
 export function damageKind(action: number): { crit: boolean } {

@@ -217,6 +217,7 @@ export function StatusWindow() {
             label={s.label}
             cx={s.cx}
             cy={s.cy}
+            diametro={"d" in s ? s.d : undefined}
             item={item}
             nome={item ? (nomes[item.itemId]?.name ?? `#${item.itemId}`) : undefined}
             pendente={item ? equipPending(item.index) : false}
@@ -659,6 +660,7 @@ function SlotEquip({
   label,
   cx,
   cy,
+  diametro,
   item,
   nome,
   pendente,
@@ -668,6 +670,8 @@ function SlotEquip({
   label: string;
   cx: number;
   cy: number;
+  /** override em px de ARTE (mesma unidade de `ST_SLOT_D`) — só a munição usa isto */
+  diametro?: number;
   item?: InventoryItem;
   nome?: string;
   pendente?: boolean;
@@ -675,7 +679,7 @@ function SlotEquip({
 }) {
   const frame = useNineSlice(SLOT_FRAME);
   const [hover, setHover] = useState(false);
-  const d = px(ST_SLOT_D);
+  const d = px(diametro ?? ST_SLOT_D);
   const borda = Math.max(6, d * 0.24);
   const titulo = item ? `${nome ?? `#${item.itemId}`}${item.refine ? ` +${item.refine}` : ""} — duplo clique desequipa` : label;
 
@@ -747,6 +751,33 @@ function SlotEquip({
             pointerEvents: "none",
           }}
         />
+      )}
+      {/**
+       * Quantidade da munição — só o slot de Ammo empilha, e sem este número
+       * o consumo de flecha por disparo era invisível aqui: a única forma de
+       * ver a pilha diminuir era abrir o Inventário (Alt+E) numa aba
+       * diferente. Mesmo estilo do badge de pilha do Inventário
+       * (`InventoryWindow.tsx: Slot`), reaproveitado — não um segundo jeito
+       * de desenhar número.
+       */}
+      {item && item.amount > 1 && (
+        <span
+          style={{
+            position: "absolute",
+            right: borda * 0.5,
+            bottom: borda * 0.3,
+            fontFamily: FRAME_NUM_FONT,
+            fontVariantNumeric: FRAME_NUM_VARIANT,
+            fontWeight: 700,
+            fontSize: Math.max(9, d * 0.24),
+            lineHeight: 1,
+            color: ST_COLORS.ink,
+            textShadow: `0 1px 2px ${ST_COLORS.shadow}`,
+            pointerEvents: "none",
+          }}
+        >
+          {item.amount}
+        </span>
       )}
     </div>
   );

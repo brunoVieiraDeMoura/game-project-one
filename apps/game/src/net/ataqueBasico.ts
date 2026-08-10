@@ -56,6 +56,12 @@ export const useAtaqueBasico = create<AtaqueBasicoState>((set) => ({
   desligar: () => set((s) => (s.ativo ? { ativo: false } : s)),
 }));
 
+// mesmo espírito do __world/__player: "está ligado?" é pergunta de estado, e
+// adivinhar pelo brilho do slot na tela é o tipo de coisa que só engana.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __basico?: () => boolean }).__basico = () => useAtaqueBasico.getState().ativo;
+}
+
 /** manda bater no alvo que estiver selecionado, se houver um vivo */
 export function baterNoAlvo(): void {
   const mundo = useWorldStore.getState();
