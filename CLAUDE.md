@@ -277,6 +277,20 @@ Plano completo em `docs/plano-rathena.md`. Estado (2026-07-28):
   de um spawn já carregado sem restart continua **NÃO CONFIRMADO** — write
   e fila de reload comprovadamente funcionam, mas não há canal de observação
   confiável disponível hoje (sem `/play`) pra provar o efeito em runtime.
+- **Barra de habilidades sincroniza com o servidor** (`ZC.SHORTCUT_KEY_LIST_V2`/
+  `CZ.SHORTCUT_KEY_CHANGE1`, opcodes `0x07d9`/`0x02ba` neste packetver): o
+  rAthena já persistia hotkeys sozinho (`HOTKEY_SAVING`, tabela `hotkey` do
+  char-server) — faltava só a ponte. `session.ts` decodifica os 38 slots
+  (`MAX_HOTKEYS`) no `world:ready` e emite `hotkey:list`; `setHotkey()` monta
+  o `CZ.SHORTCUT_KEY_CHANGE1` e manda. `skillBarStore.ts` nasce do
+  `localStorage` (fallback) e passa a usar o servidor como fonte de verdade
+  a partir do primeiro `hydrateFromServer` — toda mudança local depois disso
+  também sincroniza. UI continua mostrando só 27 slots (`SKILL_SLOTS`); os
+  38 reais (`SERVER_HOTKEY_SLOTS`) ficam todos sincronizados por baixo, sem
+  redesenho de UI. `kind: "ammo"` (só do cliente) e o Ataque Básico (id
+  negativo, só do cliente) nunca são mandados ao servidor — sem equivalente
+  real no rAthena. Testado com **round-trip real contra o rAthena vivo**
+  (`session.integration.test.ts`: cria char → muda 1 slot → reconecta →
+  confirma persistido no char-server de verdade).
 - **Pendências conhecidas**: modelo por classe/monstro é o placeholder
-  KayKit; hotkeys do servidor (ZC.SHORTCUT_KEY_LIST) ainda não são usadas — a
-  barra mora no navegador.
+  KayKit.
