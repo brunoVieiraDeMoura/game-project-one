@@ -596,7 +596,13 @@ function AtalhoDoRodape({ link }: { link: (typeof LOGIN_LINKS)[number] }) {
   // moldura FICA (pedido: "era pra tirar só o background") — só o preenchimento
   // sai, `background: "none"` deixa a madeira do rodapé aparecer por dentro
   return link.href ? (
-    <a href={link.href} target="_blank" rel="noreferrer" style={{ display: "block" }} {...hover.props}>
+    <a
+      href={link.href}
+      target="_blank"
+      rel="noreferrer"
+      style={{ display: "block", color: "inherit", textDecoration: "none" }}
+      {...hover.props}
+    >
       <CardFrame border={borda} background="none" style={frameStyle} inner={inner} title={link.rotulo}>
         {conteudo}
       </CardFrame>

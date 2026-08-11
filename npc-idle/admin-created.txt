@@ -11,3 +11,8 @@ gpqa01,65,65,4	script	QA Novo NPC#GPQA_NOVO_NPC	4_M_ALCHE_C,{
 	mes "Ola! Eu sou um NPC criado pelo admin.";
 	close;
 }
+
+gpqa01,70,70,0	script	QA Audit Final#GPQA_FINAL_AUDIT_NPC	4_M_ALCHE_C,{
+	mes "Auditoria final.";
+	close;
+}

@@ -112,7 +112,7 @@ export type LoginRegiao = (typeof LOGIN_REGIOES)[number];
  */
 export const LOGIN_LINKS = [
   { chave: "site", rotulo: "Site Oficial", icone: "globo", href: "" },
-  { chave: "discord", rotulo: "Discord", icone: "discord", href: "" },
+  { chave: "discord", rotulo: "Discord", icone: "discord", href: "https://discord.gg/URwaY8hKT" },
   { chave: "noticias", rotulo: "Notícias", icone: "pergaminho", href: "" },
   { chave: "suporte", rotulo: "Suporte", icone: "escudo", href: "" },
 ] as const;
