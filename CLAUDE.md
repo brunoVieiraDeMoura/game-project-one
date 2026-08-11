@@ -292,5 +292,14 @@ Plano completo em `docs/plano-rathena.md`. Estado (2026-07-28):
   real no rAthena. Testado com **round-trip real contra o rAthena vivo**
   (`session.integration.test.ts`: cria char → muda 1 slot → reconecta →
   confirma persistido no char-server de verdade).
-- **Pendências conhecidas**: modelo por classe/monstro é o placeholder
-  KayKit.
+- **Monstro tem modelo real por família** (`entities/mobModels.ts`): além dos
+  6 mobIds de demo/QA originais, todo monstro cujo `mob_db` real é
+  literalmente "Skeleton alguma coisa" (`race:"undead"` + nome batendo
+  `/skeleton/i`, 35 mobIds — conferido em `tools/legacy-migration/output/
+  monsters.json`, não "todo undead") ganhou modelo explícito: variantes
+  "Worker"/"Weak" → `skeleton_minion`, o resto → `skeleton_warrior`. Fallback
+  continua `skeleton_warrior` pro resto do mob_db — nunca quebra o render.
+  Só existem 2 modelos de monstro no acervo hoje; ampliar cobertura de
+  verdade (mais variedade visual) depende de mais assets, não só de tabela.
+- **Pendências conhecidas**: modelo por CLASSE de jogador ainda é o
+  placeholder KayKit (parte de monstro já resolvida, ver acima).
