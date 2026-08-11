@@ -5,6 +5,7 @@ import { useSessionStore } from "../net/sessionStore";
 import { usePlayerStore } from "../net/playerStore";
 import { JOB_NAMES } from "../character/jobNames";
 import { CharacterPortrait } from "../hud/CharacterPortrait";
+import { classModelFor } from "../entities/classModels";
 import { ChatFrame } from "../hud/ChatFrame";
 import { ChatScrollbar } from "../hud/ChatScrollbar";
 import { CHAT_ART_SIZE } from "../ui/chatFrame";
@@ -380,9 +381,33 @@ function HeroCentral({
           marginBottom: "-1vw",
         }}
       >
-        {current && (
-          <CharacterPortrait dono="char-select" characterKey="mage" inteiro fundo={false} giroRef={giroRef} />
-        )}
+        {current &&
+          (() => {
+            // aparência = a classe REAL do personagem (`current.job`), não mais
+            // um "mage" fixo — mesma tabela que `NetPlayer`/`NetEntity` usam
+            const modelo = classModelFor(current.job);
+            return (
+              // `key={current.slot}`: troca de PERSONAGEM aqui troca de MODELO
+              // (`characterKey`), e o `useGLTF` de um char novo SUSPENDE o
+              // `Bust` — sem a troca de key, era o MESMO componente pedindo
+              // outro glb, e ficava boneco antigo (T-pose) empilhado com o
+              // novo até o suspense assentar. Com a key, o React desmonta o
+              // retrato INTEIRO (limpa o esqueleto velho de verdade, ver
+              // `useCharacter`) antes de montar o novo — o custo é recriar o
+              // contexto WebGL a cada clique na lista, aceitável aqui porque
+              // é ação deliberada do usuário, não hover por quadro (diferente
+              // do retrato de ALVO, que evita desmontar de propósito).
+              <CharacterPortrait
+                key={current.slot}
+                dono="char-select"
+                characterKey={modelo.character}
+                weapons={modelo.weapons}
+                inteiro
+                fundo={false}
+                giroRef={giroRef}
+              />
+            );
+          })()}
         {/**
          * As setas de girar SAÍRAM da fileira do botão (pedido #5: "nas
          * laterais do char, no meio da tela") — flutuam encostadas nas bordas

@@ -20,10 +20,69 @@ const BASE = "/assets";
 export const CHARACTER_URLS = {
   knight: `${BASE}/characters/Knight.glb`,
   mage: `${BASE}/characters/Mage.glb`,
+  rogue: `${BASE}/characters/Rogue.glb`,
+  rogue_hooded: `${BASE}/characters/Rogue_Hooded.glb`,
+  barbarian: `${BASE}/characters/Barbarian.glb`,
   skeleton_warrior: `${BASE}/characters/Skeleton_Warrior.glb`,
   skeleton_minion: `${BASE}/characters/Skeleton_Minion.glb`,
+  /**
+   * Personagem de arqueiro DEDICADO do kit (`assets-new/Characters/
+   * Characters/gltf/Ranger.glb`) — mesmo rig `Rig_Medium`, 23 joints, mesmos
+   * dois `handslot.l`/`handslot.r`, textura embutida no próprio .glb (igual
+   * aos outros 7), conferido por inspeção binária direta do glTF antes de
+   * copiar. Usado pela família `archer` em `entities/classModels` no lugar
+   * do Rogue com arco rotacionado: tem malha própria de arqueiro (inclui
+   * `Ranger_Quiver`, carcaz nas costas) em vez de reaproveitar o visual do
+   * ladrão.
+   */
+  ranger: `${BASE}/characters/Ranger.glb`,
 } as const;
 export type CharacterKey = keyof typeof CHARACTER_URLS;
+
+/**
+ * Armas (KayKit `Characters/Assets`) presas no `handslot.l`/`handslot.r` do
+ * personagem — ver `useEquippedWeapons` abaixo e `entities/classModels` para
+ * quem usa qual.
+ */
+export const WEAPON_URLS = {
+  sword_2handed: `${BASE}/weapons/sword_2handed.gltf`,
+  dagger: `${BASE}/weapons/dagger.gltf`,
+  staff: `${BASE}/weapons/staff.gltf`,
+  /**
+   * `arrow_bow.gltf` (usado antes) é só a FLECHA sozinha — sem arco nenhum,
+   * daí o bug visto no char-select ("archer com uma flecha na mão"). Este é
+   * o arco de verdade, com a corda (`Characters/Assets/gltf/bow_withString`).
+   * Malha longa no eixo Z (limbo a limbo) — precisa do `rotation` em
+   * `WeaponMount` pra ficar de pé como um arco (ver `classModels.archer`).
+   */
+  bow: `${BASE}/weapons/bow_withString.gltf`,
+} as const;
+export type WeaponKey = keyof typeof WEAPON_URLS;
+
+/**
+ * os dois nós vazios que todo char do Rig_Medium tem para pendurar arma.
+ *
+ * No .glb/.gltf de origem os nós se chamam `handslot.l`/`handslot.r` (com
+ * ponto) — mas o `GLTFLoader` do three passa todo nome de nó por
+ * `PropertyBinding.sanitizeNodeName` (o `.` é delimitador de path de
+ * animação, ex. `"nome.position"`), que REMOVE o ponto. Em runtime o nome é
+ * `handslotl`/`handslotr`; usar a forma com ponto aqui faria
+ * `getObjectByName` nunca achar o osso (conferido com `__weaponDebug` no
+ * `/class-preview`, todas as 20 tentativas voltavam `boneFound: false`).
+ */
+export type HandSlot = "handslotl" | "handslotr";
+export interface WeaponMount {
+  weapon: WeaponKey;
+  slot: HandSlot;
+  /**
+   * Ajuste de pose (radianos, XYZ) aplicado ANTES de virar filho do
+   * handslot. A convenção do kit é malha comprida no eixo Y com a origem no
+   * punho (`sword_2handed`, `dagger`, `staff` — encaixam sem ajuste); o arco
+   * (`bow_withString`) foge disso, comprido no eixo Z, e precisa girar 90° em
+   * X pra ficar de pé (medido visualmente em `/class-preview`).
+   */
+  rotation?: readonly [number, number, number];
+}
 
 const ANIMATION_URLS = [
   `${BASE}/animations/Rig_Medium_MovementBasic.glb`,
@@ -32,24 +91,47 @@ const ANIMATION_URLS = [
   `${BASE}/animations/Rig_Medium_CombatRanged.glb`,
 ];
 
-/** clips que usamos, por papel semântico → nome do clip no kit */
-export const CLIP = {
-  idle: "Idle_A",
-  walk: "Walking_C",
-  run: "Running_A",
-  jump: "Jump_Full_Short",
-  attack: "Melee_1H_Attack_Slice_Horizontal",
-  /** conjuração — LOOP enquanto a barra de cast corre (ver `net/combatAnim`) */
-  cast: "Ranged_Magic_Spellcasting",
-  /** a magia SAI — um tiro, tocado uma vez quando a skill sai (`skill:cast`) */
-  castRelease: "Ranged_Magic_Shoot",
-  hit: "Hit_A",
-  death: "Death_A",
-} as const;
+/** papel semântico → nome do clip; todo `WeaponFamily` preenche as mesmas chaves */
+interface ClipSet {
+  idle: string;
+  walk: string;
+  run: string;
+  jump: string;
+  attack: string;
+  /** conjuração/preparação — LOOP enquanto a barra de cast corre (ver `net/combatAnim`) */
+  cast: string;
+  /** a skill SAI — tocado uma vez quando a skill sai (`skill:cast`) */
+  castRelease: string;
+  hit: string;
+  death: string;
+}
+
+/**
+ * Um conjunto de clips por família de arma — a mesma `useCharacter` serve
+ * Knight (espada 2M), Rogue_Hooded (adaga dupla), Mage (cajado), Rogue/Archer
+ * (arco) e Barbarian (desarmado) trocando só qual clip cada papel toca.
+ * `mage` é o default histórico (mob/NPC/skeleton continuam iguais).
+ */
+export type WeaponFamily = "swordsman" | "thief" | "mage" | "archer" | "other";
+
+const COMUM = { idle: "Idle_A", walk: "Walking_C", run: "Running_A", jump: "Jump_Full_Short", hit: "Hit_A", death: "Death_A" };
+
+const CLIP_SETS: Record<WeaponFamily, ClipSet> = {
+  // default histórico — Melee_1H genérico + magia (mob/NPC/skeleton/player sem classe ainda)
+  mage: { ...COMUM, attack: "Melee_1H_Attack_Slice_Horizontal", cast: "Ranged_Magic_Spellcasting", castRelease: "Ranged_Magic_Shoot" },
+  swordsman: { ...COMUM, attack: "Melee_2H_Attack_Slice", cast: "Melee_2H_Idle", castRelease: "Melee_2H_Attack_Stab" },
+  thief: { ...COMUM, attack: "Melee_Dualwield_Attack_Slice", cast: "Melee_Blocking", castRelease: "Melee_Dualwield_Attack_Stab" },
+  archer: { ...COMUM, attack: "Ranged_Bow_Release", cast: "Ranged_Bow_Draw", castRelease: "Ranged_Bow_Release" },
+  other: { ...COMUM, attack: "Melee_Unarmed_Attack_Punch_A", cast: "Melee_Unarmed_Idle", castRelease: "Melee_Unarmed_Attack_Kick" },
+};
+
+/** compat: quem só conhecia o CLIP fixo de antes (mago genérico) continua igual */
+export const CLIP = CLIP_SETS.mage;
 
 /** pré-carrega tudo (drei cacheia por url) */
 export function preloadAssets() {
   for (const url of Object.values(CHARACTER_URLS)) useGLTF.preload(url);
+  for (const url of Object.values(WEAPON_URLS)) useGLTF.preload(url);
   for (const url of ANIMATION_URLS) useGLTF.preload(url);
 }
 
@@ -68,13 +150,15 @@ export function useSharedClips(): THREE.AnimationClip[] {
   );
 }
 
+export type ClipRole = keyof ClipSet;
+
 export interface CharacterHandle {
   /** grupo raiz a ser inserido na cena (contém o mesh clonado) */
   scene: THREE.Group;
   /** toca um clip em loop por papel, com crossfade (idle/walk/run) */
-  play: (role: keyof typeof CLIP) => void;
+  play: (role: ClipRole) => void;
   /** toca um clip uma vez (jump/attack) a `speed`×; devolve a duração real (s) */
-  playOnce: (role: keyof typeof CLIP, speed?: number) => number;
+  playOnce: (role: ClipRole, speed?: number) => number;
 }
 
 /**
@@ -104,11 +188,14 @@ export function useCharacter(
    * Sem o argumento, anima sempre (o próprio personagem, o retrato do HUD).
    */
   ativoRef?: React.RefObject<boolean> | React.MutableRefObject<boolean>,
+  /** qual conjunto de clips (ataque/conjuração) — a arma da classe decide, ver `entities/classModels` */
+  family: WeaponFamily = "mage",
 ): CharacterHandle {
   const gltf = useGLTF(url);
   const clips = useSharedClips();
   const animSpeed = useRef(animationSpeed);
   animSpeed.current = animationSpeed;
+  const clipSet = CLIP_SETS[family];
 
   const scene = useMemo(() => {
     /**
@@ -277,10 +364,10 @@ export function useCharacter(
    * primeiro quadro é agendado.
    */
   useLayoutEffect(() => {
-    const a = pegarAction(CLIP.idle);
+    const a = pegarAction(clipSet.idle);
     if (a) {
       a.reset().play();
-      current.current = CLIP.idle;
+      current.current = clipSet.idle;
       mixer.update(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -288,8 +375,8 @@ export function useCharacter(
 
   // crossfade curto: transição idle↔walk↔run responde na hora (não "bloqueia")
   const FADE = 0.08;
-  const play = (role: keyof typeof CLIP) => {
-    const name = CLIP[role];
+  const play = (role: ClipRole) => {
+    const name = clipSet[role];
     if (current.current === name) return;
     const next = pegarAction(name);
     if (!next) return;
@@ -302,8 +389,8 @@ export function useCharacter(
   };
 
   // one-shot (jump/attack) a `speed`×: toca uma vez; o chamador retoma o loco
-  const playOnce = (role: keyof typeof CLIP, speed = 1): number => {
-    const name = CLIP[role];
+  const playOnce = (role: ClipRole, speed = 1): number => {
+    const name = clipSet[role];
     const a = pegarAction(name);
     if (!a) return 0.5 / speed;
     a.setLoop(THREE.LoopOnce, 1);

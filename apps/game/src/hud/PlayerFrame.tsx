@@ -5,11 +5,12 @@ import { useCharacterStore } from "../character/characterStore";
 import { usePlayerStore } from "../net/playerStore";
 import { useWorldStore } from "../net/worldStore";
 import { fatiaDeRender } from "../net/entityRenderSlice";
-import { mobModel } from "../entities/mobModels";
+import { mobModel, NPC_MODEL } from "../entities/mobModels";
+import { classModelFor } from "../entities/classModels";
 import { useHudStore } from "./hudStore";
 import { CurvedBar } from "../ui/CurvedBar";
 import { CharacterPortrait } from "./CharacterPortrait";
-import type { CharacterKey } from "../assets";
+import type { CharacterKey, WeaponMount } from "../assets";
 import {
   AVATAR_OVERLAP,
   CHAR_FRAME,
@@ -364,7 +365,15 @@ export function TargetFrame() {
       level: netTarget.level ?? "?",
       hp: temHp ? { atual: netTarget.hp!, max: netTarget.maxHp! } : undefined,
       // aparência do alvo = a mesma tabela que a cena usa para desenhá-lo
-      modelo: netTarget.kind === "mob" ? mobModel(netTarget.job).character : "knight",
+      // (mob: mob_db; player: classe real — `net.job` É a classe nesse caso;
+      // npc: sem modelo próprio ainda, cai no mesmo placeholder da cena)
+      modelo:
+        netTarget.kind === "mob"
+          ? mobModel(netTarget.job).character
+          : netTarget.kind === "player"
+            ? classModelFor(netTarget.job).character
+            : NPC_MODEL.character,
+      weapons: netTarget.kind === "player" ? classModelFor(netTarget.job).weapons : [],
     };
     ultima.current = ficha;
   } else if (!online && localTarget && localTarget.alive) {
@@ -374,6 +383,7 @@ export function TargetFrame() {
       hp: { atual: localTarget.hp, max: localTarget.maxHp },
       sp: localTarget.maxSp > 0 ? { atual: localTarget.sp, max: localTarget.maxSp } : undefined,
       modelo: "skeleton_warrior",
+      weapons: [],
     };
     ultima.current = ficha;
   }
@@ -395,7 +405,7 @@ export function TargetFrame() {
         hp={ficha.hp}
         sp={ficha.sp}
         hpFill={ENEMY_FILL}
-        portrait={<CharacterPortrait dono="alvo" characterKey={ficha.modelo} />}
+        portrait={<CharacterPortrait dono="alvo" characterKey={ficha.modelo} weapons={ficha.weapons} />}
       />
     </div>
   );
@@ -408,4 +418,5 @@ interface FichaDeAlvo {
   hp?: { atual: number; max: number };
   sp?: { atual: number; max: number };
   modelo: CharacterKey;
+  weapons: readonly WeaponMount[];
 }

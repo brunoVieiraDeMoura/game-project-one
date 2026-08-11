@@ -5,6 +5,7 @@ import { SpectatorView } from "./views/SpectatorView";
 import { PlayView } from "./views/PlayView";
 import { EditorView } from "./views/EditorView";
 import { AssetScalingView } from "./views/AssetScalingView";
+import { ClassPreviewView } from "./views/ClassPreviewView";
 import { LoginView } from "./views/LoginView";
 import { CharSelectView } from "./views/CharSelectView";
 import { useGatewayEvents } from "./net/useGatewayEvents";
@@ -68,6 +69,7 @@ const router = createBrowserRouter([
       { path: "/play", element: <PlayView /> },
       { path: "/editor", element: <EditorView /> },
       { path: "/asset-scaling", element: <AssetScalingView /> },
+      { path: "/class-preview", element: <ClassPreviewView /> },
     ],
   },
 ]);

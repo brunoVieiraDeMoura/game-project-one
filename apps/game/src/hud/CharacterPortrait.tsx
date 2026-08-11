@@ -1,7 +1,10 @@
 import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { CHARACTER_URLS, useCharacter, type CharacterKey } from "../assets";
+import { CHARACTER_URLS, useCharacter, type CharacterKey, type WeaponMount } from "../assets";
+import { usePlayerStore } from "../net/playerStore";
+import { classModelFor } from "../entities/classModels";
+import { EquippedWeapons } from "../entities/EquippedWeapons";
 import { SondaDeCanvas, SondaDeMontagem, SondaDeSuspense } from "../core/diagnostics/SondaDeCanvas";
 
 /**
@@ -55,12 +58,36 @@ function Pulso() {
   return null;
 }
 
+/**
+ * Bbox do CORPO — ignora arma (`o.userData.arma`, marcada em
+ * `entities/EquippedWeapons`).
+ *
+ * `Box3.setFromObject(scene)` mediria a arma junto, e o grip dela não é a
+ * origem do mesh como em espada/adaga/cajado: o arco tem a origem no CENTRO
+ * do limbo, então metade do modelo cai abaixo da mão. Incluído na medida,
+ * aquele pedaço abaixo do pé virava "chão" mais baixo que o pé de verdade, e
+ * o enquadramento "inteiro" recentrava a cena inteira nele — o personagem
+ * saía do lugar (visto no char-select: "arco no chão, personagem voado").
+ * A arma continua desenhada normalmente; só não conta pro enquadramento.
+ */
+function medirCorpo(scene: THREE.Object3D): THREE.Box3 {
+  const box = new THREE.Box3();
+  scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry || o.userData.arma) return;
+    box.union(new THREE.Box3().setFromObject(mesh));
+  });
+  return box;
+}
+
 function Bust({
   url,
+  weapons,
   inteiro,
   giro,
 }: {
   url: string;
+  weapons?: readonly WeaponMount[];
   inteiro?: boolean;
   /** angulo em radianos que o arrasto acumulou; mexido por ref, nunca por state */
   giro?: React.MutableRefObject<number>;
@@ -70,7 +97,7 @@ function Bust({
 
   useLayoutEffect(() => {
     scene.updateWorldMatrix(true, true);
-    const box = new THREE.Box3().setFromObject(scene);
+    const box = medirCorpo(scene);
     if (!Number.isFinite(box.max.y) || box.max.y <= box.min.y) return;
 
     // pescoço: origem do osso da cabeça. Sem o osso (glb de fora do kit),
@@ -103,14 +130,21 @@ function Bust({
     if (giro) scene.rotation.y = giro.current;
   });
 
-  return <primitive object={scene} />;
+  return (
+    <>
+      <primitive object={scene} />
+      {weapons && weapons.length > 0 && <EquippedWeapons scene={scene} weapons={weapons} />}
+    </>
+  );
 }
 
 export function CharacterPortrait({
-  // mesmo modelo do NetPlayer/Player (Mago) — este é o retrato do PRÓPRIO
-  // jogador (`dono="jogador"`) quando quem chama não passa `characterKey`;
-  // "alvo" e "status" recebem a deles explicitamente.
-  characterKey = "mage",
+  // sem `characterKey`, o retrato é do PRÓPRIO jogador (`dono="jogador"`) e
+  // busca personagem+arma da classe real (`character/characterStore`, ver
+  // `entities/classModels`) — "alvo" e "status" passam a deles explicitamente
+  // (e a arma junto, em `weapons`, senão o busto sai desarmado).
+  characterKey,
+  weapons,
   inteiro,
   fundo,
   giravel,
@@ -126,6 +160,8 @@ export function CharacterPortrait({
    */
   dono?: string;
   characterKey?: CharacterKey;
+  /** arma(s) do busto; sem isto (e sem `characterKey`) puxa da classe real */
+  weapons?: readonly WeaponMount[];
   /** enquadra o corpo todo (janela de status) em vez do busto (medalhão) */
   inteiro?: boolean;
   /** fundo por trás do modelo; `false` deixa transparente (cena pintada atrás) */
@@ -144,6 +180,15 @@ export function CharacterPortrait({
   const giroInterno = useRef(0);
   const giro = giroRef ?? giroInterno;
   const arrasto = useRef<number | null>(null);
+
+  // `stats.class` (`net/playerStore`, semeado no char:select) — NÃO
+  // `character/characterStore`, que só serve o modo local/demo e nunca é
+  // preenchido numa sessão de verdade (era por isso que o retrato do
+  // jogador — "jogador"/"status" — caía sempre no fallback Barbarian).
+  const jobId = usePlayerStore((s) => s.stats.class);
+  const classModel = classModelFor(jobId);
+  const resolvedCharacterKey = characterKey ?? classModel.character;
+  const resolvedWeapons = weapons ?? (characterKey ? [] : classModel.weapons);
 
   // Só o eixo Y: girar em X deitaria o personagem, e o enquadramento (feito a
   // partir do osso da cabeça) deixaria de valer.
@@ -192,7 +237,9 @@ export function CharacterPortrait({
           componente, que é ANTES de o contexto WebGL existir. A distância entre
           este evento e o `contexto-criado` é o que separa "o React remontou" de
           "criar o contexto custou". */}
-      {import.meta.env.DEV && <SondaDeMontagem nome={`retrato:${dono}`} dados={{ characterKey, inteiro: !!inteiro }} />}
+      {import.meta.env.DEV && (
+        <SondaDeMontagem nome={`retrato:${dono}`} dados={{ characterKey: resolvedCharacterKey, inteiro: !!inteiro }} />
+      )}
       <Canvas
         camera={{ fov: FOV, near: 0.01, far: 100 }}
         /**
@@ -223,7 +270,12 @@ export function CharacterPortrait({
             também carrega um .glb, e os dois suspendendo juntos seriam
             indistinguíveis com um sinal anônimo */}
         <Suspense fallback={import.meta.env.DEV ? <SondaDeSuspense nome="retrato" /> : null}>
-          <Bust url={CHARACTER_URLS[characterKey]} inteiro={inteiro} giro={giravel || giroRef ? giro : undefined} />
+          <Bust
+            url={CHARACTER_URLS[resolvedCharacterKey]}
+            weapons={resolvedWeapons}
+            inteiro={inteiro}
+            giro={giravel || giroRef ? giro : undefined}
+          />
         </Suspense>
       </Canvas>
     </div>

@@ -4,6 +4,8 @@ import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
 import { fogDistances, type GameplayConfig } from "@ragnarok/game-data";
 import { CHARACTER_URLS, useCharacter, type CharacterKey } from "../assets";
+import { classModelFor } from "../entities/classModels";
+import { EquippedWeapons } from "../entities/EquippedWeapons";
 import { usePlayStore } from "../play/playStore";
 import { gateway } from "./gateway";
 import { cellToWorld, worldToCell, type LegacyMapping } from "./legacyCells";
@@ -139,10 +141,11 @@ export function NetPlayer({
   mapping,
   gameplay,
   positionRef,
-  // o personagem principal usa o modelo do Mago (ver CLAUDE.md, troca do
-  // Knight); NetPlayer é sempre o PRÓPRIO jogador, então não há classe por
-  // enquanto — um único modelo serve a todos até existir seleção por classe.
-  characterKey = "mage",
+  // sem override, o personagem/arma/animação vêm da classe real do servidor
+  // (`character/characterStore`, ver `entities/classModels`) — passar
+  // `characterKey` força um modelo específico (demo/teste) e cai de volta na
+  // família de clip genérica (histórico "Mago") por não saber a arma certa.
+  characterKey,
   cellSize,
 }: {
   map: GameMap;
@@ -156,7 +159,24 @@ export function NetPlayer({
   const group = useRef<THREE.Group>(null);
   /** só o boneco gira; o que fica no grupo raiz não acompanha a virada */
   const model = useRef<THREE.Group>(null);
-  const { scene, play, playOnce } = useCharacter(CHARACTER_URLS[characterKey], gameplay.animationSpeed);
+  /**
+   * `stats.class` (`net/playerStore`), NÃO `character/characterStore` — este
+   * só serve o modo local/demo (doc do próprio arquivo) e nunca é preenchido
+   * numa sessão de verdade, então `data?.jobId` ficava sempre `undefined` e
+   * todo mundo caía no fallback Barbarian, sessão real ou não (bug relatado:
+   * "caçador tá vindo Barbarian"). `stats.class` é semeado no `char:select`
+   * (`seedFromChar`, ver `playerStore.ts`) — é o campo que o char-select E a
+   * ficha do próprio jogador já usam pra classe.
+   */
+  const jobId = usePlayerStore((s) => s.stats.class);
+  const classModel = classModelFor(jobId);
+  const resolvedCharacterKey = characterKey ?? classModel.character;
+  const { scene, play, playOnce } = useCharacter(
+    CHARACTER_URLS[resolvedCharacterKey],
+    gameplay.animationSpeed,
+    undefined,
+    characterKey ? "mage" : classModel.family,
+  );
   /**
    * Ataque e conjuração são pulsos de OUTRO módulo (`net/combatAnim`), não do
    * `self` deste store — o mesmo golpe que faz a barra de dano piscar é a
@@ -1093,6 +1113,7 @@ export function NetPlayer({
     <group ref={group}>
       <group ref={model} scale={gameplay.charScale}>
         <primitive object={scene} />
+        {!characterKey && <EquippedWeapons scene={scene} weapons={classModel.weapons} />}
       </group>
       {/* barras de HP/SP embaixo do personagem, como no RO — FORA do grupo que
           gira, senão viram junto com o boneco a cada mudança de direção */}

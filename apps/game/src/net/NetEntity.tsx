@@ -5,6 +5,8 @@ import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
 import type { TerrainQuery } from "@ragnarok/engine-core";
 import { CHARACTER_URLS, useCharacter } from "../assets";
+import { classModelFor } from "../entities/classModels";
+import { EquippedWeapons } from "../entities/EquippedWeapons";
 import { mobModel, NPC_MODEL } from "../entities/mobModels";
 import { gateway } from "./gateway";
 import { cellToWorld, type LegacyMapping } from "./legacyCells";
@@ -99,14 +101,22 @@ export function NetEntityView({
     }),
   );
   const targeted = useWorldStore((s) => s.target === gid);
-  const modelInfo = entity?.kind === "npc" ? NPC_MODEL : mobModel(entity?.job ?? 0);
+  /** só p/ `kind === "player"`: `entity.job` ali é a CLASSE, não o mob_db (ver `gateway.EntitySnapshot`) */
+  const classModel = entity?.kind === "player" ? classModelFor(entity.job) : null;
+  const modelInfo =
+    entity?.kind === "npc" ? NPC_MODEL : entity?.kind === "player" ? { character: classModel!.character, scale: 1 } : mobModel(entity?.job ?? 0);
   /**
    * "Esta entidade está à vista?" — escrito no `useFrame` abaixo, lido pelo
    * mixer de animação (ver `assets.useCharacter`). Começa `true` para o primeiro
    * quadro não nascer congelado.
    */
   const aVista = useRef(true);
-  const { scene, play, playOnce } = useCharacter(CHARACTER_URLS[modelInfo.character], animationSpeed, aVista);
+  const { scene, play, playOnce } = useCharacter(
+    CHARACTER_URLS[modelInfo.character],
+    animationSpeed,
+    aVista,
+    classModel?.family ?? "mage",
+  );
   /**
    * Montanha/prop na frente barram o CLIQUE, não só a assistência de mira.
    *
@@ -437,6 +447,7 @@ export function NetEntityView({
 
       <group ref={model} scale={charScale * modelInfo.scale}>
         <primitive object={scene} />
+        {classModel && <EquippedWeapons scene={scene} weapons={classModel.weapons} />}
       </group>
 
       {entity.name && (
