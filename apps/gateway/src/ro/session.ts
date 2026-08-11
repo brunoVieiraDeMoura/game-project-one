@@ -18,6 +18,7 @@ import type {
 	GuildMember,
 	InventoryItem,
 	GroundItem,
+	HotkeySlot,
 	NpcDialog,
 	PlayerSkill,
 	SessionStage,
@@ -58,6 +59,11 @@ const NAME_QUERY_INTERVAL_MS = 120;
 /** tentativas por entidade e espera antes de repetir (ver `queryName`) */
 const NAME_QUERY_TRIES = 2;
 const NAME_RETRY_DELAY_MS = 1500;
+/** `MAX_HOTKEYS` (mmo.hpp) pra este packetver (20130618, sem o 2º tab de
+ * atalhos — esse exige >= 20190522). Fora disso o rAthena ignora em silêncio
+ * (`clif_parse_Hotkey`: `if(idx >= MAX_HOTKEYS_DB) return;`) — checar antes
+ * evita gastar um pacote à toa, não é regra inventada. */
+const MAX_HOTKEYS = 38;
 
 export declare interface RoSession {
 	on(event: "chars", listener: (chars: CharSummary[], slots: number) => void): this;
@@ -122,6 +128,7 @@ export declare interface RoSession {
 		listener: (payload: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => void,
 	): this;
 	on(event: "skills", listener: (payload: PlayerSkill[]) => void): this;
+	on(event: "hotkeys", listener: (payload: HotkeySlot[]) => void): this;
 	on(event: "skill-cast", listener: (payload: SkillCast) => void): this;
 	on(event: "skill-casting", listener: (payload: SkillCasting) => void): this;
 	on(event: "skill-ground", listener: (payload: SkillGround) => void): this;
@@ -1128,6 +1135,22 @@ export class RoSession extends EventEmitter {
 			});
 		}
 
+		// Barra de atalho: o rAthena manda os 38 slots INTEIROS de novo a cada
+		// vez (nunca incremental — não há pacote de "1 slot mudou" na volta, só
+		// CZ_SHORTCUT_KEY_CHANGE* de saída), então basta decodificar e emitir —
+		// sem Map acumulador, diferente de skills. Mesmo padrão de variante
+		// múltipla do bloco acima: só a struct que o packetver realmente
+		// registrou (`.id` setado por `initProtocol`) é enganchada — neste
+		// projeto (20130618) é só `SHORTCUT_KEY_LIST_V2`.
+		for (const key of Object.keys(PACKET.ZC)) {
+			if (!/^SHORTCUT_KEY_LIST(_V\d+)?$/.test(key)) continue;
+			const Struct = PACKET.ZC[key];
+			if (!Struct?.id) continue;
+			conn.hook(Struct, (pkt: any) => {
+				this.emit("hotkeys", toHotkeys(pkt.ShortCutKey ?? []));
+			});
+		}
+
 		for (const name of ["ADD_SKILL", "SKILLINFO_UPDATE", "SKILLINFO_UPDATE2"] as const) {
 			if (!PACKET.ZC[name]) continue;
 			conn.hook(PACKET.ZC[name], (pkt: any) => {
@@ -1814,6 +1837,29 @@ export class RoSession extends EventEmitter {
 	}
 
 	/**
+	 * Muda UM slot da barra de atalho (`CZ_SHORTCUT_KEY_CHANGE1`, 0x02ba —
+	 * único variante ativo neste packetver, `CHANGE2`/tab exige >= 20190522).
+	 * `count` é o campo cru (nível de skill / quantidade de item, mesmo campo
+	 * pros dois no rAthena). `kind: "empty"` limpa o slot (convenção do
+	 * próprio protocolo: `id=0`).
+	 *
+	 * Sem confirmação nenhuma na volta — `clif_parse_Hotkey` só grava
+	 * `sd->status.hotkeys[idx]`, sem checar skill/item existir nem nível, e
+	 * não manda pacote de resposta. A prova de que persistiu é reconectar.
+	 */
+	setHotkey(slot: number, data: { kind: "empty" | "skill" | "item"; id: number; count?: number }): void {
+		if (slot < 0 || slot >= MAX_HOTKEYS) return;
+		const pkt = new PACKET.CZ.SHORTCUT_KEY_CHANGE1();
+		pkt.Index = slot;
+		pkt.ShortCutKey = {
+			isSkill: data.kind === "skill" ? 1 : 0,
+			ID: data.kind === "empty" ? 0 : data.id,
+			count: data.count ?? 0,
+		};
+		this.sendMap(pkt);
+	}
+
+	/**
 	 * Fala num canal.
 	 *
 	 * Cada canal tem um caminho DIFERENTE no protocolo, e usar o pacote errado
@@ -1993,6 +2039,18 @@ function toSkill(raw: any): PlayerSkill {
 		/** o rAthena marca aqui se ainda dá para subir com ponto de habilidade */
 		upgradable: Boolean(raw.upgradable),
 	};
+}
+
+/** `ID: 0` é a convenção do próprio rAthena pra slot vazio (char novo/slot
+ * nunca gravado nasce assim, `sql-files/main.sql`) — não é o gateway
+ * inventando "vazio", é o mesmo valor que o servidor já usa. */
+function toHotkeys(raw: { isSkill: number; ID: number; count: number }[]): HotkeySlot[] {
+	return raw.map((h, slot) => ({
+		slot,
+		kind: h.ID === 0 ? "empty" : h.isSkill ? "skill" : "item",
+		id: h.ID,
+		count: h.count,
+	}));
 }
 
 /**

@@ -83,6 +83,19 @@ export interface InventoryItemPayload {
   cards: number[];
 }
 
+/**
+ * Um slot da barra de atalho do rAthena (0..37, `MAX_HOTKEYS` deste
+ * packetver). `count` é o campo cru (nível de skill / quantidade de item —
+ * mesmo campo pros dois no protocolo). Nunca existe `"ammo"` aqui — essa
+ * distinção é só do `skillBarStore` local, sem contraparte no servidor.
+ */
+export interface HotkeySlotPayload {
+  slot: number;
+  kind: "empty" | "skill" | "item";
+  id: number;
+  count: number;
+}
+
 export interface SkillPayload {
   id: number;
   name: string;
@@ -146,6 +159,7 @@ export interface ServerEvents {
   /** resposta a `card:insert`; `cards` já vem pronto, calculado pelo gateway */
   "card:result": (p: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => void;
   "skill:list": (p: SkillPayload[]) => void;
+  "hotkey:list": (p: HotkeySlotPayload[]) => void;
   "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff"; action: number }) => void;
   "skill:casting": (p: { skillId: number; sourceGid: number; targetGid: number; x: number; y: number; durationMs: number }) => void;
   "skill:ground": (p: { gid: number; creatorGid: number; x: number; y: number; unitId: number; visible: boolean }) => void;
@@ -235,6 +249,8 @@ export interface ClientEvents {
   "ignore:remove": (p: { name: string }) => void;
   /** gasta 1 ponto de habilidade (CZ_UPGRADE_SKILLLEVEL); o servidor valida */
   "skill:raise": (p: { skillId: number }) => void;
+  /** muda 1 slot da barra; sem confirmação de volta (ver `HotkeySlotPayload`) */
+  "hotkey:set": (p: { slot: number; kind: "empty" | "skill" | "item"; id: number; count?: number }) => void;
 }
 
 export type GatewaySocket = Socket<ServerEvents, ClientEvents>;

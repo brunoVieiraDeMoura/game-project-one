@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { gateway, type EntitySnapshot, type InventoryItemPayload, type SkillPayload } from "./gateway";
+import { gateway, type EntitySnapshot, type HotkeySlotPayload, type InventoryItemPayload, type SkillPayload } from "./gateway";
+import { useSkillBar } from "../hud/skillBarStore";
 import { interpolatedCell, useWorldStore } from "./worldStore";
 import { useAttackStore } from "./attackStore";
 import { useSkillTargetStore } from "./skillTargetStore";
@@ -237,6 +238,7 @@ export function useWorldEvents(): void {
     };
 
     const onSkills = (p: SkillPayload[]) => usePlayerStore.getState().setSkills(p);
+    const onHotkeys = (p: HotkeySlotPayload[]) => useSkillBar.getState().hydrateFromServer(p);
 
     // VFX: 600ms é a duração dos efeitos pontuais (impacto/buff); área vive
     // até o servidor mandar sumir.
@@ -329,6 +331,7 @@ export function useWorldEvents(): void {
     };
 
     socket.on("skill:list", onSkills);
+    socket.on("hotkey:list", onHotkeys);
     socket.on("skill:cast", onSkillCast);
     socket.on("skill:casting", onSkillCasting);
     socket.on("skill:ground", onSkillGround);
@@ -374,6 +377,7 @@ export function useWorldEvents(): void {
 
     return () => {
       socket.off("skill:list", onSkills);
+      socket.off("hotkey:list", onHotkeys);
       socket.off("skill:cast", onSkillCast);
       socket.off("skill:casting", onSkillCasting);
       socket.off("skill:ground", onSkillGround);

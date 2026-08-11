@@ -100,6 +100,9 @@ export interface ServerEvents {
 	 */
 	"card:result": (payload: { equipIndex: number; cardIndex: number; success: boolean; cards: number[] }) => void;
 	"skill:list": (payload: PlayerSkill[]) => void;
+	/** os 38 slots inteiros, sempre em lote — o rAthena manda a lista completa
+	 * de novo no map-enter (`clif_hotkeys_send`), nunca incremental. */
+	"hotkey:list": (payload: HotkeySlot[]) => void;
 	"skill:cast": (payload: SkillCast) => void;
 	"skill:casting": (payload: SkillCasting) => void;
 	"skill:ground": (payload: SkillGround) => void;
@@ -248,6 +251,25 @@ export interface PlayerSkill {
 	upgradable: boolean;
 }
 
+/**
+ * Um slot da barra de atalho do rAthena (`ZC_SHORTCUT_KEY_LIST_V2`,
+ * `hotkey_data{isSkill,ID,count}` — `packets_struct.hpp`). `slot` é o índice
+ * 0..37 (`MAX_HOTKEYS` neste packetver, `mmo.hpp`) — o servidor usa os 38,
+ * mesmo a UI hoje só desenhando 27 (`SKILL_SLOTS`, `skillBarStore.ts`); os
+ * 11 extras seguem sincronizados sem representação visual, de propósito.
+ *
+ * `count` é o campo cru do rAthena (nível pra skill, quantidade pra item —
+ * ele reaproveita o mesmo campo pros dois, isto só espelha, não reinterpreta).
+ * Nunca existe `"ammo"` aqui: é uma distinção só do cliente (equipar vs.
+ * usar), sem contraparte no protocolo do servidor — ver `skillBarStore.ts`.
+ */
+export interface HotkeySlot {
+	slot: number;
+	kind: "empty" | "skill" | "item";
+	id: number;
+	count: number;
+}
+
 /** Uso de skill que já aconteceu (o VFX sai daqui). */
 export interface SkillCast {
 	skillId: number;
@@ -372,6 +394,14 @@ export interface ClientEvents {
 	 * atualiza sozinha.
 	 */
 	"skill:raise": (payload: { skillId: number }) => void;
+	/**
+	 * Muda UM slot da barra (`CZ_SHORTCUT_KEY_CHANGE1`, 0x02ba). O rAthena não
+	 * valida skill/item existir nem nível (`clif_parse_Hotkey`, `clif.cpp` —
+	 * grava `sd->status.hotkeys[idx]` sem checagem nenhuma além do índice
+	 * caber em `MAX_HOTKEYS_DB`) nem manda confirmação de volta — a única
+	 * prova de que pegou é reconectar e ver `hotkey:list` de novo.
+	 */
+	"hotkey:set": (payload: { slot: number; kind: "empty" | "skill" | "item"; id: number; count?: number }) => void;
 }
 
 /** Atributos que a janela de status permite subir com ponto. */

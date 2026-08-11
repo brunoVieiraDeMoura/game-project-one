@@ -12,6 +12,7 @@ import net from "node:net";
 import { describe, expect, it, beforeAll } from "vitest";
 import { config } from "../config.js";
 import { RoSession } from "./session.js";
+import type { HotkeySlot } from "../protocol.js";
 
 const TIMEOUT = 20_000;
 
@@ -99,4 +100,118 @@ describe("RoSession contra o rAthena", () => {
 		},
 		TIMEOUT,
 	);
+
+	it(
+		"hotkeys: os 38 slots chegam no map-enter, mudar 1 slot sobrevive a reconexao (prova real de persistencia no char-server)",
+		async (ctx) => {
+			if (!serverUp) {
+				ctx.skip();
+			}
+
+			const suffix = Date.now().toString().slice(-6);
+			const account = `hk${suffix}`;
+			const password = "gp123456";
+			const charName = `Hk${suffix}`;
+
+			// sessao 1: cria a conta+personagem, entra no mapa, confirma os 38
+			// slots (vazios, char novo) e muda o slot 5 pra um item real.
+			const session1 = new RoSession({
+				host: config.roHost,
+				loginPort: config.loginPort,
+				packetver: config.packetver,
+				debug: config.debug,
+			});
+			try {
+				const chars = new Promise<void>((resolve, reject) => {
+					session1.on("chars", () => resolve());
+					session1.on("closed", ({ reason }) => reject(new Error(reason)));
+				});
+				await session1.authenticate(`${account}_M`, password);
+				await chars;
+
+				const entered = new Promise<void>((resolve, reject) => {
+					session1.on("map-enter", () => resolve());
+					session1.on("closed", ({ reason }) => reject(new Error(reason)));
+				});
+				const hotkeysPromise = new Promise<HotkeySlot[]>((resolve) => session1.once("hotkeys", resolve));
+				const relisted = new Promise<void>((resolve) => session1.once("chars", () => resolve()));
+				session1.createChar({ slot: 0, name: charName, hair: 1, hairColor: 1 });
+				await relisted;
+				session1.selectChar(0);
+				await entered;
+				// `clif_hotkeys_send` só dispara dentro de `clif_parse_LoadEndAck`
+				// (CZ_NOTIFY_ACTORINIT) — o cliente real manda isso quando a cena 3D
+				// termina de montar (`world:ready` no gateway); aqui simulamos o
+				// mesmo aviso manualmente, sem cena nenhuma.
+				session1.notifyReady();
+
+				const initial = await withTimeout(hotkeysPromise, 10_000, "hotkeys (sessao 1)");
+				expect(initial).toHaveLength(38);
+				// char novo: os 38 vem vazios (`hotkey_rowshift`/tabela `hotkey` sem
+				// linha nenhuma pra este char_id ainda) — prova que o decode dos 38
+				// slots está correto ANTES de qualquer escrita nossa.
+				expect(initial.every((s) => s.kind === "empty")).toBe(true);
+
+				// muda o slot 5 pra um item real (Red Potion, 501) — sem
+				// confirmação nenhuma no protocolo (`clif_parse_Hotkey` não ecoa
+				// nada de volta), só dá pra confiar que o pacote saiu.
+				session1.setHotkey(5, { kind: "item", id: 501, count: 3 });
+				await sleep(1000);
+			} finally {
+				session1.close();
+			}
+
+			// dá tempo do map-server avisar o char-server que o personagem saiu
+			// (é aí que o char-server grava a tabela `hotkey` de verdade).
+			await sleep(2000);
+
+			// sessao 2: reloga na MESMA conta (sem sufixo _M — ela já existe) e
+			// confirma que o slot 5 voltou com o valor gravado. Isto, e só isto,
+			// é prova real de persistência — não "pacote enviado com sucesso".
+			const session2 = new RoSession({
+				host: config.roHost,
+				loginPort: config.loginPort,
+				packetver: config.packetver,
+				debug: config.debug,
+			});
+			try {
+				const chars2 = new Promise<void>((resolve, reject) => {
+					session2.on("chars", () => resolve());
+					session2.on("closed", ({ reason }) => reject(new Error(reason)));
+				});
+				await session2.authenticate(account, password);
+				await chars2;
+
+				const entered2 = new Promise<void>((resolve, reject) => {
+					session2.on("map-enter", () => resolve());
+					session2.on("closed", ({ reason }) => reject(new Error(reason)));
+				});
+				const hotkeysPromise2 = new Promise<HotkeySlot[]>((resolve) => session2.once("hotkeys", resolve));
+				session2.selectChar(0);
+				await entered2;
+				session2.notifyReady();
+
+				const afterReconnect = await withTimeout(hotkeysPromise2, 10_000, "hotkeys (sessao 2)");
+				expect(afterReconnect).toHaveLength(38);
+				expect(afterReconnect[5]).toEqual({ slot: 5, kind: "item", id: 501, count: 3 });
+				// os outros slots continuam vazios — a mudança não vazou pra fora
+				// do índice pedido.
+				expect(afterReconnect.filter((s) => s.kind !== "empty")).toHaveLength(1);
+			} finally {
+				session2.close();
+			}
+		},
+		TIMEOUT * 3,
+	);
 });
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+	return Promise.race([
+		promise,
+		new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} não chegou em ${ms}ms`)), ms)),
+	]);
+}

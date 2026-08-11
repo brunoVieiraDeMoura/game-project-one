@@ -87,6 +87,7 @@ io.on("connection", (socket) => {
 		ro.on("card-options", (payload) => socket.emit("card:options", payload));
 		ro.on("card-result", (payload) => socket.emit("card:result", payload));
 		ro.on("skills", (payload) => socket.emit("skill:list", payload));
+		ro.on("hotkeys", (payload) => socket.emit("hotkey:list", payload));
 		ro.on("skill-cast", (payload) => socket.emit("skill:cast", payload));
 		ro.on("skill-casting", (payload) => socket.emit("skill:casting", payload));
 		ro.on("skill-ground", (payload) => socket.emit("skill:ground", payload));
@@ -185,6 +186,14 @@ io.on("connection", (socket) => {
 	socket.on("skill:use", (payload: { skillId?: number; level?: number; targetGid?: number }) => {
 		withSession((ro) =>
 			ro.useSkill(Number(payload?.skillId ?? 0), Number(payload?.level ?? 1), Number(payload?.targetGid ?? 0)),
+		);
+	});
+
+	socket.on("hotkey:set", (payload: { slot?: number; kind?: "empty" | "skill" | "item"; id?: number; count?: number }) => {
+		const kind = payload?.kind;
+		if (kind !== "empty" && kind !== "skill" && kind !== "item") return;
+		withSession((ro) =>
+			ro.setHotkey(Number(payload?.slot ?? -1), { kind, id: Number(payload?.id ?? 0), count: Number(payload?.count ?? 0) }),
 		);
 	});
 
