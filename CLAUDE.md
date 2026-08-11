@@ -247,8 +247,19 @@ Plano completo em `docs/plano-rathena.md`. Estado (2026-07-28):
   barras do próprio personagem, alvo clicável, itens no chão (pegar e soltar),
   barra de habilidades por arrastar (persistida), mira de skill (chão e alvo),
   minimapa em células e respawn instantâneo por `battle_conf`.
-- **Pendências conhecidas**: editor de classes ainda não escreve YAML (só skill
-  escreve, via `db/import`); spawn de mob continua sendo script de NPC do
+- **Editor de classes escreve YAML** (`JobDatabaseWriter`, leia1.txt
+  2026-08-07): `job_stats.yml` (MaxWeight/BonusStats/BaseHp/BaseSp/
+  MaxBaseLevel/MaxJobLevel/BaseExp/JobExp/BaseASPD — `job_exp` é parte da
+  MESMA estrutura de `job_stats.yml`, não um arquivo físico separado no
+  override, porque o dispatcher do rAthena só declara um slot de import pro
+  domínio JOB_STATS inteiro) e `skill_tree.yml` (Tree/Inherit) já têm
+  write-path completo: validação estrutural + cruzada, escrita atômica
+  (tudo-ou-nada nos 2 arquivos), backup antes de sobrescrever, diff e
+  round-trip provados antes de qualquer gravação real, `@reloadpcdb`
+  enfileirado ao final. Testado (`job-database-writer.test.ts`,
+  `job-classes.test.ts`), inclusive isolamento entre classes (editar uma
+  não toca a entrada já gravada de outra).
+- **Pendências conhecidas**: spawn de mob continua sendo script de NPC do
   rAthena (não há tela para isso); modelo por classe/monstro é o placeholder
   KayKit; hotkeys do servidor (ZC.SHORTCUT_KEY_LIST) ainda não são usadas — a
   barra mora no navegador.
