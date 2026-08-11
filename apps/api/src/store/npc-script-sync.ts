@@ -72,7 +72,18 @@ function sameShape(a: DialogueShape, b: DialogueShape): boolean {
 
 export type NpcScriptSyncResult =
   | { kind: "skip" }
-  | { kind: "applied"; absPath: string; previousRawText: string }
+  | {
+      kind: "applied";
+      absPath: string;
+      previousRawText: string;
+      /** relativo ao `npcRoot` — mesmo valor gravado antes do ":" no `legacyRef`. */
+      relPath: string;
+      /** última linha (1-based) do bloco do NPC editado, ANTES da escrita — fronteira:
+       * `legacyRef` de outro NPC no mesmo arquivo só precisa de ajuste se sua linha for maior que esta. */
+      editedBlockEndLine: number;
+      /** quantas linhas o arquivo ganhou (positivo) ou perdeu (negativo) com esta escrita. */
+      lineDelta: number;
+    }
   | {
       kind: "refused";
       httpStatus: number;
@@ -198,7 +209,33 @@ export function applyNpcScriptEdit(npcRoot: string, current: Npc, requested: Npc
     return { kind: "refused", httpStatus: 500, error: "operational", message: `falha ao escrever o arquivo: ${(err as Error).message}` };
   }
 
-  return { kind: "applied", absPath: located.absPath, previousRawText: located.rawText };
+  const lineDelta = newRawText.split("\n").length - located.rawText.split("\n").length;
+  return {
+    kind: "applied",
+    absPath: located.absPath,
+    previousRawText: located.rawText,
+    relPath: located.relPath,
+    editedBlockEndLine: located.blockEndLine,
+    lineDelta,
+  };
+}
+
+/** Acha um sibling `legacyRef` que precisa de ajuste depois que UM write mudou
+ * a contagem de linhas de `relPath` — só desloca refs no MESMO arquivo, com
+ * linha estritamente depois do bloco editado (`afterLine`). Nunca toca o
+ * `legacyRef` do próprio NPC editado (ele fica com a linha do seu cabeçalho,
+ * que nunca muda — só o que vem DEPOIS do bloco dele pode ter deslocado).
+ * Devolve `undefined` quando não há ajuste a fazer (arquivo diferente, linha
+ * antes/dentro do bloco editado, ou ref malformado — nesse caso não é este
+ * código que deve reportar o problema). */
+export function shiftLegacyRefIfAfter(legacyRef: string, relPath: string, afterLine: number, delta: number): string | undefined {
+  if (delta === 0) return undefined;
+  const sep = legacyRef.lastIndexOf(":");
+  if (sep < 0) return undefined;
+  const refRelPath = legacyRef.slice(0, sep);
+  const lineNum = Number(legacyRef.slice(sep + 1));
+  if (refRelPath !== relPath || !Number.isInteger(lineNum) || lineNum <= afterLine) return undefined;
+  return `${refRelPath}:${lineNum + delta}`;
 }
 
 /** Restaura os bytes originais depois de `applied` — usado quando a

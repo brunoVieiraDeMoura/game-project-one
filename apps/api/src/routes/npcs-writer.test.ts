@@ -84,6 +84,22 @@ function extractBody(code: string): string {
   return code.slice(start, end);
 }
 
+// mesma ideia de `extractBody`, mas pra um arquivo com VÁRIOS NPCs (Fase
+// 3.5, drift de legacyRef) — os fixtures desses testes não têm chave
+// aninhada dentro do corpo, então basta achar o primeiro `{`/`}` de cada
+// bloco em sequência.
+function extractBlocks(code: string, count: number): string[] {
+  const bodies: string[] = [];
+  let from = 0;
+  for (let i = 0; i < count; i++) {
+    const brace = code.indexOf("{", from);
+    const close = code.indexOf("}", brace);
+    bodies.push(code.slice(brace + 1, close));
+    from = close + 1;
+  }
+  return bodies;
+}
+
 function npcFrom(mapped: ReturnType<typeof mapNpcScriptWithUnits>, id: string, legacyRef: string, extra: Partial<Npc> = {}): Npc {
   return {
     id,
@@ -351,5 +367,240 @@ describe("PUT /npcs/:id — integração real com o Writer (arquivo temporário)
     expect(stale.json().error).toBe("stale-source");
 
     expect(refused.json().error).not.toBe(stale.json().error);
+  });
+
+  it("16. Fase 3.5 — NPC A editado com troca de contagem de linhas desloca o legacyRef do NPC B (mesmo arquivo, depois de A), sem corromper o conteúdo de B", async () => {
+    // dois NPCs reais no MESMO arquivo: "Primeiro" (linha 1) e "Segundo"
+    // (linha 6) — cabeçalho de B calculado a mão pela contagem de linhas do
+    // fixture abaixo, igual `migrate-npcs.ts` faria na migração original.
+    const code = `prontera,150,150,4\tscript\tPrimeiro\t1_M_01,{
+\tmes "original";
+\tclose;
+}
+
+prontera,160,160,4\tscript\tSegundo\t1_M_01,{
+\tmes "segundo";
+\tclose;
+}
+`;
+    writeFileSync(join(dir, "a.txt"), code, "utf8");
+
+    const firstBrace = code.indexOf("{");
+    const firstClose = code.indexOf("}", firstBrace);
+    const bodyA = code.slice(firstBrace + 1, firstClose);
+    const secondBrace = code.indexOf("{", firstClose);
+    const secondClose = code.indexOf("}", secondBrace);
+    const bodyB = code.slice(secondBrace + 1, secondClose);
+
+    const mappedA = mapNpcScriptWithUnits(parseNpcScript(bodyA));
+    const mappedB = mapNpcScriptWithUnits(parseNpcScript(bodyB));
+    const npcA = npcFrom(mappedA, "na", "a.txt:1");
+    const npcB = npcFrom(mappedB, "nb", "a.txt:6");
+    await app.inject({ method: "POST", url: "/npcs", payload: npcA });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcB });
+
+    // um "say" com texto multi-linha vira UM `mes` por linha na reimpressão
+    // (`npc-script-writer.ts`: `node.text.split("\n").map(mes...)`) — trocar
+    // "original" (1 linha) por 3 linhas faz o arquivo crescer 2 linhas SEM
+    // nenhuma mudança estrutural (mesmo tipo de edição do teste 3), a mesma
+    // classe de drift que a auditoria encontrou no corpus real.
+    const editedA = { ...npcA, dialogue: editSay(npcA.dialogue, "original", "original\nlinha 2\nlinha 3") };
+    const resA = await app.inject({ method: "PUT", url: "/npcs/na", payload: editedA });
+    expect(resA.statusCode).toBe(200);
+
+    const fileNow = readFileSync(join(dir, "a.txt"), "utf8");
+    expect(fileNow).toContain('mes "linha 3";');
+
+    // NPC B não foi tocado no PUT acima, mas seu cabeçalho real se moveu de
+    // "a.txt:6" pra "a.txt:8" (2 linhas a mais antes dele) — sem a correção,
+    // o catálogo continuaria com "a.txt:6" (que agora é só "}") e a PRÓXIMA
+    // edição de B falharia com "not-a-script-header".
+    const npcBRow = await app.inject({ method: "GET", url: "/npcs/nb" });
+    expect(npcBRow.json().legacyRef).toBe("a.txt:8");
+
+    // prova fim-a-fim: uma edição real em B, usando o legacyRef corrigido,
+    // funciona e não corrompe o conteúdo dela nem o bloco de A ao lado.
+    const editedB = { ...npcB, legacyRef: npcBRow.json().legacyRef, dialogue: editSay(npcB.dialogue, "segundo", "B EDITADO") };
+    const resB = await app.inject({ method: "PUT", url: "/npcs/nb", payload: editedB });
+    expect(resB.statusCode).toBe(200);
+
+    const fileAfterB = readFileSync(join(dir, "a.txt"), "utf8");
+    expect(fileAfterB).toContain("B EDITADO");
+    expect(fileAfterB).toContain('mes "linha 3";'); // bloco de A intacto
+  });
+
+  it("17. Fase 3.5 — redução de linhas em A desloca B pra TRÁS (delta negativo)", async () => {
+    const code = `prontera,150,150,4\tscript\tPrimeiro\t1_M_01,{
+\tmes "linha 1";
+\tmes "linha 2";
+\tmes "linha 3";
+\tclose;
+}
+
+prontera,160,160,4\tscript\tSegundo\t1_M_01,{
+\tmes "segundo";
+\tclose;
+}
+`;
+    writeFileSync(join(dir, "a.txt"), code, "utf8");
+    const [bodyA, bodyB] = extractBlocks(code, 2);
+    const npcA = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyA!)), "na", "a.txt:1");
+    const npcB = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyB!)), "nb", "a.txt:8");
+    await app.inject({ method: "POST", url: "/npcs", payload: npcA });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcB });
+
+    // 3 `mes` (nó "say" com texto de 3 linhas) → 1 `mes` só — arquivo perde 2 linhas.
+    const editedA = { ...npcA, dialogue: editSay(npcA.dialogue, "linha 1\nlinha 2\nlinha 3", "linha unica") };
+    const resA = await app.inject({ method: "PUT", url: "/npcs/na", payload: editedA });
+    expect(resA.statusCode).toBe(200);
+
+    const fileNow = readFileSync(join(dir, "a.txt"), "utf8");
+    expect(fileNow).toContain('mes "linha unica";');
+    expect(fileNow).not.toContain('mes "linha 2";');
+    expect(fileNow).toContain('mes "segundo";'); // conteúdo de B intacto
+
+    const npcBRow = await app.inject({ method: "GET", url: "/npcs/nb" });
+    expect(npcBRow.json().legacyRef).toBe("a.txt:6");
+    expect(npcBRow.json().dialogue).toEqual(npcB.dialogue); // conteúdo de B, não só o arquivo, intacto
+  });
+
+  it("18. Fase 3.5 — delta zero (mesma contagem de linhas) não altera o legacyRef de B", async () => {
+    const code = `prontera,150,150,4\tscript\tPrimeiro\t1_M_01,{
+\tmes "original";
+\tclose;
+}
+
+prontera,160,160,4\tscript\tSegundo\t1_M_01,{
+\tmes "segundo";
+\tclose;
+}
+`;
+    writeFileSync(join(dir, "a.txt"), code, "utf8");
+    const [bodyA, bodyB] = extractBlocks(code, 2);
+    const npcA = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyA!)), "na", "a.txt:1");
+    const npcB = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyB!)), "nb", "a.txt:6");
+    await app.inject({ method: "POST", url: "/npcs", payload: npcA });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcB });
+
+    // troca de texto SEM mudar contagem de linhas (1 `mes` → 1 `mes`).
+    const editedA = { ...npcA, dialogue: editSay(npcA.dialogue, "original", "trocado") };
+    const resA = await app.inject({ method: "PUT", url: "/npcs/na", payload: editedA });
+    expect(resA.statusCode).toBe(200);
+
+    const npcBRow = await app.inject({ method: "GET", url: "/npcs/nb" });
+    expect(npcBRow.json().legacyRef).toBe("a.txt:6"); // inalterado
+  });
+
+  it("19. Fase 3.5 — três NPCs no mesmo arquivo (B antes de A, C depois): só C desloca", async () => {
+    const code = `prontera,140,140,4\tscript\tAntes\t1_M_01,{
+\tmes "antes";
+\tclose;
+}
+
+prontera,150,150,4\tscript\tPrimeiro\t1_M_01,{
+\tmes "original";
+\tclose;
+}
+
+prontera,160,160,4\tscript\tDepois\t1_M_01,{
+\tmes "depois";
+\tclose;
+}
+`;
+    writeFileSync(join(dir, "a.txt"), code, "utf8");
+    const [bodyBefore, bodyA, bodyAfter] = extractBlocks(code, 3);
+    const npcBefore = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyBefore!)), "nbefore", "a.txt:1");
+    const npcA = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyA!)), "na", "a.txt:6");
+    const npcAfter = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyAfter!)), "nafter", "a.txt:11");
+    await app.inject({ method: "POST", url: "/npcs", payload: npcBefore });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcA });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcAfter });
+
+    const editedA = { ...npcA, dialogue: editSay(npcA.dialogue, "original", "original\nlinha 2\nlinha 3") };
+    const resA = await app.inject({ method: "PUT", url: "/npcs/na", payload: editedA });
+    expect(resA.statusCode).toBe(200);
+
+    const beforeRow = await app.inject({ method: "GET", url: "/npcs/nbefore" });
+    expect(beforeRow.json().legacyRef).toBe("a.txt:1"); // não desloca — vem ANTES de A
+
+    const afterRow = await app.inject({ method: "GET", url: "/npcs/nafter" });
+    expect(afterRow.json().legacyRef).toBe("a.txt:13"); // desloca +2 — vem DEPOIS de A
+    expect(afterRow.json().dialogue).toEqual(npcAfter.dialogue);
+  });
+
+  it("20. Fase 3.5 — NPC de OUTRO arquivo nunca é deslocado, mesmo com número de linha coincidente", async () => {
+    const code = `prontera,150,150,4\tscript\tPrimeiro\t1_M_01,{
+\tmes "original";
+\tclose;
+}
+
+prontera,160,160,4\tscript\tSegundo\t1_M_01,{
+\tmes "segundo";
+\tclose;
+}
+`;
+    writeFileSync(join(dir, "a.txt"), code, "utf8");
+    const [bodyA, bodyB] = extractBlocks(code, 2);
+    const npcA = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyA!)), "na", "a.txt:1");
+    const npcB = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyB!)), "nb", "a.txt:6");
+
+    // "c.txt:8" — linha 8 é EXATAMENTE onde "nb" vai parar depois do shift de
+    // +2 em "a.txt". Se o filtro de arquivo não isolasse por `relPath`, este
+    // NPC de outro arquivo seria deslocado por coincidência numérica.
+    const other = parseFile(dir, "c.txt", IF_ELSE, "c.txt:8");
+    const npcOther = npcFrom(other.mapped, "nother", "c.txt:8");
+
+    await app.inject({ method: "POST", url: "/npcs", payload: npcA });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcB });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcOther });
+
+    const editedA = { ...npcA, dialogue: editSay(npcA.dialogue, "original", "original\nlinha 2\nlinha 3") };
+    const resA = await app.inject({ method: "PUT", url: "/npcs/na", payload: editedA });
+    expect(resA.statusCode).toBe(200);
+
+    const otherRow = await app.inject({ method: "GET", url: "/npcs/nother" });
+    expect(otherRow.json().legacyRef).toBe("c.txt:8"); // intocado
+    expect(readFileSync(join(dir, "c.txt"), "utf8")).toContain('mes "sim";'); // c.txt intocado
+  });
+
+  it("21. Fase 3.5 — múltiplos siblings depois de A deslocam todos corretamente", async () => {
+    const code = `prontera,150,150,4\tscript\tPrimeiro\t1_M_01,{
+\tmes "original";
+\tclose;
+}
+
+prontera,160,160,4\tscript\tSegundo\t1_M_01,{
+\tmes "segundo";
+\tclose;
+}
+
+prontera,170,170,4\tscript\tTerceiro\t1_M_01,{
+\tmes "terceiro";
+\tclose;
+}
+`;
+    writeFileSync(join(dir, "a.txt"), code, "utf8");
+    const [bodyA, bodyB, bodyC] = extractBlocks(code, 3);
+    const npcA = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyA!)), "na", "a.txt:1");
+    const npcB = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyB!)), "nb", "a.txt:6");
+    const npcC = npcFrom(mapNpcScriptWithUnits(parseNpcScript(bodyC!)), "nc", "a.txt:11");
+    await app.inject({ method: "POST", url: "/npcs", payload: npcA });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcB });
+    await app.inject({ method: "POST", url: "/npcs", payload: npcC });
+
+    const editedA = { ...npcA, dialogue: editSay(npcA.dialogue, "original", "original\nlinha 2\nlinha 3") };
+    const resA = await app.inject({ method: "PUT", url: "/npcs/na", payload: editedA });
+    expect(resA.statusCode).toBe(200);
+
+    const bRow = await app.inject({ method: "GET", url: "/npcs/nb" });
+    const cRow = await app.inject({ method: "GET", url: "/npcs/nc" });
+    expect(bRow.json().legacyRef).toBe("a.txt:8");
+    expect(cRow.json().legacyRef).toBe("a.txt:13");
+    expect(bRow.json().dialogue).toEqual(npcB.dialogue);
+    expect(cRow.json().dialogue).toEqual(npcC.dialogue);
+
+    const fileNow = readFileSync(join(dir, "a.txt"), "utf8");
+    expect(fileNow).toContain('mes "segundo";');
+    expect(fileNow).toContain('mes "terceiro";');
   });
 });

@@ -5,7 +5,7 @@ import type { NpcRepository } from "../store/npc-repository";
 import type { MapRepository } from "../store/map-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
-import { applyNpcScriptEdit, rollbackAppliedWrite } from "../store/npc-script-sync";
+import { applyNpcScriptEdit, rollbackAppliedWrite, shiftLegacyRefIfAfter } from "../store/npc-script-sync";
 import { applyNpcScriptCreate, rollbackNpcScriptCreate, ADMIN_CREATED_NPC_FILE } from "../store/npc-script-create";
 import { queueReload } from "../store/mysql-item-repository.js";
 
@@ -153,6 +153,7 @@ export function npcRoutes(
         // campos do mesmo request (nome/posição/warp/shop) fossem válidos.
         let rollbackFile: (() => void) | null = null;
         let scriptFileChanged = false;
+        let legacyRefShift: { relPath: string; editedBlockEndLine: number; lineDelta: number } | null = null;
         const editRoot = current.legacyRef ? scriptRootFor(current.legacyRef, npcScriptRoot ?? "", npcCreateRoot ?? "") : npcScriptRoot;
         if (editRoot) {
           const sync = applyNpcScriptEdit(editRoot, current, body.data);
@@ -167,6 +168,9 @@ export function npcRoutes(
           if (sync.kind === "applied") {
             rollbackFile = () => rollbackAppliedWrite(sync.absPath, sync.previousRawText);
             scriptFileChanged = true;
+            if (sync.lineDelta !== 0) {
+              legacyRefShift = { relPath: sync.relPath, editedBlockEndLine: sync.editedBlockEndLine, lineDelta: sync.lineDelta };
+            }
           }
         }
 
@@ -181,6 +185,32 @@ export function npcRoutes(
               targetId: p.data.id,
               payload: updated,
             });
+          }
+          // achado da Fase 3.5 (drift de legacyRef): uma edição que muda a
+          // contagem de linhas do arquivo desloca o cabeçalho de todo NPC
+          // DEPOIS dele no mesmo arquivo — sem isto, o `legacyRef` desses
+          // siblings continua apontando pra linha antiga e uma futura edição
+          // deles falha ("not-a-script-header") ou, pior, acerta a linha
+          // errada por coincidência. Só roda depois que o PRÓPRIO update já
+          // confirmou (nunca antes — não quero deslocar sibling nenhum se a
+          // edição principal ainda pode ser revertida). Melhor esforço, como
+          // o resto do bloco de rollback: se a atualização de um sibling
+          // falhar, o pior caso é ele ficar com o legacyRef antigo, que
+          // `locateNpcScript` já recusa com segurança (não corrompe nada).
+          if (legacyRefShift) {
+            const { relPath, editedBlockEndLine, lineDelta } = legacyRefShift;
+            const siblings = await repo.listByLegacyRefFile(relPath);
+            for (const sibling of siblings) {
+              if (sibling.id === p.data.id || !sibling.legacyRef) continue;
+              const shifted = shiftLegacyRefIfAfter(sibling.legacyRef, relPath, editedBlockEndLine, lineDelta);
+              if (shifted) {
+                try {
+                  await repo.update(sibling.id, { ...sibling, legacyRef: shifted });
+                } catch {
+                  // melhor esforço — não falha o PUT principal, que já confirmou.
+                }
+              }
+            }
           }
           // achado da auditoria independente da Fase 3: diferente de todo
           // outro módulo (item/mob/skill/status), a edição de diálogo de NPC

@@ -29,6 +29,12 @@ export interface LocatedNpcScript {
   bodyEnd: number;
   /** `rawText.slice(bodyStart, bodyEnd)` — o mesmo texto que a migração passou pro Parser. */
   code: string;
+  /** parte antes do ":" do `legacyRef` recebido — caminho relativo ao `npcRoot`. */
+  relPath: string;
+  /** última linha (1-based) do bloco `{...}` deste NPC no arquivo — todo `legacyRef`
+   * de OUTRO NPC no mesmo arquivo com linha MAIOR que esta pode precisar de ajuste
+   * se uma edição mudar a contagem de linhas do bloco (ver `npc-script-sync.ts`). */
+  blockEndLine: number;
 }
 
 export type LocateFailureCode =
@@ -193,5 +199,14 @@ export function locateNpcScript(npcRoot: string, legacyRef: string): LocateResul
 
   const bodyStart = blockRawStart + span.start;
   const bodyEnd = blockRawStart + span.end;
-  return { ok: true, absPath, rawText, bodyStart, bodyEnd, code: rawText.slice(bodyStart, bodyEnd) };
+  return {
+    ok: true,
+    absPath,
+    rawText,
+    bodyStart,
+    bodyEnd,
+    code: rawText.slice(bodyStart, bodyEnd),
+    relPath,
+    blockEndLine: endLi + 1,
+  };
 }

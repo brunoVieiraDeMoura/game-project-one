@@ -79,4 +79,9 @@ export class JsonNpcRepository implements NpcRepository {
     if (existed) this.schedulePersist();
     return existed;
   }
+
+  async listByLegacyRefFile(relPath: string): Promise<Npc[]> {
+    const prefix = `${relPath}:`;
+    return [...this.npcs.values()].filter((n) => n.legacyRef?.startsWith(prefix));
+  }
 }

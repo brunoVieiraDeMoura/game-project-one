@@ -27,4 +27,10 @@ export interface NpcRepository {
   create(npc: Npc): Promise<Npc>;
   update(id: string, npc: Npc): Promise<Npc | undefined>;
   remove(id: string): Promise<boolean>;
+  /** todo NPC cujo `legacyRef` aponta pro mesmo arquivo `relPath` (prefixo
+   * `"relPath:"`) — usado só para corrigir `legacyRef` de siblings depois de
+   * uma edição de script que muda a contagem de linhas do arquivo
+   * (`npc-script-sync.ts`). Não pagina — mesmo padrão de uso interno,
+   * best-effort, que o resto do PUT já usa. */
+  listByLegacyRefFile(relPath: string): Promise<Npc[]>;
 }

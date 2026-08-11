@@ -9,6 +9,14 @@ function sanitizeSearch(search: string): string {
   return search.replace(/[,()%\\]/g, " ").trim();
 }
 
+/** escapa `%`/`_`/`\` (metacaracteres do LIKE do Postgres) — `relPath` vem
+ * sempre de um `legacyRef` já existente no catálogo, nunca de input de
+ * usuário livre, mas escapar custa nada e evita um match falso-positivo se
+ * um nome de arquivo algum dia tiver um desses caracteres. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 /** NpcRepository backed by hosted Supabase (service role, same as items). */
 export class SupabaseNpcRepository implements NpcRepository {
   private readonly client: SupabaseClient;
@@ -71,5 +79,11 @@ export class SupabaseNpcRepository implements NpcRepository {
     const { data, error } = await this.client.from("npcs").delete().eq("id", id).select("id");
     if (error) throw new Error(`supabase remove failed: ${error.message}`);
     return (data?.length ?? 0) > 0;
+  }
+
+  async listByLegacyRefFile(relPath: string): Promise<Npc[]> {
+    const { data, error } = await this.client.from("npcs").select("*").like("legacy_ref", `${escapeLike(relPath)}:%`);
+    if (error) throw new Error(`supabase listByLegacyRefFile failed: ${error.message}`);
+    return (data as NpcRow[]).map(rowToNpc);
   }
 }
