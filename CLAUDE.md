@@ -259,7 +259,24 @@ Plano completo em `docs/plano-rathena.md`. Estado (2026-07-28):
   enfileirado ao final. Testado (`job-database-writer.test.ts`,
   `job-classes.test.ts`), inclusive isolamento entre classes (editar uma
   não toca a entrada já gravada de outra).
-- **Pendências conhecidas**: spawn de mob continua sendo script de NPC do
-  rAthena (não há tela para isso); modelo por classe/monstro é o placeholder
+- **Admin escreve spawn de monstro** (`monster-spawn-writer.ts`, Fase 4,
+  auditoria A23): `Monster.spawns[]` do catálogo (Supabase/JSON — nunca
+  MySQL, que não tem coluna pra isso) sincroniza com `npc-idle/mobs/<mapId>.txt`
+  (uma linha `monster`/`boss_monster` real por spawn, formato conferido
+  contra `rathena/doc/script_commands.txt` e o corpus). Identidade do spawn é
+  `spawnId` (nunca número de linha — aprendizado do drift de `legacyRef` da
+  Fase 3.5): o writer re-escaneia o arquivo por um comentário
+  `// spawnId:<id>` a cada escrita, nunca lembra posição antiga. Criar/editar/
+  remover são atômicos (tudo-ou-nada), preservam spawns vizinhos byte a byte,
+  e recusam mapa cujo arquivo não esteja registrado em `map_conf.txt`
+  (`map-not-registered`, sem automatizar o registro). `@reloadscript`
+  enfileirado ao final (mesmo mecanismo de fila que `@reloadpcdb` usa pra
+  Classes). Testado (`monster-spawn-generate.test.ts`,
+  `monster-spawn-writer.test.ts`, `monsters-spawn.test.ts`). **Limitação
+  conhecida, não resolvida**: se `@reloadscript` aplica de fato a alteração
+  de um spawn já carregado sem restart continua **NÃO CONFIRMADO** — write
+  e fila de reload comprovadamente funcionam, mas não há canal de observação
+  confiável disponível hoje (sem `/play`) pra provar o efeito em runtime.
+- **Pendências conhecidas**: modelo por classe/monstro é o placeholder
   KayKit; hotkeys do servidor (ZC.SHORTCUT_KEY_LIST) ainda não são usadas — a
   barra mora no navegador.
