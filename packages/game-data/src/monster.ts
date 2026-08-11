@@ -43,6 +43,14 @@ export const MonsterSkillUseSchema = z.object({
 });
 
 export const MonsterSpawnSchema = z.object({
+  /** identidade estável do spawn dentro do write-path real (Fase 4,
+   * `apps/api/src/store/monster-spawn-writer.ts`) — NUNCA o número de linha
+   * do `.txt` (aprendizado da Fase 3.5, drift de `legacyRef`): o writer acha
+   * o spawn escaneando o arquivo por um comentário `// spawnId:<id>` a cada
+   * escrita, nunca lembrando uma posição antiga. Ausente = spawn ainda não
+   * passou pelo write-path real (ex.: migrado do corpus só pra leitura) —
+   * o writer atribui um na primeira vez que grava. */
+  spawnId: z.string().optional(),
   mapId: z.string(),
   amount: z.number().int().positive(),
   respawnTimeMs: z.number().int().nonnegative(),
@@ -51,10 +59,10 @@ export const MonsterSpawnSchema = z.object({
   /** fixed spawn rect within the map; absent = whole map (rAthena x,y,xs,ys = 0) */
   area: z
     .object({
-      x: z.number().int(),
-      y: z.number().int(),
-      xs: z.number().int().default(0),
-      ys: z.number().int().default(0),
+      x: z.number().int().nonnegative(),
+      y: z.number().int().nonnegative(),
+      xs: z.number().int().nonnegative().default(0),
+      ys: z.number().int().nonnegative().default(0),
     })
     .optional(),
   /** spawned via boss_monster (MVP-style announce + tomb) */

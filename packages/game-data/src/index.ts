@@ -34,3 +34,4 @@ export * from "./rathena/npc-script-mapper";
 export * from "./rathena/npc-script-validator";
 export * from "./rathena/npc-script-writer";
 export * from "./rathena/npc-script-generate";
+export * from "./rathena/monster-spawn-generate";

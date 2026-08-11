@@ -1,5 +1,6 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { buildServer } from "../server";
 import { JsonMonsterRepository } from "../store/json-monster-repository";
 import { join } from "node:path";
@@ -32,14 +33,29 @@ function sampleMonster(id: number, name = `Mob ${id}`, aegisName = `MOB_${id}`) 
 
 describe("monsters API", () => {
   let app: FastifyInstance;
+  let spawnRoot: string;
 
   beforeEach(async () => {
+    // Fase 4: spawnRoot isolado (nunca o `npc-idle/mobs` real) + map_conf.txt
+    // de teste registrando o único mapa usado nesta suíte (`prt_fild00`) —
+    // mesmo padrão de tmpdir isolado que `npcScriptRoot`/`npcCreateRoot` já
+    // usam nos testes de NPC.
+    spawnRoot = mkdtempSync(join(tmpdir(), "monster-spawn-test-"));
+    const mapConfPath = join(spawnRoot, "map_conf.txt");
+    writeFileSync(mapConfPath, "npc: npc/game-project/mobs/prt_fild00.txt\n", "utf8");
+
     app = await buildServer({
       monsterRepository: new JsonMonsterRepository(
         join(tmpdir(), `monsters-test-${Date.now()}-${Math.random()}.json`),
       ),
       security: null,
+      monsterSpawnRoot: spawnRoot,
+      mapConfPath,
     });
+  });
+
+  afterEach(() => {
+    rmSync(spawnRoot, { recursive: true, force: true });
   });
 
   it("A23: /capabilities reporta spawnsWritable=true quando o repositório injetado NÃO é o MySQL (checa a instância, não o env cru — hasRoDatabase() pode ser true no ambiente e o repo em uso ser outro)", async () => {

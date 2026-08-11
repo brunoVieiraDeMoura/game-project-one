@@ -78,6 +78,14 @@ export interface ServerDeps {
    * desliga só a CRIAÇÃO (edição de NPC migrado continua funcionando via
    * `npcScriptRoot`). */
   npcCreateRoot?: string | null;
+  /** raiz de spawn de monstro (Fase 4, auditoria A23) — `<mapId>.txt` sob
+   * este diretório; default `join(REPO_ROOT, "npc-idle", "mobs")`, mesmo
+   * lugar de `gpqa01.txt`/`prontera.txt`. null desliga o write-path (spawns
+   * passam direto pro repositório, como sempre foi). */
+  monsterSpawnRoot?: string | null;
+  /** `rathena-conf/map_conf.txt` — só CONFERIDO (nunca escrito) pra saber se
+   * o arquivo de spawn de um mapa está registrado. */
+  mapConfPath?: string;
 }
 
 function defaultItemRepository(): ItemRepository {
@@ -271,14 +279,20 @@ export async function buildServer(deps: ServerDeps = {}) {
   await app.register(jobClassRoutes(jobClassRepository, security), { prefix: "/job-classes" });
   await app.register(skillRoutes(skillRepository, security), { prefix: "/skills" });
   await app.register(statusRoutes(statusRepository, security), { prefix: "/statuses" });
-  const monsterRepository = deps.monsterRepository ?? defaultMonsterRepository();
-  // achado A23: checado na INSTÂNCIA de verdade (não em `hasRoDatabase()` cru)
-  // pra bater com `deps.monsterRepository` injetado (testes, overrides) — o
-  // env pode ter MySQL configurado enquanto o repo em uso é outro.
-  const monsterSpawnsWritable = !(monsterRepository instanceof MysqlMonsterRepository);
-  await app.register(monsterRoutes(monsterRepository, security, monsterSpawnsWritable), { prefix: "/monsters" });
   const mapRepository = deps.mapRepository ?? defaultMapRepository();
   await app.register(mapRoutes(mapRepository, security), { prefix: "/maps" });
+  const monsterRepository = deps.monsterRepository ?? defaultMonsterRepository();
+  const monsterSpawnRoot = deps.monsterSpawnRoot === undefined ? join(REPO_ROOT, "npc-idle", "mobs") : deps.monsterSpawnRoot;
+  const mapConfPath = deps.mapConfPath ?? join(REPO_ROOT, "rathena-conf", "map_conf.txt");
+  const monsterSpawnWriterPaths = monsterSpawnRoot ? { spawnRoot: monsterSpawnRoot, mapConfPath } : null;
+  // achado A23 (Fase 4): checado na INSTÂNCIA de verdade (não em
+  // `hasRoDatabase()` cru) pra bater com `deps.monsterRepository` injetado
+  // (testes, overrides) — o env pode ter MySQL configurado enquanto o repo em
+  // uso é outro. `spawnsWritable` só é `true` quando o CATÁLOGO consegue
+  // persistir `spawns[]` de verdade (não-MySQL) E o writer de arquivo está
+  // configurado — as duas juntas são o que fecha o ciclo catálogo↔arquivo.
+  const monsterSpawnsWritable = !(monsterRepository instanceof MysqlMonsterRepository) && monsterSpawnWriterPaths !== null;
+  await app.register(monsterRoutes(monsterRepository, security, monsterSpawnsWritable, monsterSpawnWriterPaths), { prefix: "/monsters" });
   const npcRepository = deps.npcRepository ?? defaultNpcRepository();
   const npcScriptRoot = deps.npcScriptRoot === undefined ? join(REPO_ROOT, "rathena") : deps.npcScriptRoot;
   const npcCreateRoot = deps.npcCreateRoot === undefined ? join(REPO_ROOT, "npc-idle") : deps.npcCreateRoot;
