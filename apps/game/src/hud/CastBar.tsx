@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useCastStore } from "../net/castStore";
-import { useSkillCatalog } from "../net/skillCatalog";
-import { usePlayerStore } from "../net/playerStore";
+import { getSkillDisplayName, useSkillCatalog } from "../net/skillCatalog";
 import { BAR_FRAME_SLICE, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { useBarFrame } from "../ui/CurvedBar";
+import { LoadingRing } from "../ui/rpg";
 import { CAST_BAR, CAST_FILL, SB_COLORS } from "../ui/skillBar";
 
 /**
@@ -23,8 +23,11 @@ import { CAST_BAR, CAST_FILL, SB_COLORS } from "../ui/skillBar";
  */
 export function CastBar() {
   const atual = useCastStore((s) => s.atual);
-  const nomeCatalogo = useSkillCatalog((s) => (atual ? s.byId[atual.skillId]?.name : undefined));
-  const nomeCru = usePlayerStore((s) => (atual ? s.skills.find((k) => k.id === atual.skillId)?.name : undefined));
+  // NUNCA cair para o nome cru do pacote do servidor (constante Aegis) nem
+  // para o id — ver `getSkillDisplayName`. Enquanto o catálogo não respondeu,
+  // a barra mostra um anel girando em vez de "MG_FIREBOLT".
+  const info = useSkillCatalog((s) => (atual ? s.byId[atual.skillId] : undefined));
+  const nome = getSkillDisplayName(info);
   const frame = useBarFrame();
   const enchimento = useRef<HTMLDivElement>(null);
   const relogio = useRef<HTMLSpanElement>(null);
@@ -104,7 +107,7 @@ export function CastBar() {
         }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-          {nomeCatalogo ?? nomeCru ?? `#${atual.skillId}`}
+          {nome ?? <LoadingRing size={fonte} />}
         </span>
         <span
           ref={relogio}

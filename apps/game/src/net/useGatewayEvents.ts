@@ -10,6 +10,11 @@ import { useGroundItems } from "./GroundItems";
 import { useAttackStore } from "./attackStore";
 import { usePickupStore } from "./pickupStore";
 import { useSkillWalkStore } from "./skillWalkStore";
+import { bindToCharacter, unbindCharacter } from "../hud/skillBarStore";
+import {
+  bindToCharacter as bindCombatVisualsToCharacter,
+  unbindCharacter as unbindCombatVisuals,
+} from "../hud/combatVisualsStore";
 
 /**
  * Liga os eventos de conta/personagem/mundo no sessionStore.
@@ -81,6 +86,13 @@ export function useGatewayEvents(): void {
       // Nível, zeny, classe e atributos iniciais vêm daqui (o servidor só manda
       // pacote quando MUDAM). Sem isso o HUD abria "Nv 1" ao lado do HP real.
       if (p.char) usePlayerStore.getState().seedFromChar(p.char);
+      // `p.gid` é o char id (não o account id — ver o comentário sobre isso em
+      // `useWorldEvents.ts`). Amarra a barra de habilidades a ESTE personagem
+      // ANTES do `world:ready`: o `hotkey:list` que o servidor manda em
+      // resposta precisa achar o binding já certo, senão sincroniza pro
+      // personagem errado (ou pro nenhum).
+      bindToCharacter(p.gid);
+      bindCombatVisualsToCharacter(p.gid);
       // Avisa o servidor que o cliente entrou no mapa (CZ.NOTIFY_ACTORINIT).
       // Vai daqui, e não da cena 3D, porque o rAthena só considera o
       // personagem ATIVO depois disto: sem o aviso ele ignora chat, comando de
@@ -97,6 +109,11 @@ export function useGatewayEvents(): void {
       useCastStore.getState().parar();
       useCooldownStore.getState().clear();
       useFriendStore.getState().reset();
+      // Desvincula a barra de habilidades do personagem — sem isso ela
+      // continuava visível (e gravável) no próximo personagem que logasse
+      // neste mesmo navegador.
+      unbindCharacter();
+      unbindCombatVisuals();
       useSessionStore.getState().setError(motivo);
     };
     const onClosed = (p: { reason: string }) => encerrar(p.reason);

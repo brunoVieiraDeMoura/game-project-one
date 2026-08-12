@@ -7,7 +7,7 @@ import { usePlayerStore } from "../net/playerStore";
 import { useWorldStore } from "../net/worldStore";
 import { useAimStore } from "../net/aimStore";
 import { castarEmAlvo } from "../net/acoes";
-import { useSkillCatalog } from "../net/skillCatalog";
+import { getSkillDisplayName, SKILL_NAME_FALLBACK, useSkillCatalog } from "../net/skillCatalog";
 import { useCooldownStore } from "../net/cooldownStore";
 import { useItemCatalog, isUsableItemType } from "../net/itemCatalog";
 import { equipPending, requestEquip } from "../net/equipmentStore";
@@ -168,7 +168,9 @@ export function SkillBar() {
     // catálogo (`target`, vindo do skill_db), não o alcance: adivinhar por
     // `range === 0` classificava todo auto-buff como skill de área.
     const info = useSkillCatalog.getState().byId[skill.id];
-    const label = info?.name ?? skill.name;
+    // Texto puro (frase "Escolha o alvo para X"), sem ícone pra desenhar um
+    // anel — aqui, e só aqui, "Unknown" É o loading, nunca o nome Aegis.
+    const label = getSkillDisplayName(info) ?? SKILL_NAME_FALLBACK;
     if (info?.target === "ground") {
       useAimStore.getState().aim({ id: skill.id, level: skill.level, name: label, mode: "ground" });
       return;
@@ -236,8 +238,8 @@ export function SkillBar() {
               nome={
                 skill
                   ? basico
-                    ? skill.name
-                    : (catalog[skill.id]?.name ?? skill.name)
+                    ? skill.name // Ataque Básico: nome do próprio cliente, nunca do catálogo — sempre disponível, nunca é Aegis
+                    : getSkillDisplayName(catalog[skill.id])
                   : item
                     ? (itemNames[item.itemId]?.name ?? `#${item.itemId}`)
                     : undefined
@@ -398,9 +400,11 @@ function SkillSlot({
       draggable={preenchido}
       onDragStart={(e) => e.dataTransfer.setData("application/x-ro-slot", String(slotIndex))}
       title={
-        nome
-          ? `${nome}${detalhe ? ` ${detalhe}` : ""} — botão direito tira da barra`
-          : "arraste uma habilidade (Alt+S), consumível ou munição (Alt+E) para cá"
+        !preenchido
+          ? "arraste uma habilidade (Alt+S), consumível ou munição (Alt+E) para cá"
+          : nome
+            ? `${nome}${detalhe ? ` ${detalhe}` : ""} — botão direito tira da barra`
+            : "carregando…"
       }
       style={{
         position: "relative",
@@ -451,7 +455,14 @@ function SkillSlot({
           pointerEvents: "none",
         }}
       >
-        {nome && <IconSquare seed={seed ?? nome} label={nome} size={px(48)} />}
+        {preenchido &&
+          (nome ? (
+            <IconSquare seed={seed ?? nome} label={nome} size={px(48)} />
+          ) : (
+            // slot ocupado, nome ainda não chegou do catálogo — anel de
+            // carregamento, NUNCA a constante Aegis nem "Unknown" piscando
+            <IconSquare loading size={px(48)} />
+          ))}
       </div>
 
       {cooldownSkillId != null && <Cooldown skillId={cooldownSkillId} raio={borda * 0.66} />}

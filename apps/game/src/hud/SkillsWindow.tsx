@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { gateway } from "../net/gateway";
 import { ATAQUE_BASICO, ATAQUE_BASICO_ID } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
-import { useSkillCatalog, type SkillInfo } from "../net/skillCatalog";
+import { getSkillDisplayName, useSkillCatalog, type SkillInfo } from "../net/skillCatalog";
 import { useHudStore } from "./hudStore";
-import { IconSquare } from "../ui/rpg";
+import { IconSquare, LoadingRing } from "../ui/rpg";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { CHAT_ART } from "../ui/chatFrame";
 import { CurvedBox } from "../ui/CurvedBox";
@@ -60,7 +60,8 @@ interface Linha {
   id: number;
   /** constante do rAthena — é dela que sai a classe */
   aegis: string;
-  nome: string;
+  /** `undefined` = catálogo ainda não respondeu pra esta skill (ver `getSkillDisplayName`) */
+  nome?: string;
   nivel: number;
   maxNivel: number;
   upgradable: boolean;
@@ -113,9 +114,11 @@ export function SkillsWindow() {
       const info = catalog[sk.id];
       return {
         id: sk.id,
-        // o `name` do pacote É a constante; o nome bonito vem do catálogo
+        // `sk.name` (o pacote do servidor) É a constante Aegis — só serve
+        // pra achar a CLASSE pelo prefixo (`classeDaSkill`, abaixo), nunca
+        // pra mostrar como nome. O nome visual vem só de `getSkillDisplayName`.
         aegis: info?.aegisName || sk.name,
-        nome: info?.name ?? sk.name,
+        nome: getSkillDisplayName(info),
         nivel: sk.level,
         maxNivel: info?.maxLevel ?? 0,
         upgradable: sk.upgradable,
@@ -409,7 +412,12 @@ function Detalhe({ linha }: { linha: Linha }) {
       </div>
 
       <div style={{ ...noPergaminho(SK_LAYOUT_ART.icon), pointerEvents: "none" }}>
-        <IconSquare seed={`sk-${linha.id}`} size={pxLivro(SK_LAYOUT_ART.icon.w)} label={linha.nome} />
+        <IconSquare
+          seed={`sk-${linha.id}`}
+          size={pxLivro(SK_LAYOUT_ART.icon.w)}
+          label={linha.nome}
+          loading={linha.nome === undefined}
+        />
       </div>
 
       <div
@@ -429,13 +437,14 @@ function Detalhe({ linha }: { linha: Linha }) {
             color: SK_COLORS.inkStrong,
             // Até duas linhas: nome do skill_db passa de vinte caracteres
             // ("Increase SP Recovery") e uma linha só cortava a palavra.
-            display: "-webkit-box",
+            display: linha.nome === undefined ? "flex" : "-webkit-box",
+            alignItems: linha.nome === undefined ? "center" : undefined,
             WebkitBoxOrient: "vertical",
             WebkitLineClamp: 2,
             overflow: "hidden",
           }}
         >
-          {linha.nome}
+          {linha.nome ?? <LoadingRing size={px(TYPE.section)} />}
         </span>
         <span style={{ font: `${px(TYPE.label)}px ${FRAME_FONT}`, lineHeight: 1, color: SK_COLORS.inkDim }}>
           {tipo}
@@ -557,7 +566,7 @@ function Icone({
       // arrastar para a barra de habilidades, como já era no Panel antigo
       draggable
       onDragStart={(e) => e.dataTransfer.setData("application/x-ro-skill", String(linha.id))}
-      title={`${linha.nome} — arraste para a barra de habilidades`}
+      title={linha.nome ? `${linha.nome} — arraste para a barra de habilidades` : "carregando…"}
       style={{
         position: "relative",
         cursor: "pointer",
@@ -566,7 +575,7 @@ function Icone({
       }}
     >
       <div style={{ position: "absolute", inset: "12%", overflow: "hidden" }}>
-        <IconSquare seed={`sk-${linha.id}`} size={999} label={linha.nome} />
+        <IconSquare seed={`sk-${linha.id}`} size={999} label={linha.nome} loading={linha.nome === undefined} />
       </div>
       {moldura && (
         <div
@@ -627,7 +636,7 @@ function Icone({
             e.stopPropagation();
             gateway().emit("skill:raise", { skillId: linha.id });
           }}
-          title={`gastar 1 ponto em ${linha.nome}`}
+          title={linha.nome ? `gastar 1 ponto em ${linha.nome}` : "gastar 1 ponto"}
           style={{
             position: "absolute",
             right: px(-6),

@@ -19,7 +19,16 @@ import { proximoAlvo, type AlvoCandidato } from "./cicloDeAlvo";
  * metade da regra, e ela não existe fora do `<Canvas>`. A outra metade (a
  * ordenação) é pura e mora em `play/cicloDeAlvo`.
  */
-export function AlvoPorTab({ map, mapping, fogFar }: { map: GameMap; mapping: LegacyMapping; fogFar: number }) {
+export function AlvoPorTab({
+  map,
+  mapping,
+  raioEntidade,
+}: {
+  map: GameMap;
+  mapping: LegacyMapping;
+  /** raio de DETALHE (`play/viewRadius`), não o da névoa — Fase G da auditoria de render */
+  raioEntidade: number;
+}) {
   const camera = useThree((s) => s.camera);
 
   useEffect(() => {
@@ -70,7 +79,7 @@ export function AlvoPorTab({ map, mapping, fogFar }: { map: GameMap; mapping: Le
           // colado no personagem não há direção que signifique alguma coisa:
           // conta como "à frente" para não virar ruído
           alinhamento: dist < 1e-3 ? 1 : (dx * olhar.x + dz * olhar.z) / dist,
-          visivel: dist <= fogFar,
+          visivel: dist <= raioEntidade,
         });
       }
 
@@ -85,7 +94,7 @@ export function AlvoPorTab({ map, mapping, fogFar }: { map: GameMap; mapping: Le
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [camera, map, mapping, fogFar]);
+  }, [camera, map, mapping, raioEntidade]);
 
   return null;
 }

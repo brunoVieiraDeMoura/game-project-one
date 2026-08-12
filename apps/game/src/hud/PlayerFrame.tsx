@@ -10,6 +10,7 @@ import { classModelFor } from "../entities/classModels";
 import { useHudStore } from "./hudStore";
 import { CurvedBar } from "../ui/CurvedBar";
 import { CharacterPortrait } from "./CharacterPortrait";
+import { isolado } from "../core/diagnostics/isolamento";
 import type { CharacterKey, WeaponMount } from "../assets";
 import {
   AVATAR_OVERLAP,
@@ -320,7 +321,25 @@ export function PlayerFrame() {
  * ela voltar, o aro mostra "?" e a barra fica sem número — desenhar uma barra
  * cheia seria inventar HP que ninguém informou.
  */
-export function TargetFrame() {
+/**
+ * Ficha de mentira, só para o retrato ter algo para desenhar durante o
+ * AQUECIMENTO (Fase E1 da auditoria de render).
+ *
+ * `skeleton_minion` porque é o mesmo modelo que o laudo original flagrou
+ * pagando o 3º contexto WebGL no primeiro alvo real
+ * (`voo-1786466538706.json`) — aquecer com QUALQUER modelo já criaria o
+ * contexto e ligaria os programas base, mas usar o mesmo evita que o
+ * primeiro alvo REAL ainda precise linkar um shader diferente por causa de
+ * alguma variante de material específica da espécie.
+ */
+const FICHA_DE_AQUECIMENTO: FichaDeAlvo = {
+  name: "",
+  level: "",
+  modelo: "skeleton_minion",
+  weapons: [],
+};
+
+export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {}) {
   const online = usePlayerStore((s) => s.known);
   /**
    * Só a fatia de RENDER do alvo — nunca a entidade inteira.
@@ -388,16 +407,48 @@ export function TargetFrame() {
     ultima.current = ficha;
   }
 
+  /**
+   * FASE E1 — o retrato nasce no AQUECIMENTO, não no primeiro alvo real.
+   *
+   * A causa comprovada do `frameLongo` de 250,3 ms (`voo-1786466538706.json`)
+   * era o PRIMEIRO alvo da sessão montando este componente pela primeira
+   * vez: `<CharacterPortrait>` é um `<Canvas>` próprio, então isso cria um
+   * 3º `WebGLRenderingContext` — device + upload de textura + link de
+   * shader, tudo no meio de um quadro de combate. A sessão de controle sem
+   * nenhum retrato de alvo nunca passou de 33,6 ms de quadro.
+   *
+   * A correção: se ainda não houve alvo real (`ultima.current` continua
+   * `null`) e a cortina de carregamento ainda está no ar mas já em fase de
+   * AQUECIMENTO (`aquecendo`, `play/aquecimento.ts`), grava uma ficha de
+   * mentira em `ultima.current` — o MESMO mecanismo que já mantém o retrato
+   * montado depois que o jogador solta um alvo de verdade. Dali em diante,
+   * `ficha` nunca mais volta a `null` nesta sessão, e o contexto nasce e o
+   * shader compila atrás da cortina, não no primeiro `atk:`.
+   */
+  if (!ficha && aquecendo) {
+    ficha = FICHA_DE_AQUECIMENTO;
+    ultima.current = ficha;
+  }
+
   const visivel = online ? Boolean(netTarget) : Boolean(localTarget && localTarget.alive);
   /**
-   * Nunca houve alvo nesta sessão: aí não há contexto a preservar, e montar um
-   * retrato invisível de ninguém seria pior que não montar nada — pagaria o
-   * contexto e a compilação de shader por algo que talvez nunca apareça.
+   * Enquanto o AQUECIMENTO usa a ficha de mentira (nenhum alvo real ainda),
+   * o retrato precisa continuar DESENHANDO de verdade — é isso que paga o
+   * contexto e o shader antes da hora que importa. `display:none` num
+   * ancestral (ou aqui) tira o elemento da árvore de renderização e arrisca
+   * o navegador nem considerar o canvas para composição; `visibility:hidden`
+   * mantém a caixa (e o desenho) viva, só sem pintar na tela — por isso ESTA
+   * fase usa uma, e o resto da função (alvo solto/nunca existiu) continua
+   * usando a outra, sem mudar nada do comportamento já provado.
    */
+  const aquecendoSemAlvo = aquecendo && !visivel;
+  // isolamento (Fase C, `?iso=semRetratoAlvo`): nenhum contexto WebGL de
+  // retrato de alvo nasce nunca — controle para provar/descartar a Classe 1
+  if (isolado("semRetratoAlvo")) return null;
   if (!ficha) return null;
 
   return (
-    <div style={{ display: visivel ? undefined : "none" }}>
+    <div style={aquecendoSemAlvo ? { visibility: "hidden" } : { display: visivel ? undefined : "none" }}>
       <StatPlate
         width={TARGET_WIDTH}
         name={ficha.name}

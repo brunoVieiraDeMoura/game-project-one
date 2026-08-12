@@ -40,7 +40,9 @@ const COLOR_DIRT = new THREE.Color(TERRAIN_BASE_HEX.dirt);
 const COLOR_STONE = new THREE.Color(TERRAIN_BASE_HEX.stone);
 const COLOR_SAND = new THREE.Color(TERRAIN_BASE_HEX.sand);
 const COLOR_SNOW = new THREE.Color(TERRAIN_BASE_HEX.snow);
-const COLOR_WATER = new THREE.Color("#2f6ea8");
+// exportada: `grid/HorizonMesh` reusa a MESMA cor para a água distante, em
+// vez de inventar um azul próprio que poderia divergir do chão real
+export const COLOR_WATER = new THREE.Color("#2f6ea8");
 const COLOR_CLIFF = new THREE.Color("#6b5a43");
 /**
  * Parede: no campo aberto do RO é mata/moita, não muro. Verde mais fechado que

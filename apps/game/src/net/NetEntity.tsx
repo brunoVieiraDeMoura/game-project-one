@@ -68,7 +68,7 @@ export function NetEntityView({
   charScale,
   animationSpeed,
   cellSize,
-  fogFar,
+  raioEntidade,
   terrain,
 }: {
   gid: number;
@@ -78,8 +78,13 @@ export function NetEntityView({
   animationSpeed: number;
   /** largura da célula em unidades de mundo (plaquinha e hitbox são medidas nela) */
   cellSize: number;
-  /** onde a névoa fica opaca — além disto não há o que ver (ver play/viewRadius) */
-  fogFar: number;
+  /**
+   * Raio de DETALHE (`play/viewRadius`), não o da névoa — Fase G da auditoria
+   * de render. A névoa hoje fecha lá no horizonte (~600 unidades), bem além
+   * de onde entidade deve desenhar/ser alvejável; usar `fogFar` aqui faria
+   * mob renderizar a centenas de unidades de distância.
+   */
+  raioEntidade: number;
   /** para o `GlowChao` inclinar pelo relevo sob o mob (item "moldar o alvo") */
   terrain?: TerrainQuery;
 }) {
@@ -230,7 +235,7 @@ export function NetEntityView({
     const cam = estado.camera.position;
     const dx = world.x - cam.x;
     const dz = world.z - cam.z;
-    const visivel = dx * dx + dz * dz <= fogFar * fogFar;
+    const visivel = dx * dx + dz * dz <= raioEntidade * raioEntidade;
     if (g.visible !== visivel) g.visible = visivel;
     // o mixer de animação lê isto no quadro seguinte: o three pula sozinho o
     // desenho e a sombra do que está invisível, mas o mixer é nosso
@@ -472,7 +477,7 @@ export function NetEntities({
   charScale,
   animationSpeed,
   cellSize,
-  fogFar,
+  raioEntidade,
   terrain,
 }: {
   map: GameMap;
@@ -480,8 +485,8 @@ export function NetEntities({
   charScale: number;
   animationSpeed: number;
   cellSize: number;
-  /** onde a névoa fecha; entidade além disso não é desenhada */
-  fogFar: number;
+  /** raio de DETALHE (`play/viewRadius`) — não o da névoa. Ver `NetEntityView`. */
+  raioEntidade: number;
   /** para o `GlowChao` de cada mob inclinar pelo relevo sob ele */
   terrain?: TerrainQuery;
 }) {
@@ -519,7 +524,7 @@ export function NetEntities({
             charScale={charScale}
             animationSpeed={animationSpeed}
             cellSize={cellSize}
-            fogFar={fogFar}
+            raioEntidade={raioEntidade}
             terrain={terrain}
           />
         ))}

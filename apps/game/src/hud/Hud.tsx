@@ -23,7 +23,21 @@ const wrap: React.CSSProperties = { position: "absolute", userSelect: "none" };
 
 /** HUD completo do /play (soul + antes.txt): frames, minimapa, skillbar, menu,
  * chat, quests ativas, janelas e overlay de morte. Renderizado sobre o Canvas. */
-export function Hud({ map, playerPos }: { map: GameMap; playerPos: React.MutableRefObject<THREE.Vector3> }) {
+export function Hud({
+  map,
+  playerPos,
+  aquecendo = false,
+}: {
+  map: GameMap;
+  playerPos: React.MutableRefObject<THREE.Vector3>;
+  /**
+   * A cortina de carregamento ainda está no ar, mas a cena já desenha
+   * (fase 2 do `play/aquecimento`). Repassado só ao `TargetFrame`: é ele quem
+   * decide nascer cedo (Fase E1 da auditoria de render) — o resto do HUD não
+   * muda nada com isto.
+   */
+  aquecendo?: boolean;
+}) {
   useHudHotkeys(); // Alt+A/E/S/Q… como no RO
   return (
     <>
@@ -39,7 +53,7 @@ export function Hud({ map, playerPos }: { map: GameMap; playerPos: React.Mutable
       {/* topo-esquerda: frame do personagem + alvo */}
       <div style={{ ...wrap, top: 10, left: 10, display: "flex", gap: 8, alignItems: "flex-start" }}>
         <PlayerFrame />
-        <TargetFrame />
+        <TargetFrame aquecendo={aquecendo} />
       </div>
 
       {/* topo-centro: o que acabou de entrar na bolsa. Sem `wrap` (que ancora

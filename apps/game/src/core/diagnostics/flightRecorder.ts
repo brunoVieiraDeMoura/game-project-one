@@ -228,6 +228,35 @@ export interface LinhaQuadro {
    */
   matrizMs: number;
 
+  /**
+   * O que SOBRA depois de atribuir tudo que se sabe medir.
+   *
+   * `sobra = quadroMs - renderMs - animacaoMs - contextoMs - descarteMs -
+   * modeloMs - trocaMs`. Não é acumulador: é recalculada TODO quadro em cima
+   * das colunas que acabaram de ser escritas (fim do `useFrame` de
+   * `PerfProbe`, depois de `amostrarContadores`), então ela sempre descreve o
+   * quadro que fechou, nunca soma entre quadros.
+   *
+   * `renderMs` e `animacaoMs` são custo de CPU que FICA FORA de `gl.render`
+   * mas soma a ele (ver comentário de `animacaoMs`); `contextoMs`/
+   * `descarteMs`/`modeloMs`/`trocaMs` são os três suspeitos de churn de
+   * device já nomeados. Não subtrai `matrizMs`: ele é SUBCONJUNTO de
+   * `renderMs`, e tirar os dois contaria a matriz duas vezes. O que sobra
+   * depois disso é React (commit, reconciliação) ou o coletor de lixo do
+   * motor — nenhum dos dois tem coluna própria, e não é este módulo quem
+   * decide qual dos dois foi. `heapDeltaMb` ao lado é o único sinal que
+   * ajuda a decidir: sobra grande com queda de heap é candidato a GC; sobra
+   * grande sem queda de heap não é.
+   */
+  sobraMs: number;
+  /**
+   * Heap de JS deste quadro menos o do quadro anterior (`performance.memory`,
+   * só Chrome). Negativo = heap caiu = coletor pode ter rodado; positivo =
+   * heap cresceu = alocação, não coleta. `NaN` fora do Chrome ou no primeiro
+   * quadro da sessão (não há "anterior" ainda) — lacuna honesta, não zero.
+   */
+  heapDeltaMb: number;
+
   /** acumuladores do quadro — zerados em `confirmarQuadro` */
   chunksConstruidos: number;
   msDeChunk: number;
@@ -287,6 +316,8 @@ const CAMPOS: (keyof LinhaQuadro)[] = [
   "trocaMs",
   "animacaoMs",
   "matrizMs",
+  "sobraMs",
+  "heapDeltaMb",
   "chunksConstruidos",
   "msDeChunk",
   "filaDeChunks",
@@ -318,6 +349,7 @@ function linhaVazia(): LinhaQuadro {
   l.gpuMs = NaN;
   l.memoriaGpuMb = NaN;
   l.heapMb = NaN;
+  l.heapDeltaMb = NaN;
   return l;
 }
 
@@ -857,7 +889,21 @@ export function timeline(caso: Caso, limiarQuadroMs = 33): string {
 
   for (const q of caso.quadros) {
     if (q.quadroMs > limiarQuadroMs) {
-      linhas.push({ t: q.t - caso.t0, rotulo: "render/quadro-longo", detalhe: `${q.quadroMs.toFixed(1)} ms` });
+      // sobra/Δheap vão JUNTO da linha do quadro longo, não só no resumo do
+      // gatilho: um caso pode ter mais de um quadro acima do limiar, e cada um
+      // tem a própria decomposição — a pergunta "esse aqui foi GC?" é por
+      // quadro, não só no instante do disparo
+      const partes = [
+        `${q.quadroMs.toFixed(1)} ms`,
+        `quadro #${q.quadro}`,
+        `pos ${q.renderX.toFixed(1)},${q.renderZ.toFixed(1)}`,
+        `${q.drawCalls} calls`,
+        `${Math.round(q.triangulos / 1000)}k tri`,
+        `geo/tex/prog ${q.geometrias}/${q.texturas}/${q.programas}`,
+        `sobra ${ou(q.sobraMs)} ms`,
+        `Δheap ${ou(q.heapDeltaMb, 1)} MB`,
+      ];
+      linhas.push({ t: q.t - caso.t0, rotulo: "render/quadro-longo", detalhe: partes.join("  ") });
     }
   }
 
@@ -925,7 +971,11 @@ function resumirRenderer(q: LinhaQuadro): string {
     `${Math.round(q.triangulos / 1000)} k tri`,
     `geo/tex/prog ${q.geometrias}/${q.texturas}/${q.programas}`,
     `contextos ${q.contextosVivos} (renderer #${q.rendererId})`,
-    `vram ${ou(q.memoriaGpuMb, 0)} MB · heap ${ou(q.heapMb, 0)} MB`,
+    `vram ${ou(q.memoriaGpuMb, 0)} MB · heap ${ou(q.heapMb, 0)} MB (Δ${ou(q.heapDeltaMb, 1)})`,
+    // o que sobra depois de renderMs/animacaoMs/contexto/descarte/modelo/troca:
+    // React ou GC, sem coluna própria — `sobra` grande com `Δheap` negativo é
+    // candidato a GC; grande sem queda de heap não é
+    `sobra ${ou(q.sobraMs)} ms`,
   ].join("  ");
 }
 

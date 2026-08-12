@@ -7,6 +7,7 @@ import { useCharacterStore } from "../character/characterStore";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
 import { Panel, IconSquare, RpgButton, Slot, UI_PACK_CREDIT } from "../ui/rpg";
+import { useCombatVisuals } from "./combatVisualsStore";
 import { InventoryWindow } from "./InventoryWindow";
 import { StatusWindow as StatusArtWindow } from "./StatusWindow";
 import { FriendsWindow } from "./FriendsWindow";
@@ -33,11 +34,51 @@ export function Windows({
   // tempo agora — abrir uma não fecha as outras, o problema era o formato do
   // estado (um valor só), não o despacho (next-change-gamee.txt item 8).
   const openWindows = useHudStore((s) => s.openWindows);
-  if (openWindows.length === 0) return null;
+  const statusAberto = openWindows.includes("status");
+
+  /**
+   * "status" NUNCA desmonta depois da primeira vez que abre — ela é a ÚNICA
+   * janela com um `<Canvas>` WebGL de verdade dentro (`CharacterPortrait`).
+   *
+   * Causa raiz medida ao vivo (browser real, ciclos de Alt+Q abrindo/
+   * fechando): cada abertura criava um `WebGLRenderingContext` NOVO e cada
+   * fechamento o destruía (era `openWindows.map` removendo a subárvore
+   * inteira, Canvas incluso). Depois de só ~5 ciclos de fechar→abrir, o
+   * Chrome parou de restaurar o contexto — `THREE.WebGLRenderer: Context
+   * Lost.` no console, SEM o `Context Restored` correspondente, para sempre.
+   * O `<canvas>` fica vazio permanentemente: sem erro, sem exceção, o resto
+   * do HUD continua funcionando normalmente (é só o retrato que morre). O
+   * three.js já pede a restauração sozinho (`preventDefault` interno no
+   * `WebGLRenderer`) — o navegador é quem decide não tentar mais depois de
+   * churn demais num intervalo curto, e isso não dá pra consertar por fora
+   * pedindo educadamente. O jeito é não gerar o churn.
+   *
+   * `equipar/desequipar` em si NUNCA tocou o Canvas (a aparência do
+   * personagem não muda por equipamento nesta fase — só a classe decide o
+   * modelo, `entities/classModels`); o que quebrava era abrir e fechar a
+   * JANELA junto, o gesto óbvio de quem está testando equipamento.
+   *
+   * A mesma decisão já existe para os outros dois retratos do HUD (placa do
+   * personagem e placa do alvo, `hud/PlayerFrame.tsx`, comentário "FASE E1")
+   * — aqui é só estender pro terceiro. Ficar escondida por CSS
+   * (`hidden`, abaixo) em vez de desmontar custa zero contexto novo.
+   */
+  const [statusMontada, setStatusMontada] = useState(false);
+  useEffect(() => {
+    if (statusAberto) setStatusMontada(true);
+  }, [statusAberto]);
+
+  const outras = openWindows.filter((key) => key !== "status");
+  if (outras.length === 0 && !statusMontada) return null;
 
   return (
     <>
-      {openWindows.map((key, i) => (
+      {statusMontada && (
+        <DraggableWindow winKey="status" z={statusAberto ? 100 + openWindows.indexOf("status") : -1} hidden={!statusAberto}>
+          <StatusArtWindow />
+        </DraggableWindow>
+      )}
+      {outras.map((key, i) => (
         <DraggableWindow key={key} winKey={key} z={100 + i}>
           {windowBody(key, map, playerPos)}
         </DraggableWindow>
@@ -98,7 +139,18 @@ const FAIXA_ARRASTAVEL = 0.16;
  * MOVIMENTO de verdade é interceptado, pelos listeners de `pointermove` no
  * `window`, que só existem enquanto o botão está pressionado.
  */
-function DraggableWindow({ winKey, z, children }: { winKey: WindowKey; z: number; children: ReactElement }) {
+function DraggableWindow({
+  winKey,
+  z,
+  children,
+  hidden,
+}: {
+  winKey: WindowKey;
+  z: number;
+  children: ReactElement;
+  /** esconde por CSS sem desmontar — ver o comentário em `Windows()` sobre "status" */
+  hidden?: boolean;
+}) {
   const pos = useHudStore((s) => s.positions[winKey]);
   const caixa = useRef<HTMLDivElement>(null);
   const arrastando = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
@@ -128,7 +180,17 @@ function DraggableWindow({ winKey, z, children }: { winKey: WindowKey; z: number
   }, [winKey]);
 
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", zIndex: z }}>
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: hidden ? "none" : "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+        zIndex: z,
+      }}
+    >
       <div
         ref={caixa}
         onPointerDown={(e) => {
@@ -309,6 +371,11 @@ function EquipSlot({ label }: { label: string }) {
  * a escolha deixou de existir junto com o outro caminho.
  */
 function SettingsWindow() {
+  const showAttackRange = useCombatVisuals((s) => s.showAttackRange);
+  const showSkillArea = useCombatVisuals((s) => s.showSkillArea);
+  const setShowAttackRange = useCombatVisuals((s) => s.setShowAttackRange);
+  const setShowSkillArea = useCombatVisuals((s) => s.setShowSkillArea);
+
   return (
     <div style={{ font: "12px system-ui", color: "#493333" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -326,6 +393,25 @@ function SettingsWindow() {
               <b>{tecla}</b>
             </div>
           ))}
+        </div>
+        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
+          <b>Combate</b>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={showAttackRange}
+              onChange={(e) => setShowAttackRange(e.target.checked)}
+            />
+            Mostrar alcance dos ataques
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={showSkillArea}
+              onChange={(e) => setShowSkillArea(e.target.checked)}
+            />
+            Mostrar área das skills
+          </label>
         </div>
       </div>
       {/* crédito exigido pela licença do pack de UI (uso comercial liberado,

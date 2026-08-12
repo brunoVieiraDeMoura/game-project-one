@@ -1,79 +1,635 @@
-Aprovado o protocolo da Fase 3 exatamente como descrito.
+Continue a partir do estado ATUAL do repositório.
 
-Agora EXECUTE a bateria de testes funcionais reais.
+IMPORTANTE:
 
-Não altere o escopo nem transforme o plano em implementação. Siga a ordem definida no relatório:
+* NÃO faça `git add`.
+* NÃO faça commit.
+* NÃO faça push.
+* NÃO altere histórico do Git.
+* Eu faço toda a parte de Git manualmente.
+* Não crie novos commits nesta tarefa.
 
-1. Preparação e backups.
-2. Mapa `gpqa01`.
-3. Monstro novo + monstro rAthena.
-4. XP + drops + skills de monstro.
-5. Itens.
-6. Equipamentos.
-7. Skills.
-8. Status.
-9. Classes.
-10. NPCs.
-11. Verificação final.
+Quero agora uma **VERIFICAÇÃO COMPLETA DA EXECUÇÃO** da auditoria/correção anterior.
 
-Para cada teste, siga obrigatoriamente as 3 camadas:
+A entrega anterior definiu as Fases B–J e descreveu uma arquitetura, mas agora preciso verificar o que realmente existe no código e o que realmente foi executado.
 
-PERSISTÊNCIA → RUNTIME → `/play`
+NÃO assuma que algo foi implementado apenas porque estava no plano.
 
-E registre a evidência correspondente.
+NÃO faça novas otimizações especulativas.
 
-Regras importantes:
+Primeiro audite o estado atual.
 
-* Não considere banco/API como prova de funcionamento do jogo.
-* Não considere typecheck/teste unitário como prova funcional.
-* Toda capacidade que chegar ao `/play` deve ser testada de fato.
-* Quando o Admin não possuir write-path, não implemente durante esta bateria: registre o bloqueio e teste o comportamento pelo caminho real do rAthena quando possível.
-* Quando encontrar A9/A13/A21/A22/A23 ou qualquer outro achado do `risk-report.md`, confirme experimentalmente o comportamento antes de classificá-lo.
-* Não corrija limitações de produto/write-path nesta etapa.
-* Corrija somente regressões reais ou registros de configuração mínimos previstos no protocolo.
-* Não faça redesign.
-* Não altere `rathena/`.
-* Não reinicie serviços desnecessariamente.
-* Preserve todo WIP que já estava presente antes da Fase 3.
-* Não faça commit de alterações que pertençam ao WIP anterior do usuário.
+---
 
-Se um teste falhar, NÃO pule imediatamente para o próximo. Primeiro:
+# 1. ESTADO REAL DO REPOSITÓRIO
 
-1. reproduza;
-2. registre a evidência;
-3. identifique a camada da falha;
-4. classifique como bug, limitação ou bloqueio;
-5. somente então decida se existe correção permitida pelo escopo;
-6. repita o teste após eventual correção.
+Comece verificando:
 
-Para conteúdo criado especificamente para QA, use IDs/nomes claramente identificáveis como QA e remova/restaure ao final quando isso não prejudicar a evidência.
+* arquivos modificados;
+* arquivos novos;
+* estado atual do código;
+* testes disponíveis;
+* implementação real das mudanças descritas anteriormente.
 
-No final, produza:
+Não precisa executar comandos de Git para criar histórico. Apenas leia o estado atual necessário para a auditoria.
 
-`docs/audit/fase3-testes/RELATORIO.md`
+Liste objetivamente:
 
-com:
+```text
+IMPLEMENTADO
+PARCIAL
+NÃO IMPLEMENTADO
+```
 
-* tabela Área × Criar × Editar × Antigo × `/play` × Persistência × Status;
-* total de PASSOU;
-* total de FALHOU;
-* total de BLOQUEADO;
-* total de NÃO APLICÁVEL;
-* cada falha com causa raiz;
-* cada correção realizada;
-* evidência de cada achado;
-* arquivos alterados;
-* dados criados;
-* dados restaurados;
-* migrations aplicadas;
-* estado final dos servidores;
-* resultado dos testes automatizados;
-* `git diff` final;
-* confirmação de que `rathena/` permaneceu intocado;
-* commit final, somente se houver alterações pertencentes exclusivamente à Fase 3.
+para cada fase.
 
-Não declare uma área como "funcionando" apenas porque a configuração foi salva. O objetivo desta fase é provar o caminho completo:
+---
 
-ADMIN → PERSISTÊNCIA → RUNTIME → `/play`
+# 2. FASE B — INSTRUMENTAÇÃO
 
-Comece pela preparação e prossiga até onde os testes permitirem. Não peça nova aprovação entre as áreas, salvo se encontrar uma operação destrutiva ou uma decisão fora das regras já aprovadas.
+Verifique se realmente existem:
+
+```text
+sobraMs
+heapDeltaMb
+```
+
+no flight recorder.
+
+Verifique também os eventos:
+
+```text
+cursor:*
+aoe:*
+gltf:clone
+```
+
+e qualquer extensão feita em:
+
+```text
+render/quadro-longo
+```
+
+Confirme:
+
+* arquivo;
+* função;
+* ponto de chamada;
+* dados registrados;
+* frequência;
+* se ocorre somente quando necessário.
+
+Não crie eventos duplicados.
+
+---
+
+# 3. FASE C — ISOLAMENTO
+
+Verifique se existe:
+
+```text
+core/diagnostics/isolamento.ts
+```
+
+e se as chaves existem realmente:
+
+```text
+semRetratoAlvo
+semAoe
+semCursor
+semProps
+semTerreno
+semNevoa
+semHorizonte
+```
+
+Confirme como são ativadas.
+
+Verifique se estão protegidas por:
+
+```ts
+import.meta.env.DEV
+```
+
+ou mecanismo equivalente para não gerar custo no build de produção.
+
+Se os testes de isolamento ainda não foram executados, diga explicitamente:
+
+```text
+IMPLEMENTADO, MAS NÃO MEDIDO
+```
+
+Não invente resultados.
+
+---
+
+# 4. CAUSA DO FRAME LONGO — CLASSE 1
+
+Verifique se a correção do retrato do alvo foi realmente implementada.
+
+Analise:
+
+```text
+hud/PlayerFrame.tsx
+views/PlayView.tsx
+play/aquecimento.ts
+```
+
+Confirme se o `TargetFrame` realmente nasce durante o aquecimento.
+
+Quero saber:
+
+* quando o Canvas é criado;
+* quando o WebGLRenderer é criado;
+* quando o terceiro contexto WebGL aparece;
+* se isso ocorre antes do jogador poder selecionar o primeiro alvo;
+* se o Canvas fica efetivamente renderizável durante o aquecimento;
+* se depois volta para `display:none`;
+* se o primeiro alvo ainda consegue disparar criação de renderer/contexto.
+
+Se houver novo flight recorder, procure especificamente o primeiro alvo.
+
+Compare:
+
+```text
+ANTES:
+primeiro alvo → criação do 3º contexto → spike
+
+DEPOIS:
+aquecimento → criação do 3º contexto
+primeiro alvo → sem criação de contexto
+```
+
+Mostre evidência.
+
+---
+
+# 5. CLASSE 2 — SHADER COMPILATION
+
+Verifique se a solução com:
+
+```ts
+gl.compileAsync(...)
+```
+
+realmente existe.
+
+Procure:
+
+* `assets.ts`;
+* `NetEntity.tsx`;
+* outros pontos de montagem de entidades.
+
+Confirme:
+
+* qual objeto é compilado;
+* qual câmera é usada;
+* qual scene é usada;
+* quando a compilação ocorre;
+* se o objeto é visível antes ou depois;
+* se existe espera/Promise;
+* se existe chamada repetida;
+* se isso pode ocorrer no caminho crítico.
+
+Procure também eventos:
+
+```text
+renderer/shader-compilado
+```
+
+nos novos testes.
+
+Se não houver medição real depois da implementação, diga:
+
+```text
+CORREÇÃO IMPLEMENTADA, MAS NÃO COMPROVADA POR FLIGHT RECORDER
+```
+
+---
+
+# 6. CLASSE 3 — OBRIGATÓRIA
+
+Esta parte é crítica.
+
+Os dados anteriores tinham spikes de aproximadamente:
+
+```text
+448 ms
+851 ms
+```
+
+sem alteração de:
+
+* draw calls;
+* triângulos;
+* geometrias;
+* texturas;
+* programas;
+* chunks;
+* heap;
+* render CPU.
+
+Agora que existe ou deveria existir:
+
+```text
+sobraMs
+heapDeltaMb
+longtask
+```
+
+analise os novos dados.
+
+Determine se a Classe 3 é:
+
+* GC;
+* React commit;
+* tarefa longa do browser;
+* criação/destruição de algum recurso;
+* outro trabalho JavaScript;
+* bloqueio externo à aplicação;
+* outra causa comprovável.
+
+Se ainda não for possível identificar:
+
+NÃO invente.
+
+Escreva:
+
+```text
+Classe 3 ainda não identificada.
+```
+
+e explique exatamente qual dado está faltando.
+
+---
+
+# 7. HORIZONTE
+
+Verifique se realmente existe:
+
+```text
+grid/HorizonMesh.tsx
+```
+
+ou equivalente.
+
+Audite a implementação inteira.
+
+Quero saber:
+
+* quantos vértices;
+* quantos triângulos;
+* quantas geometrias;
+* quantos materiais;
+* quantos draw calls;
+* quando é criado;
+* quando é destruído;
+* se é reconstruído;
+* se é atualizado por frame;
+* se acompanha câmera/jogador;
+* se usa o heightmap existente;
+* se usa dados duplicados;
+* se existe `useFrame`;
+* se existe `useMemo`;
+* se existe `useEffect`;
+* se existe `dispose`.
+
+A regra é:
+
+```text
+HorizonMesh
+→ criado uma vez
+→ permanece reutilizado
+→ NÃO reconstrói ao caminhar
+```
+
+Se isso não for verdade, identifique exatamente o problema.
+
+---
+
+# 8. RAIOS SEPARADOS
+
+Verifique se o sistema realmente passou a possuir:
+
+```text
+detalhe
+entidades
+horizonte
+fogNear
+fogFar
+```
+
+Audite:
+
+```text
+play/viewRadius.ts
+```
+
+Depois faça uma busca completa por referências a:
+
+```text
+fogFar
+```
+
+Especialmente:
+
+```text
+net/NetEntity.tsx
+views/PlayView.tsx
+play/AlvoPorTab.tsx
+```
+
+Quero garantir que entidades NÃO estejam usando inadvertidamente:
+
+```text
+fogFar ≈ 560
+```
+
+como distância de renderização.
+
+O resultado esperado é:
+
+```text
+chunks/terreno detalhado ≈ 130
+entidades ≈ 130
+horizonte ≈ 600
+fog ≈ 300–560
+```
+
+Se os valores reais forem diferentes, mostre os valores reais.
+
+---
+
+# 9. FOG
+
+Confirme que existe:
+
+```text
+uma fog global
+```
+
+e NÃO:
+
+```text
+fog por chunk
+material por chunk
+fade independente por chunk
+```
+
+Verifique:
+
+```text
+scene/skyFog.ts
+views/PlayView.tsx
+play/viewRadius.ts
+```
+
+Confirme se o horizonte também recebe a integração visual da fog.
+
+Quero saber se a transição é:
+
+```text
+mundo detalhado
+→ terreno simplificado
+→ fog
+→ céu
+```
+
+e não:
+
+```text
+chunk
+→ parede de fog
+→ vazio
+```
+
+---
+
+# 10. PERFORMANCE DO HORIZONTE
+
+Se houver flight recorder com horizonte:
+
+compare:
+
+```text
+?iso=semHorizonte
+```
+
+contra:
+
+```text
+horizonte normal
+```
+
+Quero medir:
+
+* draw calls;
+* triângulos;
+* geometrias;
+* texturas;
+* programas;
+* frameMs;
+* gpuMs.
+
+A expectativa é aproximadamente:
+
+```text
++1 draw call
++~5k triângulos
+```
+
+Mas NÃO trate isso como resultado até medir.
+
+Se não houver medição real, diga:
+
+```text
+CUSTO DO HORIZONTE AINDA NÃO MEDIDO
+```
+
+---
+
+# 11. TESTES AUTOMÁTICOS
+
+Execute:
+
+```bash
+pnpm --filter @ragnarok/game test
+pnpm --filter @ragnarok/game test:perf
+pnpm -r typecheck
+```
+
+Se algum comando falhar:
+
+* mostre o erro;
+* identifique se é erro introduzido pelas mudanças;
+* não esconda warnings ou falhas.
+
+Não altere testes apenas para fazê-los passar.
+
+---
+
+# 12. TESTE REAL DO PLAY
+
+Se o ambiente estiver disponível:
+
+```bash
+pnpm --filter @ragnarok/game dev
+```
+
+Execute o `/play` em:
+
+```text
+prt_fild08
+```
+
+Faça uma caminhada equivalente ao teste anterior.
+
+O teste precisa:
+
+* durar aproximadamente 2 minutos;
+* trocar de chunks;
+* selecionar pelo menos um alvo;
+* olhar para a borda do mapa;
+* girar a câmera;
+* observar a transição para o horizonte.
+
+Gere:
+
+```text
+__voo.baixar()
+```
+
+antes/depois conforme o mecanismo existente.
+
+Se não puder executar o jogo por alguma limitação do ambiente, diga exatamente qual.
+
+---
+
+# 13. COMPARAÇÃO ANTES × DEPOIS
+
+Se existir novo voo real, gere esta tabela:
+
+| Métrica           |    ANTES | DEPOIS |
+| ----------------- | -------: | -----: |
+| quadroMs p50      |     16,7 |        |
+| quadroMs p95      |     18,3 |        |
+| quadroMs máximo   |   250,3+ |        |
+| gpuMs p50         |     4,16 |        |
+| gpuMs p95         |     9,55 |        |
+| gpuMs máximo      |   242,6+ |        |
+| renderMs máximo   |      86+ |        |
+| drawCalls p95     |      168 |        |
+| drawCalls máximo  |      182 |        |
+| triângulos p95    |   97.928 |        |
+| triângulos máximo |  103.184 |        |
+| geometrias máximo |      167 |        |
+| texturas máximo   |       37 |        |
+| programas máximo  |       28 |        |
+| heap máximo       | 188,7 MB |        |
+| chunks visíveis   |    45–46 |        |
+| frameLongo        |          |        |
+
+Use os números reais.
+
+Não estime.
+
+Não preencha uma coluna com números hipotéticos.
+
+---
+
+# 14. AUDITORIA FINAL DO DIFF
+
+Leia todas as alterações feitas nesta tarefa.
+
+Procure especificamente:
+
+### Performance
+
+* geometria criada por frame;
+* material criado por frame;
+* textura criada por frame;
+* `new THREE.*` dentro de `useFrame`;
+* `useFrame` novo no caminho quente;
+* `setState` dentro de `useFrame`;
+* React re-render desnecessário;
+* recompilação de shader;
+* upload de textura;
+* `dispose` prematuro;
+* reconstrução de HorizonMesh;
+* duplicação de GLTF.
+
+### Chunk
+
+Confirme que não houve:
+
+* redesign;
+* alteração desnecessária do sistema de streaming;
+* aumento do número de chunks detalhados;
+* alteração da reconciliação;
+* alteração de gameplay.
+
+### Entidades
+
+Confirme que elas continuam limitadas ao raio de detalhe.
+
+### Fog
+
+Confirme que não existe fog individual por chunk.
+
+---
+
+# 15. CRITÉRIO FINAL
+
+Classifique cada item como:
+
+```text
+[OK]
+[PARCIAL]
+[FALTA]
+[NÃO MEDIDO]
+```
+
+Itens:
+
+1. auditoria do chunk;
+2. auditoria do terreno;
+3. cursor investigado;
+4. AOE investigado;
+5. GLTF investigado;
+6. fog investigada;
+7. causa do spike de 250 ms comprovada;
+8. spike de 250 ms corrigido;
+9. shader compilation corrigida;
+10. Classe 3 identificada;
+11. instrumentação adicionada;
+12. isolamento implementado;
+13. horizonte implementado;
+14. horizonte sem reconstrução por movimento;
+15. raios detalhe/entidade/horizonte separados;
+16. entidades não usam `fogFar` como raio de render;
+17. fog contínua;
+18. horizonte sem aumento significativo de custo;
+19. testes automatizados verdes;
+20. teste real ANTES × DEPOIS realizado.
+
+## REGRA FINAL
+
+Não implemente novas mudanças nesta etapa.
+
+Quero primeiro o diagnóstico do estado atual.
+
+Se tudo estiver implementado e comprovado, diga isso.
+
+Se houver algo faltando, mostre exatamente:
+
+```text
+FALTA:
+arquivo:
+função:
+problema:
+evidência:
+próximo passo:
+```
+
+Não faça `git add`, commit ou push.
+Eu farei o Git manualmente.

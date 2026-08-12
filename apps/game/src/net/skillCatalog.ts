@@ -105,9 +105,38 @@ export const useSkillCatalog = create<CatalogState>((set, get) => ({
   },
 }));
 
-/** nome de exibição: o do catálogo quando existe, senão a constante do servidor */
-export function skillLabel(id: number, fallback: string): string {
-  return useSkillCatalog.getState().byId[id]?.name ?? fallback;
+/** skill respondida pelo catálogo mas sem nome nenhum lá dentro — dado
+ * incompleto no skill_db, não "ainda carregando"; ver `getSkillDisplayName` */
+export const SKILL_NAME_FALLBACK = "Unknown";
+
+/**
+ * Nome visual de uma skill — SEMPRE o do skill_db (via catálogo/API), NUNCA
+ * a constante do rAthena e NUNCA o id.
+ *
+ * O nome CRU que chega em `ZC.SKILLINFO_LIST` (`PlayerSkill.name` do
+ * gateway, `usePlayerStore().skills`) É a constante Aegis ("MG_FIREBOLT") —
+ * é o servidor que fala assim, não o jogador. O catálogo (`useSkillCatalog`,
+ * populado via `ensure()`) é a ÚNICA fonte do nome bonito ("Fire Bolt"), e
+ * ele chega ASSÍNCRONO — sempre depois da lista de skills em si.
+ *
+ * Único parâmetro de propósito: `info` já é o que todo chamador tem em mãos
+ * (`catalog[id]`) depois de indexar o próprio catálogo reativo (`useSkillCatalog
+ * ((s) => s.byId)`), então esta função nunca precisa saber o id nem receber
+ * um "fallback" — receber um fallback é exatamente a porta por onde o nome
+ * Aegis ou o id vazavam pra tela antes desta função existir.
+ *
+ * Dois estados de "sem nome ainda", tratados diferente de propósito:
+ *  • `info === undefined` — o catálogo AINDA NÃO RESPONDEU pra este id.
+ *    Retorna `undefined`: quem desenha mostra um ícone de carregamento
+ *    (`ui/rpg.LoadingRing`/`IconSquare({loading:true})`), nunca texto.
+ *  • `info.name` vazio COM `info` presente — o catálogo respondeu e o
+ *    skill_db não tem nome pra essa skill (dado incompleto, não vai chegar
+ *    depois). Retorna `SKILL_NAME_FALLBACK` ("Unknown") — não é carregamento,
+ *    é o valor final.
+ */
+export function getSkillDisplayName(info: Pick<SkillInfo, "name"> | undefined): string | undefined {
+  if (info === undefined) return undefined;
+  return info.name || SKILL_NAME_FALLBACK;
 }
 
 /**

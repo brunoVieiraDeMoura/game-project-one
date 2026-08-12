@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CurvedBox } from "./CurvedBox";
 import { CardFrame } from "./CardFrame";
 import { ChatFrame } from "../hud/ChatFrame";
@@ -84,17 +84,33 @@ export function LoginBackdrop({
    * proporção da janela, e nem toda mudança de tamanho dele vem de um resize da
    * janela (zoom, barra de rolagem aparecendo, devtools abrindo de lado). Ele
    * observa o elemento, que é o que realmente importa.
+   *
+   * `useLayoutEffect`, e com uma leitura SÍNCRONA logo de cara — não só o
+   * registro do observer: `largura`/`altura` nasciam em 0 e só ganhavam o
+   * valor real no primeiro callback do `ResizeObserver`, que é assíncrono e
+   * chega DEPOIS do primeiro paint. Toda escala derivada disso (moldura do
+   * painel, borda dos campos/botões, fita do cabeçalho — todas usam
+   * `useLarguraDoPalco()`) nascia presa no piso do `clamp` e só saltava para o
+   * tamanho certo um quadro depois: o "redimensiona sozinho" relatado ao
+   * entrar em `/login` ou dar F5. `getBoundingClientRect()` aqui devolve o
+   * tamanho final na hora — o palco já tem `width:100%;height:100%` fixado só
+   * por CSS, não depende de imagem nenhuma carregar — e `setState` dentro de
+   * `useLayoutEffect` é resolvido pelo React ANTES do browser pintar, então o
+   * primeiro quadro exibido já sai com o valor certo, sem o pulo.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = palco.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => {
-      const w = e?.contentRect.width ?? 0;
-      const h = e?.contentRect.height ?? 0;
+    const medir = (w: number, h: number) => {
       // só publica na mudança REAL: o observer dispara com fração de pixel e
       // cada `setState` repinta a tela inteira de decoração
       setLargura((antes) => (Math.abs(antes - w) > 0.5 ? w : antes));
       setAltura((antes) => (Math.abs(antes - h) > 0.5 ? h : antes));
+    };
+    const rect = el.getBoundingClientRect();
+    medir(rect.width, rect.height);
+    const ro = new ResizeObserver(([e]) => {
+      medir(e?.contentRect.width ?? 0, e?.contentRect.height ?? 0);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -222,15 +238,20 @@ export function LoginColuna({ children }: { children: ReactNode }) {
    * encolhe-se o necessário para caber na altura livre. Em qualquer tela
    * onde já cabia (a maioria), a conta dá `escala >= 1` e nada muda.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = miolo.current;
     if (!el || alturaPalco <= 0) return;
     const disponivel = alturaPalco - t.top - t.bottom;
-    const ro = new ResizeObserver(() => {
+    const medir = () => {
       const natural = el.scrollHeight;
       const novo = natural > 0 && disponivel > 0 ? Math.min(1, disponivel / natural) : 1;
       setEscala((antes) => (Math.abs(antes - novo) > 0.004 ? novo : antes));
-    });
+    };
+    // mesma razão de `LoginBackdrop`: medir na hora, não só esperar o
+    // primeiro callback (assíncrono) do `ResizeObserver`, senão a janela
+    // baixa nasce sem encolher e só encolhe um quadro depois
+    medir();
+    const ro = new ResizeObserver(medir);
     ro.observe(el);
     return () => ro.disconnect();
   }, [alturaPalco, t.top, t.bottom]);

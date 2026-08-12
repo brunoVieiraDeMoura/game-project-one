@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { ATAQUE_BASICO_ID } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway, type HotkeySlotPayload } from "../net/gateway";
@@ -14,6 +14,12 @@ import { gateway, type HotkeySlotPayload } from "../net/gateway";
  * `localStorage` (fallback pra antes do primeiro sync chegar ou pra quando o
  * gateway está fora do ar), e a partir do primeiro evento `"hotkeys"` o
  * servidor vira a fonte de verdade (ver `hydrateFromServer`).
+ *
+ * A barra é DO PERSONAGEM, não da aba do navegador: `bindToCharacter`/
+ * `unbindCharacter` (fim do arquivo) amarram o store ao personagem ativo. Sem
+ * personagem vinculado (`charAtual === null`) nada é lido, escrito nem
+ * mandado pro servidor — é assim que a barra de um personagem nunca vaza pra
+ * outro, nem da mesma conta nem de conta diferente.
  *
  * 27 slots = 3 páginas de 9, como no RO — é só o que a BARRA desenha. O
  * `MAX_HOTKEYS` real do rAthena neste packetver é 38 (`SERVER_HOTKEY_SLOTS`);
@@ -82,11 +88,9 @@ const EMPTY = Array.from({ length: SERVER_HOTKEY_SLOTS }, (): SkillBarSlot => ({
  * Como é um id NEGATIVO (`ATAQUE_BASICO_ID = -1`, `net/ataqueBasico.ts`) sem
  * NENHUM equivalente real no rAthena, `sendToServer` abaixo NUNCA manda este
  * slot pro servidor — mandar mandaria `id: -1` como `uint32`, virando lixo
- * (4294967295) do outro lado. Consequência aceita: se o slot 0 ainda for o
- * Ataque Básico quando o PRIMEIRO sync do servidor chegar, ele é substituído
- * pelo que o servidor realmente tem ali (o servidor nunca terá registro
- * dele, então normalmente fica vazio) — é o preço de "servidor é fonte de
- * verdade de verdade", não um bug.
+ * (4294967295) do outro lado. `hydrateFromServer` sabe disso e PRESERVA o
+ * slot quando o servidor não tem nada ali (ver o comentário lá) — ele nunca
+ * é sobrescrito pelo primeiro sync só por não ter contraparte no rAthena.
  */
 function comAtaqueBasico(): SkillBarSlot[] {
   const slots = EMPTY.map((s) => ({ ...s }));
@@ -109,10 +113,38 @@ function paraServidor(s: SkillBarSlot): { kind: "empty" | "skill" | "item"; id: 
 }
 
 function sendToServer(slot: number, s: SkillBarSlot): void {
+  // Sem personagem vinculado não há pra quem mandar — cinto e suspensório
+  // além do `serverSynced` que cada call site já checa (ver `bindToCharacter`).
+  if (charAtual === null) return;
   const payload = paraServidor(s);
   if (!payload) return;
   gateway().emit("hotkey:set", { slot, kind: payload.kind, id: payload.id });
 }
+
+/**
+ * Personagem dono do store agora, ou `null` fora de sessão (login, tela de
+ * seleção, logout). É a única fonte de identidade que o storage adapter e
+ * `sendToServer` consultam — nunca `accountId`: `charId` já é PK global do
+ * rAthena, único entre contas, então compor os dois só criaria uma segunda
+ * forma de escrever a chave errada.
+ */
+let charAtual: number | null = null;
+
+/**
+ * Adapter que compõe a chave de `localStorage` com o personagem ativo NO
+ * MOMENTO DA CHAMADA (`ragnarok:skillbar:<charId>`, mesmo padrão de
+ * `editor/draftStorage.ts`). Com `charAtual === null` não lê nem escreve
+ * nada — sem personagem não existe barra a persistir.
+ */
+const storage = createJSONStorage<{ slots: SkillBarSlot[] }>(() => ({
+  getItem: (name) => (charAtual === null ? null : localStorage.getItem(`${name}:${charAtual}`)),
+  setItem: (name, value) => {
+    if (charAtual !== null) localStorage.setItem(`${name}:${charAtual}`, value);
+  },
+  removeItem: (name) => {
+    if (charAtual !== null) localStorage.removeItem(`${name}:${charAtual}`);
+  },
+}));
 
 export const useSkillBar = create<SkillBarState>()(
   persist(
@@ -197,25 +229,55 @@ export const useSkillBar = create<SkillBarState>()(
       // arrasta/limpa slot a slot, que aí sim sincroniza.
       reset: () => set({ slots: comAtaqueBasico() }),
 
-      // Substitui os 38 slots inteiros pelo que o servidor mandou — nunca
-      // mescla com o que já tinha local (é exatamente esse "não sobrescrever
-      // com o estado antigo depois" que se evita: a partir daqui só entra
-      // slot novo por AÇÃO do jogador, nunca pela leitura antiga do
-      // localStorage, porque a rehidratação do `persist` já rodou ANTES —
-      // no `create()`, de forma síncrona — e este evento só chega depois,
-      // assíncrono, pela rede).
+      // Substitui os 38 slots pelo que o servidor mandou — para todo slot
+      // cujo `paraServidor` NÃO retorna null (é sincronizável de verdade),
+      // é o "não sobrescrever com o estado antigo depois" de sempre: só
+      // entra slot novo por AÇÃO do jogador daqui em diante, nunca pela
+      // leitura antiga do localStorage.
+      //
+      // EXCEÇÃO deliberada: slots client-only (`"ammo"` e Ataque Básico,
+      // ver `paraServidor`) nunca são mandados pro servidor — então o índice
+      // correspondente no rAthena É SEMPRE "empty" pra ele, em TODO sync,
+      // pra sempre. Sem esta exceção, o primeiro `hotkey:list` da sessão
+      // (que chega uma vez por conexão, sempre — `clif_hotkeys_send` só no
+      // `connect_new`) apagava esses slots incondicionalmente, mesmo tendo
+      // acabado de vir corretos do `localStorage` — era a causa real de
+      // "Auto Attack some depois de salvar e recarregar": o servidor nunca
+      // teve, nunca terá e nunca precisa ter registro dele; ele não é uma
+      // divergência a corrigir, é a única fonte de verdade que existe pra
+      // aquele slot. Se o servidor MANDAR algo de verdade nesse índice
+      // (kind !== "empty"), ele ainda prevalece — client-only só sobrevive
+      // quando não há absolutamente nada com que reconciliar.
       hydrateFromServer: (serverSlots) =>
-        set(() => {
-          const slots = EMPTY.map((s) => ({ ...s }));
-          for (const s of serverSlots) {
-            if (s.slot < 0 || s.slot >= SERVER_HOTKEY_SLOTS) continue;
-            slots[s.slot] = s.kind === "empty" ? { ...SLOT_VAZIO } : { kind: s.kind, id: s.id };
-          }
+        set((atual) => {
+          const doServidor = new Map(
+            serverSlots
+              .filter((s) => s.slot >= 0 && s.slot < SERVER_HOTKEY_SLOTS)
+              .map((s) => [s.slot, s] as const),
+          );
+          const slots = EMPTY.map((_, i) => {
+            const local = atual.slots[i] ?? SLOT_VAZIO;
+            const recebido = doServidor.get(i);
+            if (recebido && recebido.kind !== "empty") return { kind: recebido.kind, id: recebido.id };
+            if (paraServidor(local) === null) return { ...local };
+            return { ...SLOT_VAZIO };
+          });
           return { slots, serverSynced: true };
         }),
     }),
     {
       name: "ragnarok:skillbar",
+      storage,
+      // Ninguém está vinculado no `create()` — a reidratação automática e
+      // síncrona do zustand rodaria antes de qualquer personagem existir e
+      // não teria chave nenhuma pra ler. `bindToCharacter` chama
+      // `persist.rehydrate()` explicitamente depois de saber quem é o dono.
+      skipHydration: true,
+      // `serverSynced` NUNCA é persistido: é o que fazia a barra do
+      // personagem anterior se autodeclarar "sincronizada" e escrever no
+      // servidor do personagem novo antes do primeiro `hydrateFromServer`
+      // de verdade chegar.
+      partialize: (s) => ({ slots: s.slots }),
       /**
        * v1→v2: `slots` era `number[]` (id de skill cru); virou
        * `SkillBarSlot[]` para caber item além de skill. Quem guardava um
@@ -260,6 +322,44 @@ export const useSkillBar = create<SkillBarState>()(
 );
 
 /**
+ * Personagem passa a ser dono do store — chamar assim que `world:enter`
+ * chegar, ANTES de `world:ready` (o `hotkey:list` que vem em seguida precisa
+ * achar o binding já certo).
+ *
+ * Idempotente para o MESMO personagem de propósito: `world:enter` também
+ * chega em warp de mesmo mapa (`@jump`, Asa de Borboleta, respawn — ver o
+ * comentário sobre isso em `net/useGatewayEvents.ts`), e re-bindar ali
+ * reiniciaria `serverSynced` e a barra a cada teleporte.
+ */
+export function bindToCharacter(charId: number): void {
+  if (charId === charAtual) return;
+  // A ORDEM aqui importa: o `persist` do zustand escreve no storage a cada
+  // `setState`, usando o `charAtual` QUE JÁ ESTIVER valendo no momento da
+  // escrita. Zerar o estado com `charAtual` já apontando pro personagem novo
+  // gravaria o reset por cima do que esse personagem já tinha salvo — e o
+  // `rehydrate` logo depois releria o próprio reset, não o dado de verdade.
+  // Com `charAtual = null` durante o reset, o storage adapter recusa a
+  // escrita (nenhum personagem "dono" dela) e nada é sobrescrito.
+  charAtual = null;
+  useSkillBar.setState({ slots: comAtaqueBasico(), serverSynced: false });
+  charAtual = charId;
+  // Carrega o blob DESTE personagem do localStorage (fallback até o
+  // `hydrateFromServer` de verdade chegar).
+  void useSkillBar.persist.rehydrate();
+}
+
+/**
+ * Fim de sessão (logout, disconnect) — chamar junto dos outros resets de
+ * `encerrar()` em `net/useGatewayEvents.ts`. Sem personagem vinculado nada é
+ * lido, escrito nem mandado ao servidor (ver `storage` e `sendToServer`
+ * acima) até o próximo `bindToCharacter`.
+ */
+export function unbindCharacter(): void {
+  charAtual = null;
+  useSkillBar.setState({ slots: comAtaqueBasico(), serverSynced: false });
+}
+
+/**
  * Item removido/trocado/zerado no inventário não pode deixar a hotbar
  * apontando para nada.
  *
@@ -270,6 +370,7 @@ export const useSkillBar = create<SkillBarState>()(
  * reagir ao que o servidor já confirmou.
  */
 usePlayerStore.subscribe((estado, anterior) => {
+  if (charAtual === null) return;
   if (estado.inventory === anterior.inventory) return;
   const presentes = new Set(estado.inventory.map((it) => it.itemId));
   const bar = useSkillBar.getState();

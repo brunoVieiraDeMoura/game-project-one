@@ -50,6 +50,10 @@ export function PerfProbe() {
     // verdade, e antes disso só `scene`/`camera` eram alcançáveis.
     (window as unknown as { __gl?: () => unknown }).__gl = () => gl;
     (window as unknown as { __perf?: () => unknown }).__perf = () => perfSnapshot();
+    // benchmark manual do `gl.render` (teste A/B do vento — bypassa o gate de
+    // aba oculta que zera `fps`/`quadro p50` numa aba sem foco de verdade)
+    (window as unknown as { __scene?: () => unknown }).__scene = () => scene;
+    (window as unknown as { __camera?: () => unknown }).__camera = () => camera;
     // `principal`: é ESTE canvas que arma o gatilho de renderer recriado e que
     // tem `gl.render` embrulhado. Os retratos do HUD entram pela `SondaDeCanvas`
     // e só contam em `contextosVivos` — ver `core/diagnostics/rendererProbe`.
@@ -102,6 +106,8 @@ export function PerfProbe() {
    */
   const ocultoAgora = useRef(document.hidden);
   const pularProximoQuadro = useRef(false);
+  /** `heapMb` do quadro anterior — a diferença é `heapDeltaMb` (ver Fase B) */
+  const heapAnteriorMb = useRef(NaN);
   useEffect(() => {
     const onVisibility = () => {
       if (document.hidden) {
@@ -172,6 +178,23 @@ export function PerfProbe() {
     }
     // contadores do device + a série de render/GPU/memória
     amostrarContadores(gl);
+    /**
+     * `sobraMs`/`heapDeltaMb` — DEPOIS de `amostrarContadores`, que é quem
+     * acabou de escrever `renderMs`/`animacaoMs`/`contextoMs`/`descarteMs`/
+     * `modeloMs`/`heapMb` nesta mesma linha. `trocaMs` já estava escrito antes
+     * (é `medir()`, fora deste laço). Calculado aqui, não em
+     * `confirmarQuadro`: a coluna descreve o quadro que ACABOU DE FECHAR, e
+     * `confirmarQuadro` só roda depois, no `useFrame` do `NetPlayer`.
+     */
+    if (ativo() && !veioDeAbaOculta) {
+      const q2 = quadro();
+      q2.sobraMs =
+        q2.quadroMs - q2.renderMs - q2.animacaoMs - q2.contextoMs - q2.descarteMs - q2.modeloMs - q2.trocaMs;
+      const heapAgora = q2.heapMb;
+      q2.heapDeltaMb =
+        Number.isFinite(heapAgora) && Number.isFinite(heapAnteriorMb.current) ? heapAgora - heapAnteriorMb.current : NaN;
+      if (Number.isFinite(heapAgora)) heapAnteriorMb.current = heapAgora;
+    }
     // a árvore da cena: filhos, visibilidade, câmera, chunks, props, suspensão
     amostrarCena(scene, camera, calls);
     // ninguém chamava este gatilho — ele estava declarado e nunca disparou.

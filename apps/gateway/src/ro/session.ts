@@ -187,6 +187,11 @@ export class RoSession extends EventEmitter {
 	/** pedido de composição em voo — o ACK (0x17d) não traz o itemId da carta, só índices */
 	private pendingCardInsert: { cardIndex: number; equipIndex: number; itemId: number } | null = null;
 	private readonly skills = new Map<number, PlayerSkill>();
+	/** últimos 38 slots de atalho recebidos deste personagem — o rAthena só
+	 * manda o pacote uma vez por conexão (`connect_new`), então sem este cache
+	 * `notifyReady()` não tem o que reentregar pro segundo `world:ready` (o da
+	 * cena 3D, que é quem de fato tem o listener registrado). */
+	private hotkeys: HotkeySlot[] = [];
 	/**
 	 * Entidades já vistas neste mapa.
 	 *
@@ -482,6 +487,11 @@ export class RoSession extends EventEmitter {
 
 	private async connectMap(addr: { ip: number; port: number }, mapName: string): Promise<void> {
 		this.stage = "map";
+		// Este personagem está entrando no map-server agora — qualquer barra de
+		// atalho de uma seleção de personagem anterior neste mesmo socket (ver
+		// `char:select` em server.ts) não pode sobreviver para `notifyReady()`
+		// reentregar como se fosse deste personagem.
+		this.hotkeys = [];
 		const host = this.options.forceHost ? this.options.host : longToIP(addr.ip);
 		const conn = new RoConnection({
 			host,
@@ -1137,17 +1147,21 @@ export class RoSession extends EventEmitter {
 
 		// Barra de atalho: o rAthena manda os 38 slots INTEIROS de novo a cada
 		// vez (nunca incremental — não há pacote de "1 slot mudou" na volta, só
-		// CZ_SHORTCUT_KEY_CHANGE* de saída), então basta decodificar e emitir —
-		// sem Map acumulador, diferente de skills. Mesmo padrão de variante
-		// múltipla do bloco acima: só a struct que o packetver realmente
-		// registrou (`.id` setado por `initProtocol`) é enganchada — neste
-		// projeto (20130618) é só `SHORTCUT_KEY_LIST_V2`.
+		// CZ_SHORTCUT_KEY_CHANGE* de saída), então basta decodificar e guardar —
+		// sem Map acumulador, diferente de skills (é sempre substituição total,
+		// não merge). Mesmo padrão de variante múltipla do bloco acima: só a
+		// struct que o packetver realmente registrou (`.id` setado por
+		// `initProtocol`) é enganchada — neste projeto (20130618) é só
+		// `SHORTCUT_KEY_LIST_V2`. Guardar em `this.hotkeys` (e não só emitir) é
+		// o que permite `notifyReady()` reentregar pro segundo `world:ready`,
+		// já que este pacote só chega uma vez por conexão (`connect_new`).
 		for (const key of Object.keys(PACKET.ZC)) {
 			if (!/^SHORTCUT_KEY_LIST(_V\d+)?$/.test(key)) continue;
 			const Struct = PACKET.ZC[key];
 			if (!Struct?.id) continue;
 			conn.hook(Struct, (pkt: any) => {
-				this.emit("hotkeys", toHotkeys(pkt.ShortCutKey ?? []));
+				this.hotkeys = toHotkeys(pkt.ShortCutKey ?? []);
+				this.emit("hotkeys", this.hotkeys);
 			});
 		}
 
@@ -1467,6 +1481,9 @@ export class RoSession extends EventEmitter {
 		}
 		if (this.skills.size) {
 			this.emit("skills", [...this.skills.values()]);
+		}
+		if (this.hotkeys.length) {
+			this.emit("hotkeys", this.hotkeys);
 		}
 		for (const entity of this.entities.values()) {
 			this.emit("entity-spawn", entity);

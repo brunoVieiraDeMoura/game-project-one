@@ -1,8 +1,11 @@
 import { useLayoutEffect, useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
+import type * as THREE from "three";
 import type { MapProp } from "@ragnarok/map-format";
-import { propUrl } from "./registry";
+import { propUrl, propCategory } from "./registry";
 import { compartilharTexturas } from "../gltfTexturas";
+import { windCategoryFor, windMaterialFor } from "./wind";
+import { isolado } from "../core/diagnostics/isolamento";
 
 /**
  * Uma instância de prop do mapa (skill-r3f-conventions: componente = entidade,
@@ -25,6 +28,9 @@ import { compartilharTexturas } from "../gltfTexturas";
 export function PropInstance({ prop }: { prop: MapProp }) {
   const url = propUrl(prop.assetId);
   const gltf = url ? useGLTF(url) : null;
+  // vento (seção 1 do pedido): só grama/arbusto/árvore, e só se não isolado
+  // por `?iso=semVento` — ver `props/wind.ts`
+  const windCat = windCategoryFor(propCategory(prop.assetId));
 
   const scene = useMemo(() => {
     if (!gltf) return null;
@@ -41,11 +47,19 @@ export function PropInstance({ prop }: { prop: MapProp }) {
     // `parser.associations`, porque `image.src` não existe num `ImageBitmap`
     compartilharTexturas(gltf as never);
     const clone = gltf.scene.clone(true);
+    const vento = windCat && !isolado("semVento") ? windCat : null;
     clone.traverse((o) => {
-      const m = o as { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean };
+      const m = o as THREE.Mesh & { isMesh?: boolean; castShadow?: boolean; receiveShadow?: boolean };
       if (m.isMesh) {
         m.castShadow = true;
         m.receiveShadow = true;
+        // troca o material pela versão com vento (cacheada por espécie —
+        // ver `windMaterialFor`); resto (pedra, construção…) passa intacto
+        if (vento) {
+          m.material = Array.isArray(m.material)
+            ? m.material.map((mm) => windMaterialFor(mm, m.geometry, prop.assetId, vento))
+            : windMaterialFor(m.material, m.geometry, prop.assetId, vento);
+        }
       }
       /**
        * PROP NÃO SE MOVE — os filhos param de recompor matriz por quadro.
@@ -79,6 +93,9 @@ export function PropInstance({ prop }: { prop: MapProp }) {
       }
     });
     return clone;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `prop.assetId`/`vento` decidem o material, mas isolamento e espécie não
+    // trocam vivos num prop já montado (mesma convenção do resto do arquivo)
   }, [gltf]);
 
   /**

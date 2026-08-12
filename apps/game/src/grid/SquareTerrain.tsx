@@ -18,6 +18,7 @@ import { SQUARE_SIZE } from "./squareGrid";
 import { registrarBuild } from "../scene/perfProbe";
 import { quadro, registrarEvento, somarChunk } from "../core/diagnostics/flightRecorder";
 import { marcarChunk } from "../core/diagnostics/cenaProbe";
+import { isolado } from "../core/diagnostics/isolamento";
 import { useWorldStore } from "../net/worldStore";
 import {
   TERRAIN_LAYERS,
@@ -262,6 +263,9 @@ export function SquareTerrain({
   // repintar o React 60×/s por causa de uma onda seria o mesmo erro que o
   // cronômetro de recarga da barra de skills já evita.
   useFrame((_, dt) => {
+    // `?iso=semAgua` congela a onda pro teste A/B ("WATER STATIC" vs
+    // "WATER ANIMATED") sem trocar de material nem remontar chunk
+    if (isolado("semAgua")) return;
     const u = (materialAgua as MaterialComTempo).uTempo;
     if (u) u.value += dt;
   });
@@ -781,13 +785,27 @@ attribute float aProfundidade;
 attribute float aMargem;
 varying float vProf;
 varying float vMargem;
-varying vec3 vAguaMundo;`,
+varying vec3 vAguaMundo;
+uniform float uTempo;`,
       )
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
 vProf = aProfundidade;
 vMargem = aMargem;
+{
+  // ONDA DE VERTICE — antes disto a "animação" da água era só a cor
+  // (mistura de fbm no fragment, ±10% de brilho): balançava a PINTURA, não
+  // a MALHA, e de longe/em movimento normal isso lê como água parada. Este
+  // bloco desloca o vértice em Y de verdade — pequeno (±0,12 unidade,
+  // ~7% da altura do personagem) pra não virar piscina brava, mas
+  // GEOMÉTRICO, então bate luz/sombra diferente quadro a quadro e o olho
+  // pega o movimento sem precisar reparar na cor.
+  vec3 aguaMundoPre = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  float onda1 = sin(aguaMundoPre.x * 0.35 + uTempo * 1.15);
+  float onda2 = cos(aguaMundoPre.z * 0.28 - uTempo * 0.85 + aguaMundoPre.x * 0.12);
+  transformed.y += (onda1 * 0.6 + onda2 * 0.4) * 0.12;
+}
 vAguaMundo = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
       );
 

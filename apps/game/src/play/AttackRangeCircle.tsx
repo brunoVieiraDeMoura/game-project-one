@@ -7,7 +7,10 @@ import { usePlayerStore } from "../net/playerStore";
 import { useAimStore } from "../net/aimStore";
 import { useSkillTargetStore } from "../net/skillTargetStore";
 import { useSkillWalkStore } from "../net/skillWalkStore";
+import { useCombatVisuals } from "../hud/combatVisualsStore";
 import { moldarMalhaTerreno } from "./pickGround";
+import { registrarEvento } from "../core/diagnostics/flightRecorder";
+import { isolado } from "../core/diagnostics/isolamento";
 
 /**
  * O anel de alcance da AÇÃO ATUAL — não só do ataque básico.
@@ -57,6 +60,13 @@ import { moldarMalhaTerreno } from "./pickGround";
  *
  * Só aparece com alcance MAIOR que 1 célula: um aro em cima de toda arma/
  * skill corpo a corpo seria ruído que ninguém pediu.
+ *
+ * Preferência de visual (`hud/combatVisualsStore`): as prioridades 2 e 3 são
+ * alcance de SKILL (indo até a distância pra castar) e obedecem
+ * `showSkillArea`; só a prioridade 4 (ataque básico puro, sem skill
+ * envolvida) obedece `showAttackRange`. Os dois toggles são independentes de
+ * propósito — desligar o ataque básico não pode apagar o aviso de alcance de
+ * skill, e vice-versa. Não muda `raioAtual`/mecânica, só se o `<mesh>` nasce.
  */
 
 const COR = "#7dd3fc";
@@ -85,6 +95,41 @@ void main() {
 }
 `;
 
+/** de onde vem o alcance mostrado — decide qual toggle de visual vale (ver o comentário do arquivo) */
+export type OrigemDoAlcance = "skill" | "ataque" | null;
+
+/**
+ * Prioridade fixa da origem — pura, sem React, pra caber em teste sem montar
+ * cena nenhuma. `mirando` vence sem raio nenhum: é a AUSÊNCIA de círculo
+ * aqui que deixa o `AimPreview` sozinho.
+ */
+export function origemDoAlcance(params: {
+  mirando: boolean;
+  temPendenteAlvo: boolean;
+  temPendenteChao: boolean;
+  temAlvoBasico: boolean;
+}): OrigemDoAlcance {
+  if (params.mirando) return null;
+  if (params.temPendenteAlvo || params.temPendenteChao) return "skill";
+  if (params.temAlvoBasico) return "ataque";
+  return null;
+}
+
+/**
+ * Decide SÓ a visibilidade — nunca o `raio` (isso continua vindo de
+ * `alcanceEfetivoDaSkill`/`atkRange`, mecânica intocada). `classId`/`jobId`
+ * não entram aqui de propósito: o mesmo toggle vale pra QUALQUER classe — ver
+ * `AttackRangeCircle.test.ts`, "todas as classes".
+ */
+export function circuloDeAlcanceVisivel(
+  origem: OrigemDoAlcance,
+  raio: number,
+  prefs: { showAttackRange: boolean; showSkillArea: boolean },
+): boolean {
+  if (origem === null || raio <= 1) return false;
+  return origem === "skill" ? prefs.showSkillArea : prefs.showAttackRange;
+}
+
 export function AttackRangeCircle({
   playerPos,
   cellSize,
@@ -100,13 +145,21 @@ export function AttackRangeCircle({
   const pendenteChao = useSkillWalkStore((s) => s.pendente);
   const temAlvoBasico = useWorldStore((s) => s.target !== null);
   const atkRangeBasico = usePlayerStore((s) => s.stats.atkRange);
+  const showAttackRange = useCombatVisuals((s) => s.showAttackRange);
+  const showSkillArea = useCombatVisuals((s) => s.showSkillArea);
 
-  // prioridade fixa — ver o comentário do arquivo. `mirando` vence sem raio
-  // nenhum: é a AUSÊNCIA de círculo aqui que deixa o AimPreview sozinho.
-  const temAlvo = !mirando && (pendenteAlvo !== null || pendenteChao !== null || temAlvoBasico);
+  const origem = origemDoAlcance({
+    mirando,
+    temPendenteAlvo: pendenteAlvo !== null,
+    temPendenteChao: pendenteChao !== null,
+    temAlvoBasico,
+  });
+  const temAlvo = origem !== null;
   const raioAtual = mirando
     ? 0
     : (pendenteAlvo?.raio ?? pendenteChao?.raio ?? atkRangeBasico);
+  // preferência de visual — não mexe em `raioAtual`, só decide se desenha
+  const visivelPelaPreferencia = circuloDeAlcanceVisivel(origem, raioAtual, { showAttackRange, showSkillArea });
 
   const material = useMemo(
     () =>
@@ -136,7 +189,7 @@ export function AttackRangeCircle({
     // sem alvo (ou arma sem alcance de verdade), este quadro não tem nada a
     // fazer — hook registrado é hook que roda, mas o corpo sai cedo antes de
     // tocar terrain/uniform (mesma guarda que `AimPreview` já documenta).
-    if (!temAlvo || raioAtual <= 1) return;
+    if (!temAlvo || raioAtual <= 1 || !visivelPelaPreferencia || isolado("semAoe")) return;
     material.uniforms.uTempo!.value += dt;
 
     const m = mesh.current;
@@ -144,11 +197,13 @@ export function AttackRangeCircle({
     const p = playerPos.current;
     const chave = `${Math.round(p.x / cellSize)},${Math.round(p.z / cellSize)},${raioAtual}`;
     if (moldadoEm.current === chave) return;
+    const primeira = moldadoEm.current === null;
     moldadoEm.current = chave;
     moldarMalhaTerreno(m.geometry as THREE.BufferGeometry, p.x, p.z, raioAtual * cellSize, SEGS, ALTURA, terrain);
+    registrarEvento("cena", primeira ? "aoe:create" : "aoe:geometry-update", { anel: "range", chave, raio: raioAtual });
   });
 
-  if (!temAlvo || raioAtual <= 1) return null;
+  if (!temAlvo || raioAtual <= 1 || !visivelPelaPreferencia || isolado("semAoe")) return null;
 
   return (
     <mesh ref={mesh} material={material} renderOrder={-1}>

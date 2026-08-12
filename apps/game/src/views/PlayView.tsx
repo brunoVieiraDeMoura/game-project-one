@@ -10,8 +10,11 @@ import { HexTerrain } from "../hex/HexTerrain";
 import { setHexScale } from "../hex/hexGrid";
 import { gridFor } from "../grid";
 import { SquareTerrain } from "../grid/SquareTerrain";
+import { HorizonMesh } from "../grid/HorizonMesh";
 import { propBlockedCellsCached } from "../grid/propCells";
-import { buildHexDemo } from "../hex/hexPrefab";
+import { buildSquareDemo } from "../play/squareDemoMap";
+import { buildWindTestMap, type WindTestStage } from "../play/windTestMap";
+import { WindSystem } from "../props/WindSystem";
 import { scaleMapPositions } from "../hex/mapScale";
 import { groundProps } from "../hex/groundProps";
 import { PropInstance } from "../props/PropInstance";
@@ -36,6 +39,9 @@ import { useViewCenter } from "../play/useViewCenter";
 import { AQUECIMENTO_INICIAL, passoDeAquecimento } from "../play/aquecimento";
 import { raiosDeVisao } from "../play/viewRadius";
 import { GradientSky } from "../scene/GradientSky";
+import { TexturedSky } from "../scene/TexturedSky";
+import { AmbientParticles } from "../vfx/AmbientParticles";
+import { buildSceneTestMap, PARTICLE_SPOTS } from "../play/sceneTestMap";
 import { aplicarNevoaDoCeu } from "../scene/skyFog";
 import { SKY_HORIZON, SKY_TOP } from "../scene/skyGradient.glsl";
 import { RetroFilter } from "../scene/RetroFilter";
@@ -43,6 +49,7 @@ import { PerfProbe, PerfOverlay } from "../scene/PerfHud";
 import { SondaDeCena, SondaDeSuspense } from "../core/diagnostics/SondaDeCanvas";
 import { PreCompilarProps } from "../play/PreCompilarProps";
 import { marcarPropsVisiveis } from "../core/diagnostics/cenaProbe";
+import { isolado } from "../core/diagnostics/isolamento";
 import { scaleToWorld, useGameplayConfig } from "../play/useGameplayConfig";
 import { scatterDemoProps, findWalkableStart } from "../play/demoProps";
 import { DamageNumbers } from "../combat/DamageNumbers";
@@ -139,6 +146,12 @@ const ORCAMENTO_CARREGANDO_MS = 12;
  */
 const TETO_PRECARGA_MS = 3000;
 const SUN_DISTANCE = 140; // mesma escala do editor (EditorScene) — só a direção muda
+/** fator de compensação de luminância da troca `ambientLight`→`hemisphereLight`
+ * (ver comentário no JSX abaixo) */
+const HEMI_BOOST = 1.7;
+/** tom de "chão" do hemisphereLight — mais claro que um marrom terroso de
+ * verdade, de propósito: é luz de preenchimento, não física de bounce */
+const HEMI_GROUND = "#6b5f45";
 
 /** direção/altura do sol a partir de azimute/elevação (graus) — mesma fórmula
  * do editor (EditorScene), pra o /play bater com o que foi ajustado lá. */
@@ -156,7 +169,7 @@ function sunOffset(azimuthDeg: number, elevationDeg: number, scale = 1): THREE.V
  * A direção do sol vem do `lighting` salvo no mapa (editor "Camadas & Luz");
  * só a origem acompanha o player.
  */
-function SunRig({ targetRef, offset, intensity = 1.35, scale = 1 }: { targetRef: React.MutableRefObject<THREE.Vector3>; offset: THREE.Vector3; intensity?: number; scale?: number }) {
+function SunRig({ targetRef, offset, intensity = 1.35, scale = 1, shadowsOn = true }: { targetRef: React.MutableRefObject<THREE.Vector3>; offset: THREE.Vector3; intensity?: number; scale?: number; shadowsOn?: boolean }) {
   const shadowR = SHADOW_RADIUS * scale;
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
@@ -181,7 +194,7 @@ function SunRig({ targetRef, offset, intensity = 1.35, scale = 1 }: { targetRef:
       <directionalLight
         ref={lightRef}
         intensity={intensity}
-        castShadow
+        castShadow={shadowsOn}
         shadow-mapSize={[SHADOW_MAP, SHADOW_MAP]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
@@ -298,14 +311,14 @@ function AssistenciaDeMira({
   mapping,
   cellSize,
   playerPos,
-  fogFar,
+  raioEntidade,
 }: {
   map: GameMap;
   mapping: LegacyMapping;
   cellSize: number;
   playerPos: React.MutableRefObject<THREE.Vector3>;
-  /** onde a névoa fecha: além dela não é candidato */
-  fogFar: number;
+  /** raio de DETALHE (Fase G) — nunca o do horizonte: além dele não é candidato */
+  raioEntidade: number;
 }) {
   const gl = useThree((s) => s.gl);
   const tamanho = useThree((s) => s.size);
@@ -384,7 +397,7 @@ function AssistenciaDeMira({
       scratch.set(w.x, w.y + alturaDoAlvo, w.z);
       const dxCam = w.x - cam.position.x;
       const dzCam = w.z - cam.position.z;
-      const visivel = dxCam * dxCam + dzCam * dzCam <= fogFar * fogFar;
+      const visivel = dxCam * dxCam + dzCam * dzCam <= raioEntidade * raioEntidade;
       scratch.project(cam);
       // `z` fora de -1..1 é atrás da câmera; sem isto um alvo às costas do
       // jogador reaparece projetado NA TELA, espelhado
@@ -663,8 +676,17 @@ function Scene({
   // raios e névoa saem do MESMO lugar (play/viewRadius), que é onde mora a regra
   // "não desenhe o que a névoa já escondeu" — e onde o teste a confere
   const visao = raiosDeVisao(gameplay);
-  const PROP_RADIUS = visao.props;
-  const TERRAIN_RADIUS = visao.terreno;
+  const PROP_RADIUS = visao.detalhe;
+  const TERRAIN_RADIUS = visao.detalhe;
+  /**
+   * Raio de ENTIDADE (mob/player/npc) — sempre `detalhe`, NUNCA `fogFar`.
+   *
+   * Fase G da auditoria de render: antes deste raio existir, `NetEntities`/
+   * `AlvoPorTab`/`AssistenciaDeMira` liam `fogFar` direto, que agora é o raio
+   * do HORIZONTE (~600, não ~130) — sem esta variável esticar a névoa faria
+   * entidade desenhar e ser alvejável a centenas de unidades de distância.
+   */
+  const RAIO_ENTIDADE = visao.entidades;
   const FOG_NEAR = visao.fogNear;
   const FOG_FAR = visao.fogFar;
   // extensão do mundo pro plano de clique: num mapa hex é o passo do grid ×
@@ -787,6 +809,10 @@ function Scene({
   const culled = map.terrainMode !== "smooth";
   const allProps = culled ? map.props : world.props;
   const visibleProps = useMemo(() => {
+    // isolamento (Fase C, `?iso=semProps`): nenhum prop monta — hoje é sempre
+    // vazio em mapa real (`props: []` na migração), então isto só tem efeito
+    // visível no `smooth` legado/editor
+    if (isolado("semProps")) return [];
     if (!culled) return allProps;
     const r2 = PROP_RADIUS * PROP_RADIUS;
     return allProps.filter((p) => {
@@ -843,14 +869,48 @@ function Scene({
           esconde em vez de desmontar, então esta sonda ficar CALADA enquanto a
           `SondaDeSuspense` monta é a prova de que não houve desmonte */}
       {import.meta.env.DEV && <SondaDeCena />}
-      <GradientSky top={SKY_TOP} bottom={SKY_HORIZON} />
-      {/* fog: desbota do FOG_NEAR ao FOG_FAR; props/terreno renderizam além disso
-          (já cobertos) → itens distantes emergem suave, sem pop na borda. Cor =
-          base do gradiente do céu → horizonte contínuo. */}
-      {culled && <fog attach="fog" args={[SKY_HORIZON, FOG_NEAR, FOG_FAR]} />}
-      <ambientLight intensity={lighting.ambient} />
-      {/* sol que segue o player (sombras corretas mesmo longe da origem) */}
-      <SunRig targetRef={playerPos} offset={sunOff} intensity={lighting.sunIntensity} scale={gameplay.hexScale} />
+      {/* `semCeuFoto`: skybox real (Kenney, scene/TexturedSky) é o padrão;
+          isolado volta pro degradê procedural antigo — teste A/B "sky
+          enhancement ON/OFF" do pedido de auditoria. A névoa (abaixo) continua
+          lendo SKY_TOP/SKY_HORIZON de qualquer jeito: as duas paletas batem
+          (skybox-day.png foi escolhido por isso), então a névoa nunca precisou
+          saber qual céu está desenhado. */}
+      {isolado("semCeuFoto") ? <GradientSky top={SKY_TOP} bottom={SKY_HORIZON} /> : <TexturedSky />}
+      {/* FASE G: a névoa amarra no HORIZONTE agora, não no raio de detalhe
+          (`play/viewRadius`) — desbota de FOG_NEAR a FOG_FAR bem depois de onde
+          o chão detalhado acaba (~130), dentro do trecho coberto pela malha
+          decimada (`grid/HorizonMesh`, sempre presente). É isso que troca a
+          "parede de névoa" antiga por: detalhe → chão simplificado → névoa →
+          céu, contínuo. Cor = base do gradiente do céu, igual antes. */}
+      {culled && !isolado("semNevoa") && <fog attach="fog" args={[SKY_HORIZON, FOG_NEAR, FOG_FAR]} />}
+      {/* HemisphereLight troca o `ambientLight` chapado por luz de cima (céu)
+          + luz de baixo (chão) — o lado sem sol direto deixa de ir a preto
+          puro sem precisar de 2ª luz ambiente (regra do pedido: nenhuma
+          ambient light extra). `semAmbiente` zera (teste A/B).
+
+          `HEMI_BOOST = 1.7` e `HEMI_GROUND` mais claro que um marrom
+          "realista": no showcase (`?map=scenetest`), a troca de `ambientLight`
+          branco por `hemisphereLight` colorido deixou o lado sem sol direto
+          visivelmente mais escuro que antes — mesmo `intensity` numérico, mas
+          `SKY_TOP` (#5a8fc7) tem ~metade da luminância do branco que o
+          `ambientLight` usava, e a metade de baixo da esfera (voltada pro chão)
+          ainda mais escura com um marrom saturado. O boost e o chão mais claro
+          compensam essa perda sem tocar na luz direcional nem crescer o
+          contraste sol×sombra — é objetivo do pedido "sombra soma
+          profundidade, não vira breu". */}
+      <hemisphereLight args={[SKY_TOP, HEMI_GROUND, isolado("semAmbiente") ? 0 : lighting.ambient * HEMI_BOOST]} />
+      {/* sol que segue o player (sombras corretas mesmo longe da origem).
+          `semSol` apaga a luz inteira (não só a sombra) — teste A/B
+          "LIGHTING ON/OFF"; `semSombra` mantém a luz mas tira só a sombra. */}
+      {!isolado("semSol") && (
+        <SunRig
+          targetRef={playerPos}
+          offset={sunOff}
+          intensity={lighting.sunIntensity}
+          scale={gameplay.hexScale}
+          shadowsOn={!isolado("semSombra")}
+        />
+      )}
       {/*
         NÃO existe mais `<Physics>` aqui.
         O Rapier era montado com terreno e props dentro, mas nada consultava o
@@ -866,7 +926,7 @@ function Scene({
         {/* nome é contrato com o GroundInteract: o clique mira o TOPO do terreno,
             não o plano de y=0 — sobre um bloco alto os dois estão longe um do outro */}
         <group name={TERRAIN_GROUP}>
-          {isHex ? (
+          {isolado("semTerreno") ? null : isHex ? (
             <HexTerrain map={map} center={center} radius={TERRAIN_RADIUS} ground={gameplay} />
           ) : map.terrainMode === "square" ? (
             /* `precarregar`: o mapa inteiro é construído em segundo plano, com
@@ -897,6 +957,15 @@ function Scene({
             <MapTerrain map={map} />
           )}
         </group>
+        {/* FASE G — o HORIZONTE (`grid/HorizonMesh`), fora do `TERRAIN_GROUP` de
+            propósito: o `GroundInteract` raycasta contra esse grupo para clique
+            no chão e base de prop, e o horizonte não é uma superfície clicável —
+            é a malha decimada do mapa INTEIRO, sempre presente, por baixo do
+            chão detalhado. Só existe para o mapa real do rAthena (`"square"`):
+            é onde a `props: []` da migração deixou o LOD3/impostor sem o que
+            representar (ver o comentário do módulo) — hex/editor mantêm o
+            terreno próprio deles, sem mudança. */}
+        {map.terrainMode === "square" && <HorizonMesh map={map} />}
         {/* props do mapa (culled); o "smooth" legado usa o scatter de demo.
             O nome do grupo é contrato com o GroundInteract: é nele que o clique
             testa se o raio bateu numa árvore antes de chegar ao chão. */}
@@ -923,6 +992,14 @@ function Scene({
             </Suspense>
           ))}
         </group>
+        {/* avança o relógio do vento (props/wind.ts) — UM useFrame pro mapa
+            inteiro, nenhuma planta tem update individual */}
+        <WindSystem />
+        {/* partículas ambientais do cenário de teste — só em `?map=scenetest`,
+            posições fixas em `play/sceneTestMap.ts:PARTICLE_SPOTS` */}
+        {IS_SCENETEST &&
+          !isolado("semParticulas") &&
+          PARTICLE_SPOTS.map((p, i) => <AmbientParticles key={i} kind={p.kind} origin={p.origin} count={p.count} radius={p.radius} />)}
         {/* paga a compilação de shader de TODA espécie do mapa enquanto a
             cortina está no ar — ver `play/PreCompilarProps` */}
         {precompilarProps && <PreCompilarProps map={map} />}
@@ -938,7 +1015,7 @@ function Scene({
               charScale={gameplay.charScale}
               animationSpeed={gameplay.animationSpeed}
               cellSize={moveCell}
-              fogFar={visao.fogFar}
+              raioEntidade={RAIO_ENTIDADE}
               terrain={world.terrain}
             />
             <GroundItems map={map} mapping={mapping} cellSize={moveCell} />
@@ -1009,7 +1086,7 @@ function Scene({
         assistir={assistir}
       />
       {/* Tab cicla o inimigo mais próximo, com peso para onde a câmera aponta */}
-      {mapping && <AlvoPorTab map={map} mapping={mapping} fogFar={FOG_FAR} />}
+      {mapping && <AlvoPorTab map={map} mapping={mapping} raioEntidade={RAIO_ENTIDADE} />}
       {/* a trava do soft lock, visível: acende o mob que o clique acertaria */}
       {mapping && (
         <AssistenciaDeMira
@@ -1017,7 +1094,7 @@ function Scene({
           mapping={mapping}
           cellSize={moveCell}
           playerPos={playerPos}
-          fogFar={FOG_FAR}
+          raioEntidade={RAIO_ENTIDADE}
         />
       )}
       {/* skill de área mirando: onde ela cai e de onde dá para lançá-la */}
@@ -1120,6 +1197,19 @@ function WorldEventsBridge() {
 }
 
 const IS_DEMO = LOCAL_MODE && !IS_PREVIEW && DEFAULT_MAP === "hexdemo";
+/** `?map=windtest[&extreme=1][&stage=low|medium|high|extreme]` — cenário
+ * sintético de vegetação p/ medir custo do vento (`play/windTestMap.ts`).
+ * Mesma ideia do hexdemo acima: mapa local, sem sessão, sem busca na API. */
+const IS_WINDTEST = LOCAL_MODE && !IS_PREVIEW && DEFAULT_MAP === "windtest";
+const WINDTEST_EXTREME = PLAY_PARAMS.get("extreme") === "1";
+const WINDTEST_STAGE_RAW = PLAY_PARAMS.get("stage");
+const WINDTEST_STAGE: WindTestStage | undefined =
+  WINDTEST_STAGE_RAW === "low" || WINDTEST_STAGE_RAW === "medium" || WINDTEST_STAGE_RAW === "high" || WINDTEST_STAGE_RAW === "extreme"
+    ? WINDTEST_STAGE_RAW
+    : undefined;
+/** `?map=scenetest` — cenário de teste de luz/céu/água/sombra/partículas
+ * (`play/sceneTestMap.ts`). Mesmo mecanismo local do hexdemo/windtest. */
+const IS_SCENETEST = LOCAL_MODE && !IS_PREVIEW && DEFAULT_MAP === "scenetest";
 
 /** Mundo 3D jogável + HUD RO completo. */
 export function PlayView() {
@@ -1152,19 +1242,30 @@ export function PlayView() {
       clearTimeout(t);
     };
   }, []);
-  // busca do banco sempre; hexdemo usa a versão salva SÓ se for "blocks" (senão
-  // prefab — ignora versão smooth/quebrada salva antes do fix). Em preview, não busca.
+  // busca do banco sempre; hexdemo usa a versão salva SÓ se for "square" (o
+  // formato do prefab atual — ver play/squareDemoMap.ts; senão prefab, ignora
+  // versão hex/smooth/quebrada salva antes da troca). Em preview, não busca.
   // distâncias (câmera, névoa, alcance, pulo) vêm em unidades de hexágono e
   // passam a valer no tamanho de bloco atual — ver scaleToWorld
   const gameplayRaw = useGameplayConfig();
   const gameplay = scaleToWorld(gameplayRaw);
-  // O demo é GERADO em código, e buildHexDemo usa hexToWorld — ou seja, nasce
-  // preso ao hexScale que estiver ativo. No primeiro render a config ainda não
-  // voltou da API (hexScale = 1 default); sem refazer o demo quando ela chega,
-  // o terreno é desenhado no tamanho novo mas player/monstros/props ficam nas
-  // coordenadas antigas: o player aparecia na quina do mapa olhando pra fora
-  // (só céu) e em cima dos esqueletos, que o matavam em segundos.
-  const demoMap = useMemo(() => (IS_DEMO ? buildHexDemo() : null), [gameplay.hexScale]);
+  // Os três mapas locais gerados aqui (demo, windtest, scenetest) são grade
+  // QUADRADA de tamanho fixo — ao contrário do hex prefab antigo
+  // (`hex/hexPrefab.ts`, ainda usado só pelo editor), nenhum depende de
+  // `hexScale`. `gameplay.hexScale` fica nas dependências mesmo assim: é o
+  // sinal de "a config já chegou da API", e recomputar o demo de graça uma
+  // vez a mais não custa nada.
+  const demoMap = useMemo(
+    () =>
+      IS_DEMO
+        ? buildSquareDemo()
+        : IS_WINDTEST
+          ? buildWindTestMap({ extreme: WINDTEST_EXTREME, stage: WINDTEST_STAGE })
+          : IS_SCENETEST
+            ? buildSceneTestMap()
+            : null,
+    [gameplay.hexScale],
+  );
 
   // Com sessão no rAthena, quem escolhe o mapa é o SERVIDOR: ele diz em que
   // mapa legado o personagem está e a gente carrega a cena 3D que representa
@@ -1176,7 +1277,7 @@ export function PlayView() {
   // Com sessão, só existe o mapa que o servidor indicou. Sem correspondência,
   // string vazia = não busca nada (o aviso abaixo explica) — carregar o mapa do
   // `?map=` seria desenhar um mundo que não é onde o personagem está.
-  const mapId = IS_PREVIEW ? "" : online ? (netMapId ?? "") : DEFAULT_MAP;
+  const mapId = IS_PREVIEW || IS_WINDTEST || IS_SCENETEST ? "" : online ? (netMapId ?? "") : DEFAULT_MAP;
   // Com sessão, NUNCA cair no mapa de demonstração: se o servidor colocou o
   // personagem num mapa que ainda não tem cena 3D, o certo é dizer isso — abrir
   // o hexdemo faria o jogador andar num mundo que não é o dele (foi o que
@@ -1184,7 +1285,13 @@ export function PlayView() {
   const useDemo = IS_DEMO && !online;
 
   const fetched = useMap(mapId);
-  const rawMap = IS_PREVIEW ? previewMap : useDemo ? (fetched.map?.terrainMode === "blocks" ? fetched.map : demoMap) : fetched.map;
+  const rawMap = IS_PREVIEW
+    ? previewMap
+    : IS_WINDTEST || IS_SCENETEST
+      ? demoMap
+      : useDemo
+        ? (fetched.map?.terrainMode === "square" ? fetched.map : demoMap)
+        : fetched.map;
   // posições (props/spawns/rotas) vêm na escala em que o mapa foi autorado —
   // traz pro tamanho de bloco atual, senão só o terreno cresce
   // ...e depois assenta os props no relevo real da peça embaixo deles (a faixa
@@ -1242,7 +1349,7 @@ export function PlayView() {
     ? previewMap || previewWaiting
       ? null
       : "preview vazio — volte ao editor e clique Play"
-    : useDemo
+    : useDemo || IS_WINDTEST || IS_SCENETEST
       ? null
       : semMapa3D
         ? `o servidor colocou o personagem em "${session?.mapName}", que ainda não tem mapa 3D — só os mapas migrados do map_cache existem por enquanto`
@@ -1488,10 +1595,28 @@ export function PlayView() {
         `display: contents` não cria caixa nenhuma, então os filhos continuam
         posicionados contra o mesmo bloco de contenção que antes — o layout é
         idêntico, some só a pintura.
+
+        FASE E1: durante o AQUECIMENTO (`aquecendo`, cortina ainda no ar mas a
+        cena já desenha) isto NÃO pode ser `display:none` — é exatamente a
+        fase em que o `TargetFrame` precisa estar de pé para o contexto WebGL
+        do retrato do alvo nascer e compilar cedo (ver `hud/PlayerFrame`).
+        `display:none` tira o elemento da árvore de renderização;
+        `visibility:hidden` mantém a caixa (e o desenho por baixo) viva, só
+        não pinta — mesma troca feita dentro do `TargetFrame`. Continua
+        `display:none` de verdade em `construindo` (fase 1: sem dado
+        nenhum ainda, não há o que aquecer) e sem `map`.
       */}
       {mapaDoHud && (
-        <div style={{ display: carregando || !map ? "none" : "contents" }}>
-          <Hud map={mapaDoHud} playerPos={playerPos} />
+        <div
+          style={
+            construindo || !map
+              ? { display: "none" }
+              : aquecendo
+                ? { display: "block", visibility: "hidden" }
+                : { display: "contents" }
+          }
+        >
+          <Hud map={mapaDoHud} playerPos={playerPos} aquecendo={aquecendo} />
         </div>
       )}
     </div>

@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { GameMap } from "@ragnarok/map-format";
-import { buildChunkGeometry, buildWaterGeometry, chunkCounts, chunksSujos, CHUNK_CELLS } from "../grid/squareChunks";
+import { buildChunkGeometry, buildWaterGeometry, chunkCounts, chunksSujos } from "../grid/squareChunks";
 import { findPath } from "../net/pathfind";
 import { destinoAlcancavel } from "../net/moveTarget";
 import { GameplayConfigSchema } from "@ragnarok/game-data";
 import { raiosDeVisao } from "../play/viewRadius";
-import { SQUARE_SIZE } from "../grid/squareGrid";
 import { afterAll } from "vitest";
 import { calibrar, custoRelativo, imprimirRelatorio, relatorio } from "./orcamento";
 
@@ -226,42 +225,59 @@ describe("orçamento de desempenho", () => {
 });
 
 /**
- * A regra que a névoa e o raio de render têm de obedecer.
+ * A regra que a névoa e os raios de render têm de obedecer — REESCRITA na
+ * Fase G da auditoria de render (`docs/claude-context/02-terrain-rendering.md`).
  *
- * Ela existia só como comentário no schema ("fogFar tem que ficar DENTRO do
- * renderDistance") e foi violada por 116 unidades sem ninguém notar: medido no
- * jogo, 81% dos triângulos de chão desenhados estavam atrás de névoa OPACA — 49
- * das 59 malhas, 84.552 triângulos invisíveis contra 19.912 visíveis. Escrita
- * como teste, não volta.
+ * A regra ORIGINAL ("a névoa fecha antes do chão detalhado acabar") existia só
+ * como comentário no schema e foi violada por 116 unidades sem ninguém notar:
+ * medido no jogo, 81% dos triângulos de chão desenhados estavam atrás de névoa
+ * OPACA — 49 das 59 malhas, 84.552 triângulos invisíveis contra 19.912
+ * visíveis. Isso continua vendo (`v.detalhe` é sempre `renderDistance` cru,
+ * sem clamp de névoa — ela não limita mais o detalhe, limita o HORIZONTE).
+ *
+ * A regra NOVA, que substitui a antiga sem reabrir o mesmo bug: o mundo
+ * simplificado (`grid/HorizonMesh`) precisa de espaço para existir ANTES da
+ * névoa ficar opaca, e nenhuma leitura de entidade pode usar o raio da névoa
+ * como raio de desenho — foi exatamente essa confusão que fazia `NetEntity`/
+ * `AlvoPorTab`/`AssistenciaDeMira` ler `fogFar` como se fosse alcance de
+ * combate.
  */
-describe("nada é desenhado atrás da névoa", () => {
-  /** o culling é por CHUNK, então sobra sempre meia diagonal de folga */
-  const folgaDeChunk = CHUNK_CELLS * SQUARE_SIZE * 0.71;
-
+describe("o horizonte cobre onde a névoa fecha, e entidade nunca usa o raio da névoa", () => {
   const conferir = (bruto: Record<string, unknown>) => {
     const cfg = GameplayConfigSchema.parse(bruto);
     const v = raiosDeVisao(cfg);
-    // a névoa fecha ANTES de a malha acabar: é o que esconde a borda
-    expect(v.fogFar).toBeLessThan(v.terreno);
-    // e a malha não vai muito além do que a névoa já escondeu
-    expect(v.terreno).toBeLessThanOrEqual(v.fogFar + folgaDeChunk);
-    // props e chão têm o mesmo alcance — prop flutuando sobre o vazio é pior
-    // que prop nenhum
-    expect(v.props).toBeLessThanOrEqual(v.terreno);
+    // o detalhe é o raio que o admin pediu, cru — a névoa não o limita mais
+    expect(v.detalhe).toBe(cfg.renderDistance);
+    // entidade usa o MESMO raio do detalhe, nunca o do horizonte — é a
+    // regressão de custo que esta Fase existe para prevenir (monstro
+    // renderizando/alvejável a centenas de unidades de distância)
+    expect(v.entidades).toBe(v.detalhe);
+    // o horizonte fica ALÉM do detalhe: é o espaço onde o mundo simplificado
+    // existe antes da névoa fechar
+    expect(v.horizonte).toBeGreaterThan(v.detalhe);
+    // a névoa fecha ANTES do fim do horizonte — sem isto a malha decimada
+    // apareceria com um degrau na borda, a mesma "parede" que a auditoria
+    // original documentou para o chão detalhado
+    expect(v.fogFar).toBeLessThan(v.horizonte);
+    expect(v.fogNear).toBeLessThan(v.fogFar);
     return v;
   };
 
   it("vale para a config padrão", () => {
     const v = conferir({});
-    expect(v.fogFar).toBeCloseTo(120, 0);
+    expect(v.detalhe).toBeCloseTo(130, 0);
+    // referência usada no resto da auditoria (ver play/viewRadius)
+    expect(v.horizonte).toBeCloseTo(600, 0);
   });
 
   it("vale para a config ANTIGA convertida (a que está salva no servidor)", () => {
+    // `converterNevoaAntiga` (server-config.ts) RECALCULA `renderDistance` a
+    // partir do `fogFar` legado (`round(120 * 1.08)` = 130) e descarta o 200
+    // bruto — comportamento do schema, não desta função. `conferir()` já
+    // confere `detalhe === cfg.renderDistance` (o valor PÓS-conversão, não o
+    // literal de entrada), que é a garantia que interessa aqui.
     const v = conferir({ renderDistance: 200, fogNear: 90, fogFar: 120 });
-    // a vista não muda...
-    expect(v.fogFar).toBeCloseTo(120, 0);
-    // ...mas o terreno desenhado encolhe de 236 para ~130
-    expect(v.terreno).toBeLessThan(140);
+    expect(v.detalhe).toBeCloseTo(130, 0);
   });
 
   it("vale em qualquer raio que o admin permita", () => {

@@ -5,6 +5,8 @@ import type { CellLattice, TerrainQuery } from "@ragnarok/engine-core";
 import { usePlayStore } from "./playStore";
 import { useCombatStore } from "../combat/combatStore";
 import { useCursorStore } from "../ui/cursorStore";
+import { registrarEvento } from "../core/diagnostics/flightRecorder";
+import { isolado } from "../core/diagnostics/isolamento";
 import {
   MARKER_SEGS,
   TERRAIN_GROUP,
@@ -373,6 +375,13 @@ export function GroundInteract({
 
     const c = cursor.current;
     if (!c) return;
+    // isolamento (Fase C, `?iso=semCursor`): só o MARCADOR visual some — o
+    // raycast de hover continua (alimenta clique-pra-andar e a mira), então
+    // isto não muda gameplay, só o desenho
+    if (isolado("semCursor")) {
+      c.visible = false;
+      return;
+    }
     const h = hover.current;
     if (!h) {
       c.visible = false;
@@ -387,8 +396,15 @@ export function GroundInteract({
     // remolda só ao MUDAR de célula (ver `marcadorEm`)
     const chave = `${center.x},${center.z},${markerRadius}`;
     if (marcadorEm.current !== chave) {
+      const primeira = marcadorEm.current === null;
       marcadorEm.current = chave;
       moldarMarcador(c.geometry as THREE.BufferGeometry, center.x, center.z, markerRadius, terrain);
+      // só quando a geometria É REMOLDADA de verdade (troca de célula), nunca
+      // por quadro — é o que a Fase B pediu para provar/descartar o cursor
+      registrarEvento("cena", primeira ? "cursor:create" : "cursor:geometry-update", {
+        chave,
+        raio: markerRadius,
+      });
     }
 
     /**

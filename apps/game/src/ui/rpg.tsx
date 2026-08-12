@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BOOK, TB, UI_SCALE, bookFrame, bookPiece, bookTile, pixelated } from "./travelbook";
 
 /**
@@ -115,25 +115,64 @@ export function RpgButton({
  * Placeholder de ícone: quadrado colorido (o usuário troca por ícones reais).
  * `seed` diferente = cor diferente; `standard` = madeira do pack.
  */
+/**
+ * Anel girando — carregamento genérico.
+ *
+ * Gira mexendo `transform` por ref a cada quadro (`requestAnimationFrame`),
+ * não `@keyframes` CSS: o projeto inteiro é estilo inline, sem folha de
+ * estilo própria pra declarar a animação (mesma receita do cronômetro de
+ * recarga em `hud/SkillBar.tsx: Cooldown`).
+ */
+export function LoadingRing({ size = 34 }: { size?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const passo = (t: number) => {
+      if (ref.current) ref.current.style.transform = `rotate(${(t / 3.5) % 360}deg)`;
+      raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const anel = Math.max(10, Math.round(size * 0.6));
+  const espessura = Math.max(2, Math.round(anel * 0.16));
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: anel,
+        height: anel,
+        borderRadius: "50%",
+        border: `${espessura}px solid rgba(255,255,255,0.22)`,
+        borderTopColor: "rgba(255,255,255,0.9)",
+        flex: "none",
+      }}
+    />
+  );
+}
+
 export function IconSquare({
   seed,
   standard,
   size = 34,
   label,
+  loading,
 }: {
   seed?: string;
   standard?: boolean;
   size?: number;
   label?: string;
+  /** nome ainda não chegou do catálogo — mostra o anel em vez do rótulo/cor final */
+  loading?: boolean;
 }) {
   const color = standard ? BOOK.woodLight : colorFromSeed(seed ?? "x");
   return (
     <div
-      title={label}
+      title={loading ? undefined : label}
       style={{
         width: size,
         height: size,
-        background: color,
+        background: loading ? BOOK.wood : color,
         boxShadow: `inset 0 0 0 ${UI_SCALE}px ${BOOK.wood}`,
         display: "flex",
         alignItems: "center",
@@ -143,7 +182,7 @@ export function IconSquare({
         textShadow: `1px 1px 0 ${BOOK.wood}`,
       }}
     >
-      {label ? label.slice(0, 3) : ""}
+      {loading ? <LoadingRing size={size} /> : label ? label.slice(0, 3) : ""}
     </div>
   );
 }

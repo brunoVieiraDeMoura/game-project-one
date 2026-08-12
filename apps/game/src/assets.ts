@@ -1,10 +1,11 @@
 import { useGLTF } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { descartarPersonagem, fundirSkinned } from "./entities/personagemGltf";
 import { somarCustoDeAnimacao, somarCustoDeModelo } from "./core/diagnostics/rendererProbe";
+import { registrarEvento } from "./core/diagnostics/flightRecorder";
 import { compartilharTexturas } from "./gltfTexturas";
 
 /**
@@ -223,9 +224,70 @@ export function useCharacter(
     // SkeletonUtils.clone preserva o vínculo bone↔skinnedmesh (Object3D.clone não —
     // o mesh clonado ficaria apontando pros bones do original → T-pose)
     const clone = cloneSkinned(gltf.scene) as THREE.Group;
-    if (import.meta.env.DEV) somarCustoDeModelo(performance.now() - t0);
+    if (import.meta.env.DEV) {
+      const ms = performance.now() - t0;
+      somarCustoDeModelo(ms);
+      // só acima do limiar (mesma régua do `medir()`, 15 ms): laço quente não
+      // pode encher o anel de 512 eventos — a coluna `modeloMs` já soma TODO
+      // clone, evento é só para o caro o bastante para valer investigar
+      if (ms >= 15) registrarEvento("cena", "gltf:clone", { url, ms });
+    }
     return clone;
   }, [gltf.scene]);
+
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const cenaRaiz = useThree((s) => s.scene);
+  /**
+   * FASE E2 — compila o material da entidade ATRÁS do primeiro `draw`, não
+   * durante ele.
+   *
+   * Causa comprovada (Classe 2, `voo-1786187479459.json`): dois quadros de
+   * 287,9 e 308,8 ms com `render cpu` 274,4/302,9 ms — CPU dentro de
+   * `gl.render`, não GPU — e `renderer/shader-compilado delta=1` no MESMO
+   * instante. `play/PreCompilarProps` já paga isso para os PROPS do mapa
+   * (uma instância de cada espécie, fora do frustum, na PRÉ-CARGA); ele não
+   * cobre entidade nenhuma, porque entidade não existe na hora da
+   * pré-carga — mob e jogador entram DEPOIS, em pleno combate, e é o
+   * primeiro `draw` de cada um que paga o link do programa.
+   *
+   * Fica em `useCharacter`, não em `NetEntity`/`CharacterPortrait`
+   * separadamente: os dois passam por aqui, então um ponto só cobre
+   * personagem em mundo E retrato do HUD, cada um compilando no PRÓPRIO
+   * contexto (`useThree` lê o `gl`/`scene`/`camera` do `<Canvas>` mais
+   * próximo — o do jogo para `NetEntity`, o do retrato para
+   * `CharacterPortrait`).
+   *
+   * `requestAnimationFrame`: no efeito o `<primitive object={scene}>` ainda
+   * não commitou no grafo de cena three (mesmo motivo do
+   * `PreCompilarProps`) — um quadro depois, está. `compileAsync` roda em
+   * paralelo (`KHR_parallel_shader_compile` quando existe) e NUNCA bloqueia
+   * o quadro que o disparou — é o oposto do stall medido. Sem `ref` de
+   * "já compilado": a troca de `scene` (personagem virou outra espécie) tem
+   * de compilar de NOVO, porque o material é outro; para a MESMA `scene` o
+   * efeito só roda uma vez (dependência é a própria referência do clone).
+   */
+  useEffect(() => {
+    let vivo = true;
+    const t0 = performance.now();
+    const id = requestAnimationFrame(() => {
+      if (!vivo) return;
+      const pronto = gl.compileAsync
+        ? gl.compileAsync(scene, camera, cenaRaiz)
+        : (gl.compile(scene, camera), Promise.resolve());
+      void Promise.resolve(pronto).then(() => {
+        if (!vivo || !import.meta.env.DEV) return;
+        registrarEvento("cena", "shader:compile-entidade", {
+          ms: Math.round(performance.now() - t0),
+          programas: gl.info.programs?.length ?? 0,
+        });
+      });
+    });
+    return () => {
+      vivo = false;
+      cancelAnimationFrame(id);
+    };
+  }, [gl, camera, cenaRaiz, scene]);
 
   // mixer gerenciado na mão (não via drei useAnimations) — atualizado no useFrame
   // abaixo. actions criadas sobre os clips compartilhados; casam por nome de bone.

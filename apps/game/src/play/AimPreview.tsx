@@ -6,6 +6,9 @@ import { useAimStore } from "../net/aimStore";
 import { distanciaDeAtaque } from "../net/attackStore";
 import { alcanceEfetivoDaSkill, useSkillCatalog } from "../net/skillCatalog";
 import { moldarMalhaTerreno } from "./pickGround";
+import { registrarEvento } from "../core/diagnostics/flightRecorder";
+import { isolado } from "../core/diagnostics/isolamento";
+import { useCombatVisuals } from "../hud/combatVisualsStore";
 
 /**
  * O que a skill mirada vai pegar, e de onde dá para lançá-la.
@@ -30,6 +33,11 @@ import { moldarMalhaTerreno } from "./pickGround";
  *
  * Skill sem área (`areaRadius` 0) mostra só o alcance: inventar um disco de uma
  * célula sugeriria uma área que ela não tem.
+ *
+ * Tudo aqui é a "área de skill" da preferência de visual
+ * (`hud/combatVisualsStore.showSkillArea`, ligada por padrão) — anel E
+ * mancha, os dois. Desligar não muda `raio`/`raioArea`/a checagem de
+ * distância abaixo, só se as duas malhas nascem.
  */
 
 /** cor do que está DENTRO do alcance; fora dele, o vermelho abaixo */
@@ -115,6 +123,19 @@ function useMaterialDeMira(anel: boolean) {
   return material;
 }
 
+/**
+ * Pura, sem React — documenta e testa (`AimPreview.test.ts`) a MESMA regra
+ * que os dois `return`/early-return do componente aplicam logo abaixo. Não
+ * é chamada por eles diretamente: `mirando` ali precisa ficar como
+ * `AimSkill | null` de verdade pro TypeScript estreitar o tipo no resto do
+ * corpo (`mirando.mode`, `mirando.id`) — um booleano aqui apagaria essa
+ * informação. `jobId`/classe não entram aqui de propósito: mira de skill é
+ * igual pra qualquer classe.
+ */
+export function areaDeSkillVisivel(mirando: boolean, showSkillArea: boolean): boolean {
+  return mirando && showSkillArea;
+}
+
 export function AimPreview({
   playerPos,
   hoverPos,
@@ -130,6 +151,7 @@ export function AimPreview({
 }) {
   const mirando = useAimStore((s) => s.skill);
   const info = useSkillCatalog((s) => (mirando ? s.byId[mirando.id] : undefined));
+  const showSkillArea = useCombatVisuals((s) => s.showSkillArea);
 
   const matArea = useMaterialDeMira(false);
   const matAlcance = useMaterialDeMira(true);
@@ -167,7 +189,9 @@ export function AimPreview({
      * quando a mira abrir, ele recomeça de onde parou e ninguém vê diferença
      * numa animação cíclica.
      */
-    if (!mirando) return;
+    // regra igual a `areaDeSkillVisivel` (ver o comentário dela) — `!mirando`
+    // fica explícito aqui pro TS estreitar o tipo no resto do corpo.
+    if (!mirando || !showSkillArea || isolado("semAoe")) return;
     matArea.uniforms.uTempo!.value += dt;
     matAlcance.uniforms.uTempo!.value += dt;
     const p = playerPos.current;
@@ -180,6 +204,7 @@ export function AimPreview({
       // na ORIGEM e os vértices já são escritos em coordenada de mundo.
       const chave = `${Math.round(p.x / cellSize)},${Math.round(p.z / cellSize)}`;
       if (alcanceEm.current !== chave && raio > 0) {
+        const primeira = alcanceEm.current === null;
         alcanceEm.current = chave;
         moldarMalhaTerreno(
           anelMesh.geometry as THREE.BufferGeometry,
@@ -190,6 +215,7 @@ export function AimPreview({
           ALTURA,
           terrain,
         );
+        registrarEvento("cena", primeira ? "aoe:create" : "aoe:geometry-update", { anel: "alcance", chave, raio });
       }
     }
 
@@ -213,6 +239,7 @@ export function AimPreview({
     areaMesh.visible = true;
     const chaveArea = `${Math.round(h.x / cellSize)},${Math.round(h.z / cellSize)}`;
     if (areaEm.current !== chaveArea && raioArea > 0) {
+      const primeira = areaEm.current === null;
       areaEm.current = chaveArea;
       moldarMalhaTerreno(
         areaMesh.geometry as THREE.BufferGeometry,
@@ -223,6 +250,7 @@ export function AimPreview({
         ALTURA,
         terrain,
       );
+      registrarEvento("cena", primeira ? "aoe:create" : "aoe:geometry-update", { anel: "area", chave: chaveArea, raio: raioArea });
     }
 
     /**
@@ -248,7 +276,7 @@ export function AimPreview({
    * de andar até lá e o servidor recusar em silêncio. Só a MANCHA de área
    * continua exclusiva do chão (ver o `return` de cima).
    */
-  if (!mirando) return null;
+  if (!mirando || !showSkillArea || isolado("semAoe")) return null;
 
   return (
     <group>
