@@ -2,13 +2,16 @@ import { useGLTF } from "@react-three/drei";
 import forestCatalog from "./forest-catalog.json";
 import hexDecorCatalog from "./hex-decor-catalog.json";
 import hexTilesCatalog from "./hex-tiles-catalog.json";
+import natureCatalog from "./nature-catalog.json";
 
 /**
  * Registro de props do mundo (skill-r3f-conventions): assetId (usado no
  * GameMap.props e no editor 3D) → url do glTF. As listas vêm de
- * forest-catalog.json (Forest_Nature_map, servidos de /assets/props) e
- * hex-decor-catalog.json (decorações KayKit Hexagon: árvores/pedras/hills/
- * montanhas, servidos de /assets/hex). Resolução de prop fica só aqui — nunca
+ * nature-catalog.json (Quaternius, `assets-new/editor-map` → `/assets/
+ * nature` — vegetação/pedra ATIVA do editor), hex-decor-catalog.json/
+ * hex-tiles-catalog.json (KayKit Hexagon: construções — `/assets/hex`, ainda
+ * ativa) e forest-catalog.json (Forest_Nature_map — `/assets/props`,
+ * DESATIVADA: ver `hidden` abaixo). Resolução de prop fica só aqui — nunca
  * hardcode um assetId como string mágica fora deste arquivo.
  */
 
@@ -17,6 +20,8 @@ export interface PropCatalogEntry {
   file: string;
   cat: string;
   label: string;
+  /** montada aqui a partir de `file` (props/hex/nature) — não vem do JSON cru */
+  url: string;
   /** escala inicial ao colocar no editor (alguns assets são pequenos → 5) */
   defaultScale?: number;
   /** raio (unidades locais) do círculo que envolve o `hull` — broad-phase */
@@ -33,33 +38,50 @@ export interface PropCatalogEntry {
   /** só PONTE: piso em que se anda, medido do glTF. `y` acima da origem do
    * prop, `hx`/`hz` = meio-vão — tudo em unidades locais. */
   deck?: { y: number; hx: number; hz: number };
+  /**
+   * FORA da paleta/geração procedural, mas ainda RESOLVE (`PROP_URLS`) — é o
+   * que separa "descontinuado" de "apagado". Migração `nature-catalog`
+   * (2026-08): `forest-catalog` (grama/arbusto/árvore/árvore seca/rocha) saiu
+   * de circulação, mas mapa já salvo com esses assetIds (ex.: `gpqa01`) não
+   * pode virar prop invisível — `PropInstance` resolveria `undefined` e
+   * simplesmente sumiria a planta, calado. `hidden` existe pra isso: item
+   * some do picker e do scatter novo, sem quebrar posição já gravada.
+   */
+  hidden?: boolean;
 }
 
-// forest: file sem subdir → /assets/props ; hex: file já traz "hex/" → /assets
-const FOREST = (forestCatalog as PropCatalogEntry[]).map((e) => ({ ...e, url: `/assets/props/${e.file}` }));
-const HEX = [...(hexDecorCatalog as PropCatalogEntry[]), ...(hexTilesCatalog as PropCatalogEntry[])].map((e) => ({ ...e, url: `/assets/${e.file}` }));
+// forest: file sem subdir → /assets/props ; hex: file já traz "hex/" → /assets ; nature: /assets/nature
+type RawEntry = Omit<PropCatalogEntry, "url">;
+const FOREST = (forestCatalog as RawEntry[]).map((e) => ({ ...e, url: `/assets/props/${e.file}`, hidden: true }));
+const HEX = [...(hexDecorCatalog as RawEntry[]), ...(hexTilesCatalog as RawEntry[])].map((e) => ({ ...e, url: `/assets/${e.file}` }));
+const NATURE = (natureCatalog as RawEntry[]).map((e) => ({ ...e, url: `/assets/nature/${e.file}` }));
 
-export const PROP_CATALOG: PropCatalogEntry[] = [...HEX, ...FOREST];
+export const PROP_CATALOG: PropCatalogEntry[] = [...HEX, ...NATURE, ...FOREST];
 
-export const PROP_URLS: Record<string, string> = Object.fromEntries(
-  [...HEX, ...FOREST].map((e) => [e.id, e.url]),
-);
+// TODOS entram aqui, hidden incluso — resolução de assetId→url nunca pode
+// falhar por causa de descontinuação (ver `hidden` na interface)
+export const PROP_URLS: Record<string, string> = Object.fromEntries(PROP_CATALOG.map((e) => [e.id, e.url]));
 
-/** assetIds conhecidos, pra dropdown/paleta do editor */
-export const PROP_IDS = Object.keys(PROP_URLS);
+/** assetIds VISÍVEIS, pra dropdown/paleta do editor — hidden fica de fora */
+export const PROP_IDS = PROP_CATALOG.filter((e) => !e.hidden).map((e) => e.id);
 
-/** categorias (ordem de exibição na paleta) → entradas */
+/** categorias (ordem de exibição na paleta) → entradas VISÍVEIS (hidden não
+ * aparece no picker nem entra em `SCATTER_CATEGORIES`/geração procedural —
+ * só em `PROP_URLS`, pra mapa antigo continuar resolvendo) */
 export const PROP_BY_CATEGORY: { cat: string; label: string; items: PropCatalogEntry[] }[] = (() => {
-  const order = ["tree", "rock", "hill", "mountain", "building", "tree_bare", "bush", "grass", "road", "river", "coast", "ramp", "bridge", "other"];
+  const order = ["tree", "tree_bare", "bush", "grass", "flower", "plant", "rock", "stone", "hill", "mountain", "building", "road", "river", "coast", "ramp", "bridge", "other"];
   const labels: Record<string, string> = {
     tree: "Árvores",
-    rock: "Rochas",
-    hill: "Colinas",
-    mountain: "Montanhas",
-    building: "Casas & Construções",
     tree_bare: "Árvores secas",
     bush: "Arbustos",
     grass: "Grama",
+    flower: "Flores",
+    plant: "Plantas",
+    rock: "Rochas",
+    stone: "Pedras",
+    hill: "Colinas",
+    mountain: "Montanhas",
+    building: "Casas & Construções",
     road: "Estradas",
     river: "Rios",
     coast: "Costa",
@@ -69,6 +91,7 @@ export const PROP_BY_CATEGORY: { cat: string; label: string; items: PropCatalogE
   };
   const groups = new Map<string, PropCatalogEntry[]>();
   for (const e of PROP_CATALOG) {
+    if (e.hidden) continue;
     if (!groups.has(e.cat)) groups.set(e.cat, []);
     groups.get(e.cat)!.push(e);
   }
@@ -107,8 +130,10 @@ export const OCCUPYING_CATEGORIES = new Set(["building", "road", "river", "coast
 export const SOLID_CATEGORIES = new Set(["building", "road", "river", "coast", "tree", "rock", "hill", "mountain", "tree_bare"]);
 
 /** categorias espalháveis pelo gerador procedural (as demais — estradas/rios —
- * são manuais/geração conectada, fora do scatter aleatório). */
-export const SCATTER_CATEGORIES = ["tree", "rock", "hill", "mountain", "building", "tree_bare", "bush", "grass"];
+ * são manuais/geração conectada, fora do scatter aleatório). `flower`/`plant`/
+ * `stone` entraram com o pacote `nature-catalog` (2026-08) — mesmo tratamento
+ * raso de `grass`/`bush`: sem colisão, sem bloquear outro scatter em cima. */
+export const SCATTER_CATEGORIES = ["tree", "rock", "hill", "mountain", "building", "tree_bare", "bush", "grass", "flower", "plant", "stone"];
 
 /** collider físico por categoria (Rapier, ver PropInstance): sólidos ganham
  * "hull" (convex hull, encaixa a área ocupada na escala do objeto); decoração
@@ -122,6 +147,9 @@ const COLLIDER_BY_CATEGORY: Record<string, "hull" | "none"> = {
   tree_bare: "hull",
   bush: "none",
   grass: "none",
+  flower: "none",
+  plant: "none",
+  stone: "none",
   road: "none",
   river: "none",
   coast: "none",
@@ -249,6 +277,24 @@ export function preloadProp(assetId: string) {
 }
 
 /**
+ * As urls distintas que ESTE mapa usa — não as ~105 do catálogo inteiro, só
+ * as espécies que foram autoradas nele. Fonte única pra duas coisas que
+ * precisam do MESMO conjunto: `preloadPropsDoMapa` (dispara o download) e
+ * `play/PlayView`'s `EsperaAssetsDoMapa` (sabe quando ele TERMINOU — ver o
+ * comentário lá sobre por que a cortina de carregamento precisa disso).
+ */
+export function urlsDoMapa(props: readonly { assetId: string }[]): string[] {
+  const urls = new Set<string>();
+  for (const p of props) {
+    const url = PROP_URLS[p.assetId];
+    // assetId desconhecido não é erro aqui: o mapa pode citar um prop que saiu
+    // do catálogo, e quem avisa disso é o `PropInstance` ao não desenhar nada
+    if (url) urls.add(url);
+  }
+  return [...urls];
+}
+
+/**
  * Pré-carrega os assets que ESTE mapa usa. Devolve quantas urls distintas.
  *
  * Substitui um `preloadProps()` que era **no-op** — o `PlayView` o chamava no
@@ -265,15 +311,15 @@ export function preloadProp(assetId: string) {
  *
  * Idempotente: `useGLTF.preload` sobre url já carregada não faz nada, então
  * chamar de novo (StrictMode, troca de mapa) é de graça.
+ *
+ * **Fire-and-forget de propósito, e por isso não basta sozinho**: a API do
+ * drei (`suspend-react`) descarta a promise (`void query(...)`) — não dá pra
+ * `await` isto. Quem precisa SABER quando terminou (a cortina de
+ * carregamento) usa `urlsDoMapa` + `useGLTF` dentro de um `<Suspense>`
+ * próprio, não este preload.
  */
 export function preloadPropsDoMapa(props: readonly { assetId: string }[]): number {
-  const urls = new Set<string>();
-  for (const p of props) {
-    const url = PROP_URLS[p.assetId];
-    // assetId desconhecido não é erro aqui: o mapa pode citar um prop que saiu
-    // do catálogo, e quem avisa disso é o `PropInstance` ao não desenhar nada
-    if (url) urls.add(url);
-  }
+  const urls = urlsDoMapa(props);
   for (const url of urls) useGLTF.preload(url);
-  return urls.size;
+  return urls.length;
 }

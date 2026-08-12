@@ -245,6 +245,11 @@ export function SkillBar() {
                     : undefined
               }
               seed={skill ? `sk-${skill.id}` : item ? `item-${item.itemId}` : undefined}
+              iconSrc={
+                skill && !basico && catalog[skill.id]?.icon
+                  ? `/assets/skills/${catalog[skill.id]!.icon}`
+                  : undefined
+              }
               detalhe={
                 skill
                   ? basico
@@ -326,6 +331,7 @@ function SkillSlot({
   preenchido,
   nome,
   seed,
+  iconSrc,
   detalhe,
   quantidade,
   cooldownSkillId,
@@ -338,6 +344,8 @@ function SkillSlot({
   preenchido: boolean;
   nome?: string;
   seed?: string;
+  /** ícone de verdade (`skillCatalog[id].icon`) — ausente cai no placeholder por seed */
+  iconSrc?: string;
   detalhe?: string;
   /** só item: badge de quantidade quando amount > 1 */
   quantidade?: number;
@@ -448,7 +456,9 @@ function SkillSlot({
       <div
         style={{
           position: "absolute",
-          inset: 0,
+          inset: borda / 3,
+          overflow: "hidden",
+          borderRadius: borda * 0.66,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -457,7 +467,7 @@ function SkillSlot({
       >
         {preenchido &&
           (nome ? (
-            <IconSquare seed={seed ?? nome} label={nome} size={px(48)} />
+            <IconSquare seed={seed ?? nome} label={nome} size={px(48)} fill radius={borda * 0.66} imageSrc={iconSrc} />
           ) : (
             // slot ocupado, nome ainda não chegou do catálogo — anel de
             // carregamento, NUNCA a constante Aegis nem "Unknown" piscando

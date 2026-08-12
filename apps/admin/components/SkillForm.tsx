@@ -200,6 +200,26 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
           <Field label="Nome">
             <Input value={sk.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
+          <Field label="Ícone (arquivo em public/assets/skills/)">
+            <div className="flex items-center gap-2">
+              {sk.icon && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/assets/skills/${sk.icon}`}
+                  alt=""
+                  className="h-8 w-8 rounded border border-zinc-700 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.visibility = "hidden";
+                  }}
+                />
+              )}
+              <Input
+                value={sk.icon ?? ""}
+                placeholder="chuva-de-flechas.png"
+                onChange={(e) => set("icon", e.target.value === "" ? undefined : e.target.value)}
+              />
+            </div>
+          </Field>
           <NumberField
             label="Nível máximo"
             value={sk.maxLevel}

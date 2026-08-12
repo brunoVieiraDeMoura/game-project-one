@@ -415,8 +415,10 @@ function Detalhe({ linha }: { linha: Linha }) {
         <IconSquare
           seed={`sk-${linha.id}`}
           size={pxLivro(SK_LAYOUT_ART.icon.w)}
+          radius={px(8)}
           label={linha.nome}
           loading={linha.nome === undefined}
+          imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
         />
       </div>
 
@@ -575,7 +577,15 @@ function Icone({
       }}
     >
       <div style={{ position: "absolute", inset: "12%", overflow: "hidden" }}>
-        <IconSquare seed={`sk-${linha.id}`} size={999} label={linha.nome} loading={linha.nome === undefined} />
+        <IconSquare
+          seed={`sk-${linha.id}`}
+          size={64}
+          fill
+          radius={px(8)}
+          label={linha.nome}
+          loading={linha.nome === undefined}
+          imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
+        />
       </div>
       {moldura && (
         <div

@@ -786,7 +786,36 @@ attribute float aMargem;
 varying float vProf;
 varying float vMargem;
 varying vec3 vAguaMundo;
-uniform float uTempo;`,
+uniform float uTempo;
+// AMPLITUDE/VELOCIDADE da onda de vértice — mesmos números usados pra
+// deslocar Y e pra inclinar a normal (ver os dois blocos abaixo). Histórico:
+// 0,12 sem normal (imperceptível) → 0,30 com normal (fraco em gameplay
+// normal) → 0,55 (relatado como EXAGERADO — "balançando"/deformando forte
+// demais) → 0,16 (este valor): a NORMAL (não o deslocamento em si) é quem
+// carrega a percepção de movimento — com ela ligada, uma amplitude pequena
+// já muda a luz a cada quadro; não precisa de onda grande pra não parecer
+// parada.
+#define AMP_ONDA 0.16
+#define FREQ_X 0.35
+#define FREQ_Z 0.28
+#define VEL_A 0.75
+#define VEL_B 0.55`,
+      )
+      .replace(
+        "#include <beginnormal_vertex>",
+        `#include <beginnormal_vertex>
+{
+  // NORMAL da onda — sem isto o deslocamento de Y abaixo é invisível de
+  // longe: a malha se move mas a luz reflete igual, porque a normal
+  // continua reta pra cima. A INCLINAÇÃO (derivada analítica da mesma
+  // função de onda) é o que faz o brilho variar quadro a quadro — é essa
+  // variação de luz, não o deslocamento em si, que o olho realmente pega.
+  vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz;
+  float fase = wp.z * FREQ_Z - uTempo * VEL_B + wp.x * 0.12;
+  float dydx = (cos(wp.x * FREQ_X + uTempo * VEL_A) * FREQ_X * 0.6 - sin(fase) * 0.12 * 0.4) * AMP_ONDA;
+  float dydz = (-sin(fase) * FREQ_Z * 0.4) * AMP_ONDA;
+  objectNormal = normalize(objectNormal + vec3(-dydx, 0.0, -dydz));
+}`,
       )
       .replace(
         "#include <begin_vertex>",
@@ -794,17 +823,15 @@ uniform float uTempo;`,
 vProf = aProfundidade;
 vMargem = aMargem;
 {
-  // ONDA DE VERTICE — antes disto a "animação" da água era só a cor
+  // ONDA DE VÉRTICE — antes disto a "animação" da água era só a cor
   // (mistura de fbm no fragment, ±10% de brilho): balançava a PINTURA, não
   // a MALHA, e de longe/em movimento normal isso lê como água parada. Este
-  // bloco desloca o vértice em Y de verdade — pequeno (±0,12 unidade,
-  // ~7% da altura do personagem) pra não virar piscina brava, mas
-  // GEOMÉTRICO, então bate luz/sombra diferente quadro a quadro e o olho
-  // pega o movimento sem precisar reparar na cor.
+  // bloco desloca o vértice em Y de verdade — GEOMÉTRICO, não cor —, e a
+  // normal (bloco acima) faz a luz responder junto.
   vec3 aguaMundoPre = (modelMatrix * vec4(transformed, 1.0)).xyz;
-  float onda1 = sin(aguaMundoPre.x * 0.35 + uTempo * 1.15);
-  float onda2 = cos(aguaMundoPre.z * 0.28 - uTempo * 0.85 + aguaMundoPre.x * 0.12);
-  transformed.y += (onda1 * 0.6 + onda2 * 0.4) * 0.12;
+  float onda1 = sin(aguaMundoPre.x * FREQ_X + uTempo * VEL_A);
+  float onda2 = cos(aguaMundoPre.z * FREQ_Z - uTempo * VEL_B + aguaMundoPre.x * 0.12);
+  transformed.y += (onda1 * 0.6 + onda2 * 0.4) * AMP_ONDA;
 }
 vAguaMundo = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
       );
@@ -837,7 +864,7 @@ ${GROUND_NOISE_GLSL}`,
   float onda = groundFbm(vAguaMundo.xz * 0.22 + vec2(uTempo * 0.035, uTempo * 0.02))
              * 0.65
              + groundFbm(vAguaMundo.xz * 0.7 - vec2(uTempo * 0.017, uTempo * 0.041)) * 0.35;
-  diffuseColor.rgb *= 0.90 + onda * 0.2;
+  diffuseColor.rgb *= 0.88 + onda * 0.22;
 
   // aquarela como PADRÃO: o PNG tem média cinza, então texel/0.5 é a razão de
   // cada pixel em relação à média. Duas amostras deslizando em sentidos

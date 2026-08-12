@@ -36,6 +36,23 @@ class LocalStorageShim {
 const localStorageShim = new LocalStorageShim();
 (globalThis as unknown as { localStorage: LocalStorageShim }).localStorage = localStorageShim;
 
+/**
+ * `assignItem`/`assignAmmo`/`clear` agora tocam `audio/itemSfx.tocarMoveuItem`
+ * (`oneShotPool.playOneShot` → `new Audio(...)`) — sem este shim, `Audio` não
+ * existe em Node puro e QUALQUER teste que chame um desses três quebraria.
+ * Não precisa rastrear instâncias aqui: quem testa o SOM é `itemSfx.test.ts`,
+ * este arquivo só não pode explodir ao chamá-lo de passagem.
+ */
+class FakeAudio {
+  volume = 1;
+  currentTime = 0;
+  play(): Promise<void> {
+    return Promise.resolve();
+  }
+  pause(): void {}
+}
+(globalThis as unknown as { Audio: typeof FakeAudio }).Audio = FakeAudio;
+
 const emitidos: { evento: string; payload: unknown }[] = [];
 vi.mock("../net/gateway", () => ({
   gateway: () => ({ emit: (evento: string, payload: unknown) => emitidos.push({ evento, payload }) }),

@@ -8,6 +8,11 @@ import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { useVfxStore, type VfxInstance } from "./vfxStore";
 import { moldarMalhaTerreno } from "../play/pickGround";
+import { ColdBoltImpact } from "./ColdBoltImpact";
+
+/** constante do rAthena p/ Cold Bolt (skill_db) — decide o visual especial de
+ * impacto (`ColdBoltImpact`) em vez do flash genérico */
+const AEGIS_COLD_BOLT = "MG_COLDBOLT";
 
 /** subdivisões dos discos moldados — mesma ordem de grandeza da mira e do marcador de destino */
 const VFX_MOLD_SEGS = 8;
@@ -78,8 +83,15 @@ function VfxNode({
   // quem conjura raramente se sabe (mob, ou outro jogador) — `ensure` sem
   // `niveis` cai no nível 1, a mesma lacuna honesta do resto do catálogo.
   const areaInfo = useSkillCatalog((s) => (effect.kind === "cast" ? s.byId[effect.skillId] : undefined));
+  // "impact" também precisa do catálogo — é o `aegisName` que decide entre o
+  // flash genérico e um visual próprio (`ColdBoltImpact`); sem `ensure` aqui,
+  // o primeiro impacto de uma skill nunca antes vista no catálogo cai sempre
+  // no flash genérico (mesmo lapso honesto do disco de conjuração acima).
+  const impactInfo = useSkillCatalog((s) => (effect.kind === "impact" ? s.byId[effect.skillId] : undefined));
   useEffect(() => {
-    if (effect.kind === "cast" && effect.skillId) useSkillCatalog.getState().ensure([effect.skillId]);
+    if ((effect.kind === "cast" || effect.kind === "impact") && effect.skillId) {
+      useSkillCatalog.getState().ensure([effect.skillId]);
+    }
   }, [effect.kind, effect.skillId]);
 
   // Posição JÁ no primeiro render: só posicionar no useFrame deixa o efeito
@@ -130,9 +142,11 @@ function VfxNode({
     return <AreaDisc cx={initial.x} cz={initial.z} raioMundo={raioMundo} terrain={terrain} />;
   }
 
+  const isColdBolt = effect.kind === "impact" && impactInfo?.aegisName === AEGIS_COLD_BOLT;
+
   return (
     <group ref={group} position={[initial.x, initial.y + 0.05, initial.z]} scale={cellSize}>
-      {effect.kind === "buff" ? <BuffRing /> : <ImpactFlash />}
+      {effect.kind === "buff" ? <BuffRing /> : isColdBolt ? <ColdBoltImpact /> : <ImpactFlash />}
     </group>
   );
 }

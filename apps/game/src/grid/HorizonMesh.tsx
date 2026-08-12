@@ -111,8 +111,21 @@ import { isolado } from "../core/diagnostics/isolamento";
  * franja/clamp que decide ONDE ler continua a mesma.
  */
 
-/** de quantas em quantas células o horizonte amostra o mapa */
-export const PASSO_HORIZONTE = 8;
+/**
+ * De quantas em quantas células o horizonte amostra o mapa.
+ *
+ * **4, não mais 8** (otimização de renderização, prioridade 8 — LOD de
+ * relevo/montanha): a malha decimada era o único "LOD" do relevo distante, e
+ * amostrar de 8 em 8 células (16 unidades) deixa qualquer morro com degraus
+ * grosseiros — bem mais grosseiro que a árvore, que troca pra um billboard
+ * fotográfico (`grid/TreeImpostors`) em vez de perder resolução geométrica.
+ * `JANELA_NIVEL_MINIMO` (abaixo) é DEFINIDO em cima deste valor — reduzi-lo
+ * também encolhe a janela do fix de poke-through (BUG 1), então o custo por
+ * vértice CAI (janela menor) enquanto a contagem de vértice SOBE (passo
+ * menor): medido, o build inteiro fica na mesma ordem de grandeza de antes
+ * (a malha ainda é 1 único mesh, 1 draw call, sem culling — só mais fina).
+ */
+export const PASSO_HORIZONTE = 4;
 
 /** quanto a malha fica abaixo do relevo real — só para o chão detalhado sempre vencer o teste de profundidade */
 const OFFSET_Y = -0.3;

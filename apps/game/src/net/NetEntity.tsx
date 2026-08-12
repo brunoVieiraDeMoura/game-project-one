@@ -80,9 +80,9 @@ export function NetEntityView({
   cellSize: number;
   /**
    * Raio de DETALHE (`play/viewRadius`), não o da névoa — Fase G da auditoria
-   * de render. A névoa hoje fecha lá no horizonte (~600 unidades), bem além
-   * de onde entidade deve desenhar/ser alvejável; usar `fogFar` aqui faria
-   * mob renderizar a centenas de unidades de distância.
+   * de render. A névoa hoje fecha lá no horizonte (~390 unidades no default),
+   * bem além de onde entidade deve desenhar/ser alvejável; usar `fogFar` aqui
+   * faria mob renderizar a centenas de unidades de distância.
    */
   raioEntidade: number;
   /** para o `GlowChao` inclinar pelo relevo sob o mob (item "moldar o alvo") */
@@ -109,7 +109,11 @@ export function NetEntityView({
   /** só p/ `kind === "player"`: `entity.job` ali é a CLASSE, não o mob_db (ver `gateway.EntitySnapshot`) */
   const classModel = entity?.kind === "player" ? classModelFor(entity.job) : null;
   const modelInfo =
-    entity?.kind === "npc" ? NPC_MODEL : entity?.kind === "player" ? { character: classModel!.character, scale: 1 } : mobModel(entity?.job ?? 0);
+    entity?.kind === "npc"
+      ? NPC_MODEL
+      : entity?.kind === "player"
+        ? { character: classModel!.character, scale: classModel!.scale }
+        : mobModel(entity?.job ?? 0);
   /**
    * "Esta entidade está à vista?" — escrito no `useFrame` abaixo, lido pelo
    * mixer de animação (ver `assets.useCharacter`). Começa `true` para o primeiro

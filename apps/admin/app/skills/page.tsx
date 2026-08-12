@@ -183,7 +183,22 @@ export default function SkillsPage() {
               skills.map((s) => (
                 <tr key={s.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
                   <td className="px-3 py-2 text-zinc-400">{s.id}</td>
-                  <td className="px-3 py-2">{s.name}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {s.icon && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/assets/skills/${s.icon}`}
+                          alt=""
+                          className="h-5 w-5 rounded object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.visibility = "hidden";
+                          }}
+                        />
+                      )}
+                      {s.name}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs text-zinc-400">{s.aegisName}</td>
                   <td className="px-3 py-2">
                     <Badge tone="indigo">{classeDaSkill(s.aegisName).label}</Badge>

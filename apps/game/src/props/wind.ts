@@ -50,8 +50,13 @@ export const WIND_PROFILES: Record<WindCategory, WindProfile> = {
 const WIND_CATEGORY_BY_PROP_CATEGORY: Record<string, WindCategory | undefined> = {
   grass: "grass",
   bush: "grass",
+  // flor/planta — mesmo perfil raso da grama (caule fino, sem massa de
+  // tronco); chegaram com o pacote `nature-catalog` (2026-08)
+  flower: "grass",
+  plant: "grass",
   tree: "tree",
   tree_bare: "tree",
+  // rock/stone ficam de fora de propósito — pedra não balança com vento
 };
 
 export function windCategoryFor(propCategory: string | undefined): WindCategory | undefined {
@@ -112,12 +117,25 @@ uniform float uWindMinY;
 uniform float uWindMaxY;
 `;
 
-// hash barato (1 seno) — só pra desfasar cada instância, não é ruído de verdade
+// hash barato (1 seno) — só pra desfasar cada instância, não é ruído de verdade.
+//
+// A semente é a posição de mundo do OBJETO — `modelMatrix[3].xz`. Isso quebra
+// sob `InstancedMesh` (Fase 1, otimização de vegetação): todo o `InstancedMesh`
+// tem UM `modelMatrix` só (a transform do grupo, não de cada planta), então sem
+// a guarda abaixo todas as instâncias da mesma malha balançariam em sincronia
+// perfeita. `instanceMatrix[3].xz` é a tradução da PRÓPRIA instância (o atributo
+// que o three já declara sob `USE_INSTANCING`) — única por planta, sem uniform
+// novo nem custo extra por instância.
 const WIND_VERTEX = `
 {
   float wH = clamp((transformed.y - uWindMinY) / max(uWindMaxY - uWindMinY, 1e-4), 0.0, 1.0);
   float wW = pow(wH, uWindHeightPow);
-  float wPhase = fract(sin(dot(modelMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+#ifdef USE_INSTANCING
+  vec2 wSeed = instanceMatrix[3].xz;
+#else
+  vec2 wSeed = modelMatrix[3].xz;
+#endif
+  float wPhase = fract(sin(dot(wSeed, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
   float wMain = sin(uWindTime * uWindFreq + wPhase);
   float wGust = sin(uWindTime * uWindGustFreq + wPhase * 1.7) * uWindGustAmp;
   float wDisp = (wMain + wGust) * uWindAmp * wW * uWindStrength;

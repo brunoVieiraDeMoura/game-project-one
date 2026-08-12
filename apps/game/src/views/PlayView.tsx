@@ -1,4 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useGLTF } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -11,6 +12,7 @@ import { setHexScale } from "../hex/hexGrid";
 import { gridFor } from "../grid";
 import { SquareTerrain } from "../grid/SquareTerrain";
 import { HorizonMesh } from "../grid/HorizonMesh";
+import { TreeImpostors } from "../grid/TreeImpostors";
 import { propBlockedCellsCached } from "../grid/propCells";
 import { buildSquareDemo } from "../play/squareDemoMap";
 import { buildWindTestMap, type WindTestStage } from "../play/windTestMap";
@@ -18,6 +20,7 @@ import { WindSystem } from "../props/WindSystem";
 import { scaleMapPositions } from "../hex/mapScale";
 import { groundProps } from "../hex/groundProps";
 import { PropInstance } from "../props/PropInstance";
+import { VegetationInstancer, ehCategoriaInstanciavel } from "../props/VegetationInstancer";
 import { Monster } from "../entities/Monster";
 import { NpcWalker } from "../entities/NpcWalker";
 import { previewSpawns, type PreviewSpawn } from "../entities/previewSpawns";
@@ -40,8 +43,9 @@ import { AQUECIMENTO_INICIAL, passoDeAquecimento } from "../play/aquecimento";
 import { raiosDeVisao } from "../play/viewRadius";
 import { GradientSky } from "../scene/GradientSky";
 import { TexturedSky } from "../scene/TexturedSky";
-import { AmbientParticles } from "../vfx/AmbientParticles";
+import { AmbientParticles, isParticleKind, type ParticleKind } from "../vfx/AmbientParticles";
 import { buildSceneTestMap, PARTICLE_SPOTS } from "../play/sceneTestMap";
+import { SHOWCASE_MAP_ID, SHOWCASE_PARTICLE_SPOTS } from "../play/showcaseSpots";
 import { aplicarNevoaDoCeu } from "../scene/skyFog";
 import { SKY_HORIZON, SKY_TOP } from "../scene/skyGradient.glsl";
 import { RetroFilter } from "../scene/RetroFilter";
@@ -70,8 +74,10 @@ import { NetDamageNumbers } from "../net/NetDamageNumbers";
 import { SkillVfx } from "../vfx/SkillVfx";
 import { Projectile } from "../vfx/Projectile";
 import { GroundItems, useGroundItems } from "../net/GroundItems";
+import { MapAmbience } from "../audio/mapAmbience";
 import { preloadAssets } from "../assets";
-import { preloadPropsDoMapa } from "../props/registry";
+import { preloadPropsDoMapa, urlsDoMapa } from "../props/registry";
+import { assetsEmVoo } from "../core/diagnostics/assetProbe";
 
 preloadAssets();
 
@@ -145,13 +151,34 @@ const ORCAMENTO_CARREGANDO_MS = 12;
  * sempre continua valendo e é o comportamento seguro.
  */
 const TETO_PRECARGA_MS = 3000;
+/**
+ * Teto pra espera de ASSETS do mapa (`EsperaAssetsDoMapa`) — mesma régua do
+ * `TETO_PRECARGA_MS` acima, mas mais folgado: aquele é geometria local
+ * (CPU, sem rede); isto é fetch de `.gltf`/textura de verdade, que numa
+ * conexão ruim pode legitimamente demorar mais que 3 s. É válvula de
+ * segurança, não o caminho normal — o bake do atlas de árvore/arbusto
+ * (`grid/treeImpostorBake.ts`) já mede ~1 s pra dezenas de espécies com o
+ * asset em cache; isto aqui é só pro caso de rede lenta/asset preso não
+ * segurar o jogador pra sempre.
+ */
+const TETO_ASSETS_MS = 8000;
+/**
+ * Intervalo do LOG de diagnóstico enquanto a fase `cena` está presa.
+ *
+ * NÃO é um teto que libera a cortina — ver o comentário no efeito que usa
+ * esta constante. É só de quanto em quanto tempo repetir o aviso, para um
+ * carregamento preso aparecer no console em vez de silenciar depois do
+ * primeiro aviso.
+ */
+const TETO_DIAGNOSTICO_CENA_MS = 5000;
 const SUN_DISTANCE = 140; // mesma escala do editor (EditorScene) — só a direção muda
 /** fator de compensação de luminância da troca `ambientLight`→`hemisphereLight`
- * (ver comentário no JSX abaixo) */
-const HEMI_BOOST = 1.7;
+ * (ver comentário no JSX abaixo). 1.7 ainda deixava o lado sem sol escuro
+ * demais (relato do teste de showcase) — 2.4 é o segundo ajuste. */
+const HEMI_BOOST = 2.4;
 /** tom de "chão" do hemisphereLight — mais claro que um marrom terroso de
  * verdade, de propósito: é luz de preenchimento, não física de bounce */
-const HEMI_GROUND = "#6b5f45";
+const HEMI_GROUND = "#8a7d64";
 
 /** direção/altura do sol a partir de azimute/elevação (graus) — mesma fórmula
  * do editor (EditorScene), pra o /play bater com o que foi ajustado lá. */
@@ -275,6 +302,106 @@ function AquecerCena({ aoTerminar }: { aoTerminar: () => void }) {
     aoTerminar();
   });
 
+  return null;
+}
+
+/**
+ * Sinaliza "ainda tem asset do mapa em voo" — o fallback de um `<Suspense>`
+ * que embrulha `EsperaAssetsDoMapa`. Montado ⇒ suspenso ⇒ ainda carregando;
+ * desmontado ⇒ resolveu. Mesmo idioma de `SondaDeSuspense`
+ * (`core/diagnostics/SondaDeCanvas.tsx`): "monta = suspendeu, desmonta =
+ * revelou" é o único sinal disponível, porque a promessa é lançada no
+ * render e o React não devolve quem a lançou.
+ */
+function AvisaCarregandoAssets({ set }: { set: (v: boolean) => void }) {
+  useEffect(() => {
+    set(true);
+    return () => set(false);
+  }, [set]);
+  return null;
+}
+
+/**
+ * Suspende até TODAS as urls do mapa (props, vegetação instanciada, espécies
+ * do impostor de árvore/arbusto — `urlsDoMapa` cobre as três, é o mesmo
+ * conjunto que `preloadPropsDoMapa` já baixa) estarem resolvidas no cache do
+ * `useGLTF`. Nunca desenha nada — existe só para o `<Suspense>` pai saber
+ * quando a cortina pode considerar os ASSETS prontos, não só o terreno.
+ *
+ * ## Por que isto precisa existir
+ *
+ * `preloadPropsDoMapa` (chamado no boot) é FIRE-AND-FORGET DE PROPÓSITO — a
+ * API do drei (`suspend-react`) descarta a promise (`void query(...)`), não
+ * dá pra `await` nela. Sem este componente, `construindo`/`aquecendo` só
+ * sabiam sobre terreno (`SquareTerrain.precarregar`): num carregamento a
+ * frio, com dezenas de `.gltf` de vegetação ainda em voo, a cortina podia
+ * cair achando que "terminou" — e o jogador ganhava controle enquanto árvore,
+ * arbusto e o atlas de impostor (`grid/TreeImpostors`) ainda estavam
+ * suspensos, chegando aos pedaços em pleno jogo. Era a folga que sobrava do
+ * "entra rápido, mas demora até esquentar" mesmo depois do bake do atlas
+ * parar de levar 41 segundos (`grid/treeImpostorBake.ts`) — o BAKE ficou
+ * rápido, mas a CORTINA nunca esperava por ele pra começo de conversa.
+ */
+function EsperaAssetsDoMapa({ urls, set }: { urls: string[]; set: (v: boolean) => void }) {
+  useGLTF(urls);
+  // Roda SÓ quando isto de fato renderiza — ou seja, resolveu (`useGLTF` não
+  // suspendeu, ou suspendeu e voltou). Sem isto, o caso "nada suspendeu" (urls
+  // já em cache) nunca dispara `set(false)` nenhum: o fallback não chega a
+  // montar, então `AvisaCarregandoAssets` também não roda — o único jeito de
+  // sair do `true` inicial é o filho resolvido se anunciar sozinho.
+  useEffect(() => {
+    set(false);
+  }, [set]);
+  return null;
+}
+
+/**
+ * O SINAL DE VERDADE de que `<Scene>` MONTOU — não que o mapa chegou, não que
+ * o HUD pode aparecer: que a raiz da própria árvore 3D (terreno, céu, luz,
+ * atlas de impostor de árvore) parou de estar suspensa e comitou de verdade.
+ *
+ * ## A causa raiz que isto corrige
+ *
+ * Antes desta sonda, `construindo`/`aquecendo`/`aquecido` não tinham NENHUMA
+ * ligação com o `<Suspense>` que embrulha `<Scene>` — dependiam só de sinais
+ * paralelos (mapa chegou, terreno pré-cacheado, urls de prop resolvidas). O
+ * `AquecerCena` decide "aquecida" quando `gl.info.programs.length` PARA de
+ * crescer por 8 quadros — e numa cena AINDA SUSPENSA (`<Scene>` nunca montou)
+ * essa contagem fica travada em 0 desde o primeiro quadro: "0 parado por 8
+ * quadros" é indistinguível de "compilação terminada", e a cortina caía em
+ * ~130 ms com a `THREE.Scene` de verdade tendo ZERO filhos. É exatamente a
+ * assinatura da referência do usuário (`aee.jpg`): HUD completo, `cena: 0
+ * filhos · 0 vis · OCULTA`, `draw calls 0`, `triângulos 0k` — o jogo achava
+ * que tinha terminado de aquecer algo que nunca chegou a existir.
+ *
+ * ## Por que um SIBLING de `<Scene>`, dentro do MESMO `<Suspense>`
+ *
+ * Um `<Suspense>` só comita QUALQUER filho quando NENHUM descendente dentro
+ * dele está suspenso — é a mesma garantia que já sustenta `SondaDeSuspense`
+ * (`core/diagnostics/SondaDeCanvas.tsx`, "monta = suspendeu, desmonta =
+ * revelou"), só que aqui o sinal vira ESTADO de verdade (`cenaMontada`), não
+ * só evento de flight recorder — e por isso não pode ficar atrás do `if
+ * (import.meta.env.DEV)` que protege aquela sonda: a cortina em produção
+ * precisa da MESMA garantia.
+ *
+ * `<VegetationInstancer>` e cada `<PropInstance>` têm `<Suspense
+ * fallback={null}>` PRÓPRIO (ver o comentário longo no JSX de `Scene`) — de
+ * propósito, para um `.glb` de prop individual não travar o mundo inteiro.
+ * Este sinal NÃO espera por eles, e está certo não esperar: vegetação/prop
+ * entrando aos poucos depois da cortina é o comportamento desejado. O que
+ * bloqueia `cenaMontada` é só a estrutura que NÃO tem boundary próprio —
+ * terreno, céu, luz, atlas de árvore (`TreeImpostors`) — que é precisamente
+ * o que precisa estar de pé para a cena deixar de ser um retângulo cinza.
+ */
+function SinalizaCenaPronta({ set }: { set: (v: boolean) => void }) {
+  useEffect(() => {
+    set(true);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GAME_LOAD] cena montada (Suspense da <Scene> resolvido)");
+    }
+    return () => set(false);
+  }, [set]);
   return null;
 }
 
@@ -675,7 +802,8 @@ function Scene({
   const center = useViewCenter(playerPos, CHUNK * gameplay.hexScale);
   // raios e névoa saem do MESMO lugar (play/viewRadius), que é onde mora a regra
   // "não desenhe o que a névoa já escondeu" — e onde o teste a confere
-  const visao = raiosDeVisao(gameplay);
+  const mapaMaiorLado = Math.max(grid.extent(map).width, grid.extent(map).depth);
+  const visao = raiosDeVisao(gameplay, mapaMaiorLado);
   const PROP_RADIUS = visao.detalhe;
   const TERRAIN_RADIUS = visao.detalhe;
   /**
@@ -683,7 +811,7 @@ function Scene({
    *
    * Fase G da auditoria de render: antes deste raio existir, `NetEntities`/
    * `AlvoPorTab`/`AssistenciaDeMira` liam `fogFar` direto, que agora é o raio
-   * do HORIZONTE (~600, não ~130) — sem esta variável esticar a névoa faria
+   * do HORIZONTE (~390, não ~130) — sem esta variável esticar a névoa faria
    * entidade desenhar e ser alvejável a centenas de unidades de distância.
    */
   const RAIO_ENTIDADE = visao.entidades;
@@ -875,7 +1003,7 @@ function Scene({
           lendo SKY_TOP/SKY_HORIZON de qualquer jeito: as duas paletas batem
           (skybox-day.png foi escolhido por isso), então a névoa nunca precisou
           saber qual céu está desenhado. */}
-      {isolado("semCeuFoto") ? <GradientSky top={SKY_TOP} bottom={SKY_HORIZON} /> : <TexturedSky />}
+      {isolado("semCeuFoto") ? <GradientSky top={SKY_TOP} bottom={SKY_HORIZON} /> : <TexturedSky skyId={map.sky?.skyId} />}
       {/* FASE G: a névoa amarra no HORIZONTE agora, não no raio de detalhe
           (`play/viewRadius`) — desbota de FOG_NEAR a FOG_FAR bem depois de onde
           o chão detalhado acaba (~130), dentro do trecho coberto pela malha
@@ -966,10 +1094,30 @@ function Scene({
             representar (ver o comentário do módulo) — hex/editor mantêm o
             terreno próprio deles, sem mudança. */}
         {map.terrainMode === "square" && <HorizonMesh map={map} />}
+        {/* Impostores de árvore (grid/TreeImpostors): mesma extensão do
+            HorizonMesh, mas para as árvores do mapa em vez do chão — troca
+            binária com o PropInstance real no MESMO raio de detalhe
+            (PROP_RADIUS), sem duplicar draw call por árvore. */}
+        {map.terrainMode === "square" && !isolado("semProps") && (
+          <TreeImpostors map={map} center={center} radius={PROP_RADIUS} />
+        )}
         {/* props do mapa (culled); o "smooth" legado usa o scatter de demo.
             O nome do grupo é contrato com o GroundInteract: é nele que o clique
             testa se o raio bateu numa árvore antes de chegar ao chão. */}
         <group name={PROPS_GROUP}>
+          {/* VEGETAÇÃO INSTANCIADA (props/VegetationInstancer): grama, flor,
+              planta, arbusto, árvore e árvore seca — 1 InstancedMesh por
+              espécie/sub-malha em vez de 1 Mesh por prop. Só nos mapas
+              "culled" (square/blocks): `map.props` é a fonte de verdade só ali
+              — o "smooth" legado gera props em runtime (scatterDemoProps) e
+              continua 100% no caminho antigo, sem mudança. DENTRO do
+              PROPS_GROUP de propósito: é nele que o GroundInteract raycasta
+              pra achar prop clicado, instanciado ou não. */}
+          {culled && (
+            <Suspense fallback={null}>
+              <VegetationInstancer map={map} center={center} radius={PROP_RADIUS} />
+            </Suspense>
+          )}
           {/*
             UM `<Suspense>` POR PROP, como o editor sempre fez
             (`EditorScene.tsx`). Sem eles, um único `.gltf` frio entrando no
@@ -985,21 +1133,56 @@ function Scene({
             quadros — o resto do mundo nem fica sabendo. O `fallback` é `null`
             de propósito: a alternativa seria desenhar um placeholder no lugar
             de uma árvore, o que é pior que a ausência dela.
+
+            `culled && ehCategoriaInstanciavel`: as espécies que o
+            VegetationInstancer acima já desenha saem daqui — sem isso a
+            mesma árvore apareceria DUAS vezes (a instanciada + a individual).
           */}
-          {visibleProps.map((p) => (
-            <Suspense key={p.id} fallback={null}>
-              <PropInstance prop={p} />
-            </Suspense>
-          ))}
+          {visibleProps
+            .filter((p) => !(culled && ehCategoriaInstanciavel(p.assetId)))
+            .map((p) => (
+              <Suspense key={p.id} fallback={null}>
+                <PropInstance prop={p} />
+              </Suspense>
+            ))}
         </group>
         {/* avança o relógio do vento (props/wind.ts) — UM useFrame pro mapa
             inteiro, nenhuma planta tem update individual */}
         <WindSystem />
-        {/* partículas ambientais do cenário de teste — só em `?map=scenetest`,
+        {/* partículas ambientais do cenário de teste offline (`?map=scenetest`),
             posições fixas em `play/sceneTestMap.ts:PARTICLE_SPOTS` */}
         {IS_SCENETEST &&
           !isolado("semParticulas") &&
           PARTICLE_SPOTS.map((p, i) => <AmbientParticles key={i} kind={p.kind} origin={p.origin} count={p.count} radius={p.radius} />)}
+        {/* mapa de showcase REAL (`gpqa01`, personagem de verdade, online ou
+            offline via `?map=gpqa01`) — resto do conteúdo (árvore/lago/
+            construção) veio do `build-showcase-map.ts`, só as partículas
+            (que não têm campo próprio em `MapProp`) moram no client */}
+        {map.id === SHOWCASE_MAP_ID &&
+          !isolado("semParticulas") &&
+          SHOWCASE_PARTICLE_SPOTS.map((p, i) => (
+            <AmbientParticles key={i} kind={p.kind} origin={p.origin} count={p.count} radius={p.radius} scale={p.scale} />
+          ))}
+        {/* partículas ambientais DO MAPA (`map.ambientParticles`, painel
+            "Camadas & Luz" do editor) — qualquer mapa, não só o showcase.
+            Centradas no `center` de culling (o mesmo que já move terreno/
+            props), então "seguem" o jogador sem update por partícula: é
+            `center` mudando de valor (a cada 16 unidades, ver
+            `useViewCenter`) que reescreve a posição-base do emissor. */}
+        {!isolado("semParticulas") &&
+          (map.ambientParticles ?? [])
+            .filter((p) => p.enabled && isParticleKind(p.particleId))
+            .map((p, i) => (
+              <AmbientParticles
+                key={`map-${i}`}
+                kind={p.particleId as ParticleKind}
+                origin={[center.x, 1, center.z]}
+                count={Math.round(15 + p.intensity * 60)}
+                radius={35}
+                scale={p.scale}
+                speedScale={p.speed}
+              />
+            ))}
         {/* paga a compilação de shader de TODA espécie do mapa enquanto a
             cortina está no ar — ver `play/PreCompilarProps` */}
         {precompilarProps && <PreCompilarProps map={map} />}
@@ -1382,27 +1565,74 @@ export function PlayView() {
     setPrecarga(null);
     setPrecargaExpirou(false);
     setAquecido(false);
+    // Reset explícito, ALÉM do idioma monta/desmonta de `SinalizaCenaPronta`:
+    // o `<Suspense>` de `<Scene>` some inteiro quando `map` vira `null` no
+    // meio de um warp (`{map && (<Suspense>...)}`), e o desmonte do sinalizador
+    // já cobre isso — mas resetar aqui também deixa a intenção explícita e
+    // protege contra qualquer ordem de commit em que o desmonte ainda não
+    // tenha corrido antes do primeiro render do mapa novo.
+    setCenaMontada(false);
   }, [mapId]);
   useEffect(() => {
     if (!esperaPreCarga) return;
     const t = setTimeout(() => setPrecargaExpirou(true), TETO_PRECARGA_MS);
     return () => clearTimeout(t);
   }, [esperaPreCarga, mapId]);
+  /**
+   * Espera os ASSETS do mapa (props, vegetação, impostor de árvore/arbusto —
+   * ver `EsperaAssetsDoMapa`), não só o terreno. Começa em `true` — palpite
+   * seguro pro primeiro quadro, mas NUNCA é a fonte da verdade depois disso:
+   * quem manda é sempre o Suspense (`AvisaCarregandoAssets`/
+   * `EsperaAssetsDoMapa`, montados mais abaixo), e o que quer que renderize —
+   * fallback (ainda carregando) OU o filho resolvido (`useGLTF` não
+   * suspendeu, ou suspendeu e voltou) — dispara seu PRÓPRIO `set(...)` ao
+   * montar. Por isso não existe aqui nenhum efeito "resetando pra true no
+   * troca de mapa": um reset assim corre risco de ganhar do Suspense (se o
+   * mapa novo já estiver com os assets em cache, o fallback nunca chega a
+   * montar pra devolver `false`) e travar em `true` pra sempre.
+   */
+  const [carregandoProps, setCarregandoProps] = useState(true);
+  const [assetsExpiraram, setAssetsExpiraram] = useState(false);
+  const urlsMapa = useMemo(() => (map ? urlsDoMapa(map.props) : []), [map]);
+  useEffect(() => {
+    setAssetsExpiraram(false);
+    if (urlsMapa.length === 0) return;
+    const t = setTimeout(() => setAssetsExpiraram(true), TETO_ASSETS_MS);
+    return () => clearTimeout(t);
+  }, [urlsMapa, mapId]);
   /** o mapa ainda nem chegou (fetch + zod de 160.000 células) */
   const carregandoMapa = !IS_PREVIEW && !map && !error;
   const carregandoTerreno =
     esperaPreCarga && !precargaExpirou && (precarga === null || precarga.feitos < precarga.total);
+  const carregandoAssets = urlsMapa.length > 0 && carregandoProps && !assetsExpiraram;
   /** fase 1: montando dado. Nada é desenhado, e é por isso que ela é rápida. */
-  const construindo = carregandoMapa || carregandoTerreno;
+  const construindo = carregandoMapa || carregandoTerreno || carregandoAssets;
   /**
-   * Fase 2: AQUECER — a cena já é desenhada, mas a cortina continua no ar.
+   * `<Scene>` MONTOU DE VERDADE — ver `SinalizaCenaPronta` acima para a causa
+   * raiz que este gate corrige. `construindo` falso não significava "a árvore
+   * 3D existe": significava só "os sinais paralelos (mapa, terreno, urls de
+   * prop) bateram" — o `<Suspense>` que embrulha `<Scene>` podia continuar
+   * suspenso por qualquer coisa que ELE carrega e que nenhum desses sinais
+   * cobre (o atlas de `TreeImpostors`, por exemplo, ou o céu). `aguardandoCena`
+   * é a fase nova: dado pronto, mas a raiz da árvore 3D ainda não comitou.
+   */
+  const [cenaMontada, setCenaMontada] = useState(false);
+  const aguardandoCena = !construindo && Boolean(map) && !cenaMontada;
+  /**
+   * Fase 3: AQUECER — a cena já é desenhada, mas a cortina continua no ar.
    *
-   * Ela existe porque a fase 1 não aquece nada: com `scene.visible = false` o
-   * three nem percorre a cena, então não compila shader nem sobe textura para a
-   * GPU. Revelar direto no fim da construção só mudaria o engasgo de lugar — o
-   * primeiro quadro visível pagaria a compilação de TODOS os materiais de uma
-   * vez, que é o pior quadro possível e logo no instante em que o jogador ganha
-   * o controle.
+   * Ela existe porque as fases anteriores não aquecem nada: com `scene.visible
+   * = false` o three nem percorre a cena, então não compila shader nem sobe
+   * textura para a GPU. Revelar direto no fim da construção só mudaria o
+   * engasgo de lugar — o primeiro quadro visível pagaria a compilação de TODOS
+   * os materiais de uma vez, que é o pior quadro possível e logo no instante em
+   * que o jogador ganha o controle.
+   *
+   * Só começa depois de `cenaMontada` — contar "shader parou de compilar" só
+   * faz sentido depois de a cena ter shader nenhum para compilar. É essa
+   * dependência que falta antes desta correção fazia o `AquecerCena` declarar
+   * "aquecida" (`gl.info.programs.length` parado em 0) sobre uma `THREE.Scene`
+   * ainda sem filho nenhum.
    *
    * Aqui a cena é desenhada de verdade atrás da cortina: shader compila, textura
    * sobe, o `useFrame` de cada coisa dá as primeiras voltas. Quando os quadros
@@ -1411,8 +1641,73 @@ export function PlayView() {
    */
   const [aquecido, setAquecido] = useState(false);
   const aoAquecer = useCallback(() => setAquecido(true), []);
-  const aquecendo = !construindo && Boolean(map) && !aquecido;
-  const carregando = construindo || aquecendo;
+  const aquecendo = !construindo && !aguardandoCena && Boolean(map) && cenaMontada && !aquecido;
+  /**
+   * `GAME_READY` — a única condição que baixa a cortina e revela o HUD.
+   *
+   * Precisa das QUATRO coisas ao mesmo tempo: dado pronto (`!construindo`),
+   * `<Scene>` comitada (`cenaMontada`, não suspensa — `!aguardandoCena` é
+   * redundante com isso mas deixado explícito por clareza), e o aquecimento
+   * declarado feito (`aquecido`) — que só passa a rodar DEPOIS de `cenaMontada`
+   * (ver acima), então "aquecido" aqui já implica pelo menos alguns quadros
+   * reais desenhados com conteúdo de verdade, não uma cena vazia.
+   */
+  const gameReady = !construindo && !aguardandoCena && cenaMontada && aquecido;
+  const carregando = construindo || aguardandoCena || aquecendo;
+
+  /**
+   * INSTRUMENTAÇÃO — `[GAME_LOAD]`, uma linha por TRANSIÇÃO de fase, nunca por
+   * quadro. `cargaT0` marca o início da carga DESTE mapa (reseta por warp);
+   * cada fase loga o tempo decorrido desde ali, então um carregamento de 50 s
+   * aparece como "qual fase ficou 48,7 s" em vez de só "demorou".
+   */
+  const fase: "mapa" | "terreno" | "assets" | "cena" | "aquecendo" | "pronto" = carregandoMapa
+    ? "mapa"
+    : carregandoTerreno
+      ? "terreno"
+      : carregandoAssets
+        ? "assets"
+        : aguardandoCena
+          ? "cena"
+          : aquecendo
+            ? "aquecendo"
+            : "pronto";
+  const cargaT0 = useRef(performance.now());
+  useEffect(() => {
+    cargaT0.current = performance.now();
+  }, [mapId]);
+  useEffect(() => {
+    if (!map && fase !== "mapa") return; // sem mapa e sem sessão local: nada carregando ainda
+    const ms = Math.round(performance.now() - cargaT0.current);
+    // eslint-disable-next-line no-console
+    console.info(`[GAME_LOAD] map=${mapId || "(nenhum)"} fase=${fase} +${ms}ms`);
+  }, [fase, mapId, map]);
+  /**
+   * TIMEOUT DE DIAGNÓSTICO — NUNCA de decisão.
+   *
+   * Diferente de `assetsExpiraram`/`precargaExpirou` (que liberam a cortina
+   * por segurança), este `setInterval` não seta NENHUM estado que destrave a
+   * fase `aguardandoCena` — declarar `GAME_READY` com a cena ainda suspensa é
+   * exatamente o bug que este arquivo inteiro existe para corrigir. Ele só
+   * imprime, repetidamente, o que está bloqueando — via `assetsEmVoo()`
+   * (`core/diagnostics/assetProbe`, instalado em DEV) — para um carregamento
+   * preso ter uma resposta objetiva em vez de "está lento".
+   */
+  useEffect(() => {
+    if (!aguardandoCena) return;
+    const t = setInterval(() => {
+      const presos = assetsEmVoo();
+      const ms = Math.round(performance.now() - cargaT0.current);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[GAME_LOAD] preso em fase=cena há ${ms}ms (map=${mapId}). ` +
+          (presos.length > 0
+            ? `assets em voo: ${presos.map((a) => `${a.url} (${Math.round(a.desde)}ms)`).join(", ")}`
+            : "nenhum asset em voo — a suspensão não é de download (checar Suspense de <Scene>: céu, TreeImpostors, terrainQuery)."),
+      );
+    }, TETO_DIAGNOSTICO_CENA_MS);
+    return () => clearInterval(t);
+  }, [aguardandoCena, mapId]);
 
   // Sem sessão e sem modo local pedido: manda para o login em vez de desenhar
   // um mundo que não é de ninguém.
@@ -1469,6 +1764,10 @@ export function PlayView() {
     >
       {/* só com sessão: avisa o map-server que a cena montou e escuta o mundo */}
       {online && map && <WorldEventsBridge />}
+      {/* música + natureza do mapa atual — por `mapId`, nunca por posição/
+          quadro (ver `audio/mapAmbience`). `mapId` já cobre sessão online
+          E `?map=prt_fild08` local, então dá pra testar sem servidor. */}
+      <MapAmbience mapId={mapId || null} />
       <Canvas
         camera={{ position: [40, 40, 40], fov: FOV_DA_CAMERA, near: 0.5, far: 4000 }}
         /**
@@ -1488,14 +1787,37 @@ export function PlayView() {
          * "no outro PC trava"). O `CharacterPortrait` já fazia isso.
          */
         dpr={[1, 1.5]}
+        /**
+         * `toneMappingExposure` — o R3F liga `ACESFilmicToneMapping` por
+         * padrão (nunca configurado explicitamente aqui), e ACES comprime
+         * sombra/meio-tom mais que sol/realce. É outra fatia do "sombra
+         * escura demais" que `HEMI_BOOST` sozinho não cobre — 1 uniform
+         * global, sem passe de render extra, sem tocar em nenhuma luz.
+         */
+        gl={{ toneMappingExposure: 1.25 }}
       >
         {/* Fora do Suspense: tem de valer já no primeiro quadro, antes de
             qualquer .gltf resolver.
-            `construindo`, não `carregando`: durante o AQUECIMENTO a cena tem de
-            estar visível para o three compilar os shaders dela — quem esconde
-            ali é a cortina, não a cena. */}
-        <OcultarCena oculta={construindo} />
+            `construindo || aguardandoCena`, não `carregando`: durante o
+            AQUECIMENTO a cena tem de estar visível para o three compilar os
+            shaders dela — quem esconde ali é a cortina, não a cena. Mas
+            enquanto `<Scene>` ainda está suspensa (`aguardandoCena`) ela nem
+            tem filho nenhum — ocultar aqui também é o que impede QUALQUER
+            quadro de tentar desenhar uma cena que ainda não existe. */}
+        <OcultarCena oculta={construindo || aguardandoCena} />
         {aquecendo && <AquecerCena aoTerminar={aoAquecer} />}
+        {/*
+          Boundary PRÓPRIO pra `EsperaAssetsDoMapa` — separado do da `<Scene>`
+          abaixo de propósito: este só existe pra alimentar `carregandoProps`
+          (a cortina), nunca pra decidir o que desenha. `key={mapId}` força
+          remontar do zero num warp — sem isso, um mapa novo com menos urls
+          poderia herdar o estado resolvido do mapa anterior por um quadro.
+        */}
+        {map && (
+          <Suspense key={mapId} fallback={<AvisaCarregandoAssets set={setCarregandoProps} />}>
+            <EsperaAssetsDoMapa urls={urlsMapa} set={setCarregandoProps} />
+          </Suspense>
+        )}
         {/*
           O fallback deixou de ser `null` em DEV, e isso é INSTRUMENTAÇÃO, não
           conteúdo: `SondaDeSuspense` não desenha nada, ela só existe enquanto o
@@ -1510,23 +1832,29 @@ export function PlayView() {
         <Suspense fallback={import.meta.env.DEV ? <SondaDeSuspense nome="cena" /> : null}>
           {import.meta.env.DEV && <PerfProbe />}
           {map && (
-            <Scene
-              map={map}
-              gameplay={gameplay}
-              playerPos={playerPos}
-              camAzimuth={camAzimuth}
-              online={online}
-              orcamentoTerrenoMs={carregandoTerreno ? ORCAMENTO_CARREGANDO_MS : undefined}
-              onTerrenoProgresso={aoProgredirTerreno}
-              precarregarTerreno={carregandoTerreno}
-              precompilarProps={aquecendo}
-            />
+            <>
+              <Scene
+                map={map}
+                gameplay={gameplay}
+                playerPos={playerPos}
+                camAzimuth={camAzimuth}
+                online={online}
+                orcamentoTerrenoMs={carregandoTerreno ? ORCAMENTO_CARREGANDO_MS : undefined}
+                onTerrenoProgresso={aoProgredirTerreno}
+                precarregarTerreno={carregandoTerreno}
+                precompilarProps={aquecendo}
+              />
+              {/* SIBLING de `<Scene>`, no MESMO boundary — ver o comentário
+                  longo em `SinalizaCenaPronta`. Só monta quando este
+                  `<Suspense>` de fato resolve, e é ISSO que vira `cenaMontada`. */}
+              <SinalizaCenaPronta set={setCenaMontada} />
+            </>
           )}
         </Suspense>
       </Canvas>
       {/* o medidor é do JOGO rodando: sobre a tela de carregamento ele mediria
           quadros que não desenham nada e ainda apareceria por cima do aviso */}
-      {import.meta.env.DEV && !carregando && <PerfOverlay />}
+      {import.meta.env.DEV && gameReady && <PerfOverlay />}
 
       {error && (
         <div style={{ position: "absolute", top: 10, left: 10, maxWidth: 520 }}>
@@ -1570,7 +1898,11 @@ export function PlayView() {
               ? "carregando o mapa…"
               : carregandoTerreno
                 ? "montando o terreno…"
-                : "preparando a cena…"
+                : carregandoAssets
+                  ? "carregando árvores e objetos…"
+                  : aguardandoCena
+                    ? "renderizando o mundo…"
+                    : "preparando a cena…"
           }
           // no aquecimento não há fração honesta a mostrar: o que se espera é a
           // compilação parar, e ninguém sabe de antemão quantos shaders faltam
@@ -1603,13 +1935,19 @@ export function PlayView() {
         `display:none` tira o elemento da árvore de renderização;
         `visibility:hidden` mantém a caixa (e o desenho por baixo) viva, só
         não pinta — mesma troca feita dentro do `TargetFrame`. Continua
-        `display:none` de verdade em `construindo` (fase 1: sem dado
-        nenhum ainda, não há o que aquecer) e sem `map`.
+        `display:none` de verdade em `construindo`/`aguardandoCena` (dado
+        ainda não pronto OU `<Scene>` ainda suspensa — nenhum dos dois tem o
+        que aquecer) e sem `map`. É exatamente esta condição — nunca
+        `!gameReady` sozinho misturado com o HUD achando que terminou — que
+        impede o HUD de pintar por cima de um Canvas ainda cinza (a causa
+        raiz da referência `aee.jpg`: sem `aguardandoCena` aqui, o HUD virava
+        `display:contents` no instante em que `construindo` batia falso, com
+        `<Scene>` ainda suspensa por baixo).
       */}
       {mapaDoHud && (
         <div
           style={
-            construindo || !map
+            construindo || aguardandoCena || !map
               ? { display: "none" }
               : aquecendo
                 ? { display: "block", visibility: "hidden" }

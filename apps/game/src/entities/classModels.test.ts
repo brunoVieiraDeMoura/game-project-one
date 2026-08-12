@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CHARACTER_URLS, WEAPON_URLS } from "../assets";
-import { classModelFor, weaponFamilyFor } from "./classModels";
+import { classModelFor, isArcherClass, isMageClass, isSwordmanClass, weaponFamilyFor } from "./classModels";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** `CHARACTER_URLS`/`WEAPON_URLS` são caminhos `/assets/...` servidos a
@@ -123,6 +123,88 @@ describe("classModelFor — armas por família", () => {
     const m = classModelFor(0);
     expect(m.weapons).toEqual([]);
     expect(m.character).toBe("barbarian");
+  });
+});
+
+describe("isSwordmanClass — portão central de classe do áudio de combate", () => {
+  it("Swordman (1): true", () => {
+    expect(isSwordmanClass(1)).toBe(true);
+  });
+
+  it("Knight (7), Crusader (14), Lord_Knight (4008), Paladin (4015): evoluções, também true", () => {
+    expect(isSwordmanClass(7)).toBe(true);
+    expect(isSwordmanClass(14)).toBe(true);
+    expect(isSwordmanClass(4008)).toBe(true);
+    expect(isSwordmanClass(4015)).toBe(true);
+  });
+
+  it("Dragon_Knight (4252), 4º job achado só por fecho transitivo: também true", () => {
+    expect(isSwordmanClass(4252)).toBe(true);
+  });
+
+  it("Mage (2), Thief (6), Archer (3), Novice (0): false", () => {
+    expect(isSwordmanClass(2)).toBe(false);
+    expect(isSwordmanClass(6)).toBe(false);
+    expect(isSwordmanClass(3)).toBe(false);
+    expect(isSwordmanClass(0)).toBe(false);
+  });
+
+  it("undefined/null: false, sem quebrar", () => {
+    expect(isSwordmanClass(undefined)).toBe(false);
+    expect(isSwordmanClass(null)).toBe(false);
+  });
+});
+
+describe("isArcherClass — portão central de classe do áudio de combate do Arqueiro", () => {
+  it("Archer (3): true", () => {
+    expect(isArcherClass(3)).toBe(true);
+  });
+
+  it("Hunter (11), evolução: true", () => {
+    expect(isArcherClass(11)).toBe(true);
+  });
+
+  it("Swordman (1), Mage (2), Thief (6): false", () => {
+    expect(isArcherClass(1)).toBe(false);
+    expect(isArcherClass(2)).toBe(false);
+    expect(isArcherClass(6)).toBe(false);
+  });
+
+  it("undefined/null: false, sem quebrar", () => {
+    expect(isArcherClass(undefined)).toBe(false);
+    expect(isArcherClass(null)).toBe(false);
+  });
+});
+
+describe("isMageClass — portão central de classe do áudio de combate do Mago", () => {
+  it("Mage (2): true", () => {
+    expect(isMageClass(2)).toBe(true);
+  });
+
+  it("Wizard (9), High_Wizard (4032), Acolyte (4), Priest (8): evoluções/linhagem compartilhada, true", () => {
+    expect(isMageClass(9)).toBe(true);
+    expect(isMageClass(4032)).toBe(true);
+    expect(isMageClass(4)).toBe(true);
+    expect(isMageClass(8)).toBe(true);
+  });
+
+  it("Cardinal (4256), 4º job do Priest achado só por fecho transitivo: true", () => {
+    expect(isMageClass(4256)).toBe(true);
+  });
+
+  it("Monk (15), mesma raiz Acolyte mas luta desarmado: false (fallback, não Mago)", () => {
+    expect(isMageClass(15)).toBe(false);
+  });
+
+  it("Swordman (1), Thief (6), Archer (3): false", () => {
+    expect(isMageClass(1)).toBe(false);
+    expect(isMageClass(6)).toBe(false);
+    expect(isMageClass(3)).toBe(false);
+  });
+
+  it("undefined/null: false, sem quebrar", () => {
+    expect(isMageClass(undefined)).toBe(false);
+    expect(isMageClass(null)).toBe(false);
   });
 });
 

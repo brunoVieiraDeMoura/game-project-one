@@ -6,6 +6,7 @@ export interface SkillRow {
   id: number;
   aegis_name: string;
   name: string;
+  icon: string | null;
   max_level: number;
   type: string;
   damage_nature: string;
@@ -44,6 +45,7 @@ export function skillToRow(s: Skill): SkillRow {
     id: s.id,
     aegis_name: s.aegisName,
     name: s.name,
+    icon: s.icon ?? null,
     max_level: s.maxLevel,
     type: s.type,
     damage_nature: s.damageNature,
@@ -83,6 +85,7 @@ export function rowToSkill(row: SkillRow): Skill {
     id: row.id,
     aegisName: row.aegis_name,
     name: row.name,
+    icon: row.icon ?? undefined,
     maxLevel: row.max_level,
     type: row.type,
     damageNature: row.damage_nature,

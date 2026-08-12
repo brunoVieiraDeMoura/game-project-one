@@ -33,6 +33,8 @@ function mapaDe(linhas: string[]): GameMap {
     ramps: [],
     lighting: { sunAzimuth: 40, sunElevation: 55, sunIntensity: 1.2, ambient: 0.75 },
     authoredHexScale: 1,
+    sky: { skyId: "day" },
+    ambientParticles: [],
     metadata: { version: 5, generatedAt: new Date().toISOString() },
   } as GameMap;
 }

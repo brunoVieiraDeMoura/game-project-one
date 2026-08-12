@@ -8,6 +8,7 @@ import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
 import { Panel, IconSquare, RpgButton, Slot, UI_PACK_CREDIT } from "../ui/rpg";
 import { useCombatVisuals } from "./combatVisualsStore";
+import { useAudioSettings } from "../audio/audioSettingsStore";
 import { InventoryWindow } from "./InventoryWindow";
 import { StatusWindow as StatusArtWindow } from "./StatusWindow";
 import { FriendsWindow } from "./FriendsWindow";
@@ -375,13 +376,41 @@ function SettingsWindow() {
   const showSkillArea = useCombatVisuals((s) => s.showSkillArea);
   const setShowAttackRange = useCombatVisuals((s) => s.setShowAttackRange);
   const setShowSkillArea = useCombatVisuals((s) => s.setShowSkillArea);
+  // volume central (audio/audioSettingsStore) — Música toca `MapAmbience`,
+  // Efeitos toca passos + natureza/ambiente + qualquer SFX futuro. Nenhum dos
+  // dois componentes de áudio tem volume próprio: os dois leem daqui.
+  const musicVolume = useAudioSettings((s) => s.musicVolume);
+  const sfxVolume = useAudioSettings((s) => s.sfxVolume);
+  const setMusicVolume = useAudioSettings((s) => s.setMusicVolume);
+  const setSfxVolume = useAudioSettings((s) => s.setSfxVolume);
 
   return (
     <div style={{ font: "12px system-ui", color: "#493333" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
           <b>Volume & Gráfico</b>
-          <div style={{ marginTop: 6 }}>Volume<br /><input type="range" style={{ width: "100%" }} /></div>
+          <div style={{ marginTop: 6 }}>
+            Música<br />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(musicVolume * 100)}
+              onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+              style={{ width: "100%" }}
+            />
+          </div>
+          <div style={{ marginTop: 6 }}>
+            Efeitos sonoros<br />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(sfxVolume * 100)}
+              onChange={(e) => setSfxVolume(Number(e.target.value) / 100)}
+              style={{ width: "100%" }}
+            />
+          </div>
           <div style={{ marginTop: 6 }}>Qualidade<br /><input type="range" style={{ width: "100%" }} /></div>
           <div style={{ marginTop: 6 }}>Iluminação<br /><input type="range" style={{ width: "100%" }} /></div>
         </div>

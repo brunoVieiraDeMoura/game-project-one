@@ -2,11 +2,15 @@
  * ISOLAMENTO — desligar um subsistema por vez para provar (ou descartar) quem
  * causa um hitch, sem recompilar.
  *
- * Mesmo padrão do `?voo=`/`localStorage` do flight recorder (ver
- * `flightRecorder.ts: lerFlagGuardada`): a escolha entra por query string na
- * tela de LOGIN e sobrevive à navegação até o `/play`, porque o socket e a
- * árvore de componentes nascem antes de qualquer parâmetro de URL do jogo
- * chegar a ser lido de novo.
+ * A escolha entra por query string (`?iso=chave1,chave2`) e sobrevive à
+ * navegação até o `/play` dentro da MESMA ABA — é `sessionStorage`, não
+ * `localStorage`, e a troca é de propósito: `?iso=semCeuFoto,semAgua,
+ * semSombra` (teste A/B real desta auditoria) ficou preso em disco por
+ * sessões inteiras — todo `/play` seguinte, em toda aba NOVA, herdava céu/
+ * água/sombra desligados calado, parecendo regressão de código. Sessão
+ * fechada (aba fechada) = isolamento limpo sozinho; dentro da MESMA sessão de
+ * teste, recarregar a página continua lembrando a escolha (o motivo de não
+ * ser só `?iso=` sem guardar nada).
  *
  * Um ponto de controle só, não oito arquiteturas: cada consumidor faz UM `if`
  * de uma linha (`if (semTerreno()) return null;` ou equivalente) no lugar
@@ -39,6 +43,7 @@ export const CHAVES_ISOLAMENTO = [
   "semSombra",
   "semParticulas",
   "semCeuFoto",
+  "semImpostorArvore",
 ] as const;
 
 export type ChaveIsolamento = (typeof CHAVES_ISOLAMENTO)[number];
@@ -62,10 +67,10 @@ function lerConjuntoGuardado(): Set<ChaveIsolamento> {
         .map((s) => s.trim())
         .filter(ehChaveValida);
       const conjunto = new Set(partes);
-      window.localStorage.setItem(CHAVE_STORAGE, [...conjunto].join(","));
+      window.sessionStorage.setItem(CHAVE_STORAGE, [...conjunto].join(","));
       return conjunto;
     }
-    const guardado = window.localStorage.getItem(CHAVE_STORAGE);
+    const guardado = window.sessionStorage.getItem(CHAVE_STORAGE);
     if (!guardado) return new Set();
     return new Set(guardado.split(",").filter(ehChaveValida));
   } catch {
@@ -85,7 +90,7 @@ function garantirCarregado(): void {
 function gravar(): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(CHAVE_STORAGE, [...ligadas].join(","));
+    window.sessionStorage.setItem(CHAVE_STORAGE, [...ligadas].join(","));
   } catch {
     /* modo privado / cota cheia: não vale uma exceção */
   }

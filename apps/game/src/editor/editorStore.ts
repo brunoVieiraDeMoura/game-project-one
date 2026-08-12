@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { GameMap, MapProp, MapSpawn, SurfaceType, MapTrigger, TriggerKind, Lighting, TerrainStyle } from "@ragnarok/map-format";
-import { cellIndex, createBlankMap, DEFAULT_LIGHTING, resizeGameMap } from "@ragnarok/map-format";
+import type { GameMap, MapProp, MapSpawn, SurfaceType, MapTrigger, TriggerKind, Lighting, TerrainStyle, SkyConfig, AmbientParticleConfig } from "@ragnarok/map-format";
+import { cellIndex, createBlankMap, DEFAULT_LIGHTING, DEFAULT_SKY, resizeGameMap } from "@ragnarok/map-format";
 import { getHexScale } from "../hex/hexGrid";
 import { editorGrid, setEditorGrid } from "./activeGrid";
 import { findBlockedClusters } from "./blockedClusters";
@@ -1467,6 +1467,8 @@ interface EditorState {
   viewKind: "top" | "front" | "side" | "reset";
   snap: boolean; // snap na grade hex (colocar/mover encaixa no centro do hex)
   lighting: Lighting; // iluminação do editor (sol + ambiente)
+  sky: SkyConfig; // céu do mapa (painel Cena)
+  ambientParticles: AmbientParticleConfig[]; // partículas ambientais do mapa
   measure: { a: [number, number, number] | null; b: [number, number, number] | null };
   hiddenLayers: LayerId[]; // camadas ocultas no editor
   dirty: boolean;
@@ -1506,6 +1508,11 @@ interface EditorState {
   retroPreview: boolean;
   toggleRetroPreview: () => void;
   setLighting: (patch: Partial<Lighting>) => void;
+  setSky: (patch: Partial<SkyConfig>) => void;
+  /** substitui a lista inteira (o editor sempre edita 1 entrada por vez, mas
+   * grava o array todo — mais simples que patch por índice pra uma lista de
+   * 5 itens fixos, um por `PARTICLE_CATALOG`) */
+  setAmbientParticles: (list: AmbientParticleConfig[]) => void;
   /** textura/escala de uma superfície NESTE mapa (só aparência) */
   setTerrainStyle: (surface: SurfaceType, patch: Partial<TerrainStyle>) => void;
   /** quanto o pincel de montanha deforma em rocha (0 = cúpula lisa, 1 = cheia de crista) */
@@ -1766,6 +1773,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   groundPreview: null,
   retroPreview: false,
   lighting: { ...DEFAULT_LIGHTING },
+  sky: { ...DEFAULT_SKY },
+  ambientParticles: [],
   camForward: { x: 0, z: 1 },
   measure: { a: null, b: null },
   hiddenLayers: [],
@@ -1816,6 +1825,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       past: [],
       future: [],
       lighting: { ...(map.lighting ?? DEFAULT_LIGHTING) }, // mapa salvo já traz seu sol/ambiente
+      sky: { ...(map.sky ?? DEFAULT_SKY) },
+      ambientParticles: map.ambientParticles ?? [],
     });
   },
   newMap: (name, width, height) => {
@@ -1828,6 +1839,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       past: [],
       future: [],
       lighting: { ...DEFAULT_LIGHTING },
+      sky: { ...DEFAULT_SKY },
+      ambientParticles: [],
       // projeto novo: geradores começam TUDO desmarcado (nada gera até o usuário
       // ativar). amounts vazios (sliders em 0) + todas as espécies desativadas.
       procAmounts: {},
@@ -2156,6 +2169,19 @@ export const useEditorStore = create<EditorState>((set) => ({
       const lighting = { ...s.lighting, ...patch };
       return { lighting, map: s.map ? { ...s.map, lighting } : s.map, dirty: s.map ? true : s.dirty };
     }),
+  // mesmo padrão de setLighting: sincroniza com map.sky, senão a escolha
+  // não sobrevive ao save
+  setSky: (patch) =>
+    set((s) => {
+      const sky = { ...s.sky, ...patch };
+      return { sky, map: s.map ? { ...s.map, sky } : s.map, dirty: s.map ? true : s.dirty };
+    }),
+  setAmbientParticles: (list) =>
+    set((s) => ({
+      ambientParticles: list,
+      map: s.map ? { ...s.map, ambientParticles: list } : s.map,
+      dirty: s.map ? true : s.dirty,
+    })),
   /**
    * Textura e escala de UMA superfície neste mapa.
    *

@@ -4,7 +4,7 @@ import { mapToRow, rowToMap, type MapRow } from "./map-row";
 
 describe("map-row round-trip (terreno em blocos)", () => {
   it("preserva terrainMode + surface via metadata jsonb", () => {
-    const map = createBlankMap("t", "Teste", 4, 4); // terrainMode "blocks", surface cheio
+    const map = createBlankMap("t", "Teste", 4, 4); // terrainMode "square" (default atual), surface cheio
     map.surface[0] = "water";
     map.heightmap[5] = 3;
     map.triggers = [
@@ -15,7 +15,7 @@ describe("map-row round-trip (terreno em blocos)", () => {
     const row = mapToRow(map) as unknown as MapRow;
     const back = rowToMap(row);
 
-    expect(back.terrainMode).toBe("blocks");
+    expect(back.terrainMode).toBe("square");
     expect(back.surface).toHaveLength(16);
     expect(back.surface[0]).toBe("water");
     expect(back.heightmap[5]).toBe(3);

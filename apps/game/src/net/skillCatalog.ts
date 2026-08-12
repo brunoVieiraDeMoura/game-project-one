@@ -21,6 +21,8 @@ export interface SkillInfo {
   /** constante do rAthena ("MG_FIREBOLT") — o prefixo dela dá a classe */
   aegisName: string;
   name: string;
+  /** nome de arquivo em `public/assets/skills/` — ausente = placeholder por seed (IconSquare) */
+  icon?: string;
   target: "self" | "enemy" | "ground";
   areaRadius: number;
   /** teto de nível: o ZC.SKILLINFO_LIST NÃO manda, o skill_db manda */
@@ -82,6 +84,7 @@ export const useSkillCatalog = create<CatalogState>((set, get) => ({
               id,
               aegisName: String(cru.aegisName ?? ""),
               name: String(cru.name ?? ""),
+              icon: cru.icon ? String(cru.icon) : undefined,
               target: (cru.target as SkillInfo["target"]) ?? "enemy",
               areaRadius: noNivel(cru.areaRadius as number | number[], nivel, 0),
               maxLevel: Number(cru.maxLevel ?? 0),

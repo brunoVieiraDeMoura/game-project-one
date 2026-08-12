@@ -17,6 +17,7 @@ import { EditorProp } from "./EditorProp";
 import { propDefaultScale, colliderForAsset, tileSurfaceFor } from "../props/registry";
 import { useGameplayConfig } from "../play/useGameplayConfig";
 import { TERRAIN_GROUP, nearestHit, topmostXZ } from "../play/pickGround";
+import { lineCells } from "./lineCells";
 
 /** de quanto em quanto o culling do editor recalcula (unidades de mundo) */
 const EDITOR_VIEW_STEP = 24;
@@ -97,6 +98,9 @@ export function EditorScene() {
   );
   const painting = useRef(false);
   const lastCell = useRef<string>("");
+  /** última célula pintada, em NÚMERO (não string) — usada só pra interpolar
+   * o traço do pincel de relevo entre dois `pointermove` (ver `onMove`) */
+  const lastCellRC = useRef<{ col: number; row: number } | null>(null);
   const controlsRef = useRef<React.ElementRef<typeof OrbitControls>>(null);
   // centro/raio do que o terreno quadrado desenha (mapas do rAthena). Mais
   // generoso que no /play: aqui a câmera se afasta para ver o desenho do mapa,
@@ -221,6 +225,7 @@ export function EditorScene() {
       beginStroke(); // 1 snapshot p/ todo o traçado (undo volta tudo de uma vez)
       painting.current = true;
       lastCell.current = `${col},${row}`;
+      lastCellRC.current = { col, row };
       // rampa e grab precisam saber DE ONDE o gesto saiu: na rampa é a ponta de
       // baixo, no grab é o centro da região que vai ser puxada
       if (brush === "ramp" || brush === "grab" || brush === "ledge") beginRamp(col, row);
@@ -300,8 +305,29 @@ export function EditorScene() {
       else if (tool === "brush" && (brush === "ramp" || brush === "grab")) paintCell(col, row);
       else if (key !== lastCell.current) {
         lastCell.current = key;
-        if (tool === "brush") paintCell(col, row);
-        else if (tool === "place" && currentAsset && tileSurfaceFor(currentAsset)) placeTileAsset(col, row, currentAsset);
+        if (tool === "brush") {
+          /**
+           * Traço CONTÍNUO, não só o ponto onde o pointermove caiu.
+           *
+           * Arrastar rápido dispara pointermove a cada ~10-20px de tela, e num
+           * zoom afastado isso pode ser 3-4 CÉLULAS de salto entre um evento e
+           * o outro — sem interpolar, essas células do meio nunca recebiam
+           * `paintCell` nenhuma. Pincel de relevo é PROPORCIONAL ao centro do
+           * disco (`tetoLocal = teto × peso` em `paintCell`), então uma célula
+           * pulada por um gesto rápido ficava presa no valor de QUANDO o
+           * disco passou por perto uma vez só, enquanto a vizinha (pintada de
+           * novo a cada quadro porque o mouse desacelerou ali) seguia
+           * subindo — é o degrau/ondulação relatado ("uma área interfere na
+           * outra"). Preencher a RETA (Bresenham) entre a última célula
+           * pintada e esta faz o traço se comportar como se o pincel tivesse
+           * passado por cima de cada célula intermediária de verdade, na
+           * MESMA ordem que o gesto percorreu.
+           */
+          for (const [lc, lr] of lineCells(lastCellRC.current?.col ?? col, lastCellRC.current?.row ?? row, col, row)) {
+            paintCell(lc, lr);
+          }
+          lastCellRC.current = { col, row };
+        } else if (tool === "place" && currentAsset && tileSurfaceFor(currentAsset)) placeTileAsset(col, row, currentAsset);
         else if (tool === "place" && propPaint && currentAsset) paintProps(col, row);
       }
     }
@@ -310,6 +336,7 @@ export function EditorScene() {
     if (painting.current && tool === "area") commitArea(); // grava o gatilho desenhado
     painting.current = false;
     lastCell.current = "";
+    lastCellRC.current = null;
     endRamp(); // solta a âncora da rampa (o próximo gesto começa de outro lugar)
   };
 

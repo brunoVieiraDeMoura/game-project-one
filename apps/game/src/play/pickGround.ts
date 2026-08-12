@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { TerrainQuery } from "@ragnarok/engine-core";
+import { ehInstancedMeshGerenciado, propDaInstancia } from "../props/instancedPropRegistry";
 
 /**
  * Qual ponto o mouse está mesmo apontando no chão.
@@ -24,6 +25,34 @@ import type { TerrainQuery } from "@ragnarok/engine-core";
 
 /** nome do grupo que embrulha a malha do terreno na cena do editor */
 export const TERRAIN_GROUP = "editor-terrain";
+
+/** interseção mínima que `baseDoPropClicado` precisa (o resto de `Intersection` não interessa aqui) */
+export interface HitDePropRaycast {
+  object: THREE.Object3D;
+  instanceId?: number | undefined;
+}
+
+/**
+ * Ponto (x,z) do prop que o raio acertou — real (`Mesh`, via `baseDoProp`) OU
+ * instanciado (`InstancedMesh`, via `props/instancedPropRegistry`).
+ *
+ * Vegetação instanciada (Fase 1, `props/VegetationInstancer`) não tem um
+ * `Object3D` por planta — `intersectObject` devolve a malha da ESPÉCIE inteira
+ * mais um `instanceId` (o slot atingido). `raizDoProp`/`baseDoProp` continuam
+ * valendo pra tudo que ainda é `Mesh` de verdade (props não instanciados); este
+ * wrapper só acrescenta o caminho do `instanceId` na frente, sem mudar o
+ * resultado pra quem já funcionava.
+ */
+export function baseDoPropClicado(
+  atingido: HitDePropRaycast,
+  grupo: THREE.Object3D | undefined,
+): { x: number; z: number } | null {
+  if (ehInstancedMeshGerenciado(atingido.object) && atingido.instanceId != null) {
+    const prop = propDaInstancia(atingido.object, atingido.instanceId);
+    return prop ? { x: prop.position[0], z: prop.position[2] } : null;
+  }
+  return baseDoProp(atingido.object, grupo);
+}
 
 /** folga acima do chão pra não brigar com o z-fighting do topo do tile */
 export const LIFT = 0.06;

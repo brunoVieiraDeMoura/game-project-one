@@ -34,7 +34,7 @@ import {
 import { desvioDoRelogio } from "./relogioDoServidor";
 import { celulaParaEncostar, useAttackStore } from "./attackStore";
 import { registrarParadaDeMovimento } from "./pararMovimentoDeAcao";
-import { usePickupStore } from "./pickupStore";
+import { pegandoItem, usePickupStore } from "./pickupStore";
 import { useGroundItems } from "./GroundItems";
 import { usePlayerStore } from "./playerStore";
 import { useAimStore } from "./aimStore";
@@ -45,6 +45,8 @@ import { celulaNoAlcance, dentroDoAlcance, useSkillWalkStore } from "./skillWalk
 import { useSkillTargetStore } from "./skillTargetStore";
 import { pulsoDe } from "./combatAnim";
 import { SelfBars } from "./SelfBars";
+import { footstepFrame } from "../audio/footsteps";
+import { registrarPedidoDeColeta } from "../audio/itemSfx";
 
 /**
  * O roBrowser limita a 200 ms entre pedidos de caminhada, e é o que o cliente
@@ -114,22 +116,6 @@ const POSICAO_SERVIDOR_VALIDA_MS = 400;
  * personagem levantando a arma sem baixar. 1,5 s dá folga sobre o pior caso.
  */
 const ATAQUE_VIVO_MS = 1500;
-
-/**
- * Por quanto tempo DEPOIS de mandar `item:pickup` ainda se engole o pulso de
- * combate (ver o uso, mais abaixo).
- *
- * `usePickupStore.parar()` limpa o alvo NO MESMO INSTANTE em que o pedido
- * sai (`buscarItem`) — antes mesmo do servidor responder. Um `action:attack`
- * que já estava em voo (`stepaction`, unit.cpp:2959 — mesmo mecanismo do
- * comentário em `perseguirAlvo`) resolve DEPOIS: o `entity:action` chega e
- * `marcarAtaque` registra o pulso com `pickupStore.alvo` já nulo, e a
- * animação de golpe tocava no meio do caminho até o item mesmo com o guard
- * (bug relatado: "não removeu a animação"). Uma janela de tempo, não só o
- * estado do store, é o que cobre essa lacuna. 1 s é generoso sobre um
- * round-trip de rede + o tick do servidor.
- */
-const PICKUP_ENGOLE_PULSO_MS = 1000;
 
 /**
  * Abaixo disto não é recuada, é ruído de ponto flutuante.
@@ -202,8 +188,6 @@ export function NetPlayer({
   const ultimoPulsoVisto = useRef(0);
   const ocupadoAte = useRef(0);
   const emCombateAntes = useRef(false);
-  /** quando o último `item:pickup` saiu — ver `PICKUP_ENGOLE_PULSO_MS` abaixo */
-  const ultimoPickupEm = useRef(0);
   const moveTarget = usePlayStore((s) => s.moveTarget);
   const setMoveTarget = usePlayStore((s) => s.setMoveTarget);
   const wasMoving = useRef(false);
@@ -634,7 +618,10 @@ export function NetPlayer({
     if (dist <= PEGAR_ALCANCE) {
       usePickupStore.getState().parar();
       destinoFinal.current = null;
-      ultimoPickupEm.current = now;
+      usePickupStore.getState().marcarPedido(now);
+      // marca o pedido REAL de coleta (não o clique) — `audio/itemSfx` casa
+      // com o `inv:add` que confirma, e só aí toca o som
+      registrarPedidoDeColeta();
       gateway().emit("item:pickup", { gid: alvo.gid });
       return;
     }
@@ -912,6 +899,12 @@ export function NetPlayer({
     perseguirParaCastar(now);
     const cell = interpolatedCell(self, now);
 
+    // loop de passo: `cell.moving` já É o "andando/parado" que a animação
+    // (mais abaixo) usa — o mesmo estado, não um segundo relógio. A célula
+    // arredondada só serve pra saber QUAL superfície tocar; cruzá-la não é
+    // mais o gatilho (ver `audio/footsteps.footstepFrame`).
+    footstepFrame(cell.moving, map, mapping, Math.round(cell.x), Math.round(cell.y));
+
     /**
      * DETECTOR DE RECUADA (DEV) — o desenho andou para o lado de onde veio?
      *
@@ -1060,11 +1053,11 @@ export function NetPlayer({
        * NÃO basta checar só `pickupStore.alvo` — `buscarItem` já limpa o
        * alvo NO INSTANTE em que manda `item:pickup`, antes da resposta do
        * servidor, e é exatamente NESSA janela que o pulso atrasado chega.
-       * `ultimoPickupEm` cobre essa lacuna (ver `PICKUP_ENGOLE_PULSO_MS`).
+       * `pickupStore.ultimoPedidoEm` cobre essa lacuna (ver
+       * `PICKUP_ENGOLE_PULSO_MS`, agora no store para o mesmo guard valer
+       * também pro som/voz de ataque em `useWorldEvents.onAction`).
        */
-      const pegandoItem =
-        usePickupStore.getState().alvo !== null || now - ultimoPickupEm.current < PICKUP_ENGOLE_PULSO_MS;
-      if (pegandoItem) {
+      if (pegandoItem(now)) {
         // pulso engolido — ver comentário acima
       } else if (pulso.tipo === "attack") {
         ocupadoAte.current = now + playOnce("attack") * 1000;
@@ -1153,7 +1146,7 @@ export function NetPlayer({
 
   return (
     <group ref={group}>
-      <group ref={model} scale={gameplay.charScale}>
+      <group ref={model} scale={gameplay.charScale * classModel.scale}>
         <primitive object={scene} />
         {!characterKey && <EquippedWeapons scene={scene} weapons={classModel.weapons} />}
       </group>

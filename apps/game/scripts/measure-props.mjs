@@ -33,6 +33,7 @@ const CATALOGS = [
   { json: `${SRC}/hex-decor-catalog.json`, base: PUBLIC },
   { json: `${SRC}/hex-tiles-catalog.json`, base: PUBLIC },
   { json: `${SRC}/forest-catalog.json`, base: `${PUBLIC}/props` },
+  { json: `${SRC}/nature-catalog.json`, base: `${PUBLIC}/nature` },
 ];
 
 const COMP = { 5126: Float32Array, 5123: Uint16Array, 5125: Uint32Array };

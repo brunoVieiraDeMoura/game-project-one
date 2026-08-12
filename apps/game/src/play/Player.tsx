@@ -13,6 +13,7 @@ import { CHARACTER_URLS, useCharacter, type CharacterKey } from "../assets";
 import { usePlayerInput } from "./usePlayerInput";
 import { isTyping } from "./isTyping";
 import { usePlayStore } from "./playStore";
+import { vozDePulo } from "../audio/combatVoice";
 
 /**
  * Player do modo LOCAL (demo, preview do editor).
@@ -162,6 +163,11 @@ export function Player({
         airborne.current = true;
         vy.current = Math.sqrt(2 * gameplay.gravity * gameplay.jumpHeight);
         playOnce("jump", JUMP_ANIM_SPEED);
+        // evento REAL de pulo (edge da barra de espaço, consumido uma vez
+        // acima) — ver a limitação documentada em `audio/combatVoice.vozDePulo`:
+        // este é o ÚNICO pulo que existe no cliente (mundo offline/demo); o
+        // gatilho e o portão de classe estão corretos mesmo assim.
+        vozDePulo();
       }
     }
     if (airborne.current) {

@@ -50,6 +50,8 @@ export function mapToRow(m: GameMap): MapRow {
         triggers: m.triggers,
         ramps: m.ramps,
         lighting: m.lighting,
+        sky: m.sky,
+        ambientParticles: m.ambientParticles,
         authoredHexScale: m.authoredHexScale,
         legacy: m.legacy,
       },
@@ -66,6 +68,8 @@ export function rowToMap(row: MapRow): GameMap {
     triggers?: unknown;
     ramps?: unknown;
     lighting?: unknown;
+    sky?: unknown;
+    ambientParticles?: unknown;
     authoredHexScale?: number;
     legacy?: unknown;
   };
@@ -87,6 +91,8 @@ export function rowToMap(row: MapRow): GameMap {
     triggers: blocks.triggers ?? [],
     ramps: blocks.ramps ?? [],
     lighting: blocks.lighting,
+    sky: blocks.sky,
+    ambientParticles: blocks.ambientParticles,
     // authoredHexScale também não tinha coluna e vinha se perdendo no round-trip
     // (voltava sempre 1, reescalando props/spawns errado na carga).
     authoredHexScale: blocks.authoredHexScale ?? 1,

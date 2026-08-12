@@ -16,12 +16,12 @@ function mapaFake(width: number, height: number): GameMap {
 }
 
 describe("buildHorizonGeometry", () => {
-  it("prt_fild08 (400×400): 71×71 vértices, 9.800 triângulos, 1 geometria", () => {
+  it("prt_fild08 (400×400): 141×141 vértices, 39.200 triângulos, 1 geometria", () => {
     const map = mapaFake(400, 400);
     const b = buildHorizonGeometry(map);
-    // cols/rows = floor(400/8)+1 (51) + 2×padSteps (10, de PADDING_MUNDO=160/16) = 71
-    expect(b.vertices).toBe(71 * 71);
-    expect(b.triangulos).toBe(70 * 70 * 2);
+    // cols/rows = floor(400/4)+1 (101) + 2×padSteps (40, de PADDING_MUNDO=160/8) = 141
+    expect(b.vertices).toBe(141 * 141);
+    expect(b.triangulos).toBe(140 * 140 * 2);
     expect(b.geometry.getAttribute("position")).toBeDefined();
     expect(b.geometry.getAttribute("color")).toBeDefined();
     expect(b.geometry.getAttribute("normal")).toBeDefined();
@@ -29,14 +29,14 @@ describe("buildHorizonGeometry", () => {
     b.geometry.dispose();
   });
 
-  it("passo de amostragem é o documentado (8 células)", () => {
-    expect(PASSO_HORIZONTE).toBe(8);
+  it("passo de amostragem é o documentado (4 células — otimização de renderização, prioridade 8: LOD de relevo mais fino que o original)", () => {
+    expect(PASSO_HORIZONTE).toBe(4);
   });
 
   it("vértice acompanha o RELEVO real, não fica plano", () => {
     const map = mapaFake(64, 64);
     // parede sobe um nível (visualLevel) numa faixa inteira de células — larga
-    // o bastante (> 2×JANELA_NIVEL_MINIMO+1 = 17) para que algum vértice
+    // o bastante (> 2×JANELA_NIVEL_MINIMO+1 = 9) para que algum vértice
     // decimado tenha a JANELA inteira dentro da parede: BUG 1 usa o MÍNIMO da
     // vizinhança, então uma faixa mais estreita que a janela é sempre
     // "achatada" pelo vizinho baixo de fora dela — não é defeito do teste, é o
@@ -77,9 +77,9 @@ describe("buildHorizonGeometry", () => {
     const box = b.geometry.boundingBox!;
     const vaoX = box.max.x - box.min.x;
     const vaoZ = box.max.z - box.min.z;
-    // 50 passos de 8 células × 2 unidades = 800 (o mapa inteiro, não o raio
+    // 100 passos de 4 células × 2 unidades = 800 (o mapa inteiro, não o raio
     // de detalhe ~130) + 160 de cada lado (franja do BUG 3) = 1120
-    const esperado = 50 * PASSO_HORIZONTE * SQUARE_SIZE + 2 * 160;
+    const esperado = 100 * PASSO_HORIZONTE * SQUARE_SIZE + 2 * 160;
     expect(vaoX).toBeCloseTo(esperado, 1);
     expect(vaoZ).toBeCloseTo(esperado, 1);
     b.geometry.dispose();
@@ -98,8 +98,8 @@ describe("buildHorizonGeometry", () => {
     const box = b.geometry.boundingBox!;
     expect(box.min.x).toBeCloseTo(-160, 1);
     expect(box.min.z).toBeCloseTo(-160, 1);
-    expect(box.max.x).toBeCloseTo(50 * PASSO_HORIZONTE * SQUARE_SIZE + 160, 1);
-    expect(box.max.z).toBeCloseTo(50 * PASSO_HORIZONTE * SQUARE_SIZE + 160, 1);
+    expect(box.max.x).toBeCloseTo(100 * PASSO_HORIZONTE * SQUARE_SIZE + 160, 1);
+    expect(box.max.z).toBeCloseTo(100 * PASSO_HORIZONTE * SQUARE_SIZE + 160, 1);
     b.geometry.dispose();
   });
 

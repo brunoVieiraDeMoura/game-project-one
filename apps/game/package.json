@@ -12,7 +12,8 @@
     "test:perf": "vitest run src/perf",
     "tiles:measure": "node scripts/measure-tiles.mjs",
     "props:measure": "node scripts/measure-props.mjs",
-    "terrain:textures": "node scripts/make-terrain-textures.mjs"
+    "terrain:textures": "node scripts/make-terrain-textures.mjs",
+    "chars:knight-mixamo": "node scripts/prep-knight-mixamo.mjs"
   },
   "dependencies": {
     "@ragnarok/engine-core": "workspace:*",

@@ -21,6 +21,8 @@ function mapa(w: number, h: number, cellSize = 5): GameMap {
     ramps: [],
     authoredHexScale: 1,
     lighting: { sunAzimuth: 40, sunElevation: 55, sunIntensity: 1.2, ambient: 0.75 },
+    sky: { skyId: "day" },
+    ambientParticles: [],
     metadata: { version: 6, generatedAt: new Date().toISOString() },
   } as GameMap;
 }

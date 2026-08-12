@@ -16,7 +16,9 @@
     "seed:monsters": "tsx src/scripts/seed-monsters.ts",
     "seed:npcs": "tsx src/scripts/seed-npcs.ts",
     "seed:maps": "tsx src/scripts/seed-maps.ts",
-    "link:legacy-map": "tsx src/scripts/link-legacy-map.ts"
+    "link:legacy-map": "tsx src/scripts/link-legacy-map.ts",
+    "build:showcase-map": "tsx src/scripts/build-showcase-map.ts",
+    "fix:move-speed": "tsx src/scripts/fix-move-speed.ts"
   },
   "dependencies": {
     "@fastify/compress": "^9.1.0",

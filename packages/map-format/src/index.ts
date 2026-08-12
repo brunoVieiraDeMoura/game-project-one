@@ -136,6 +136,36 @@ export const LightingSchema = z.object({
 export type Lighting = z.infer<typeof LightingSchema>;
 export const DEFAULT_LIGHTING: Lighting = { sunAzimuth: 40, sunElevation: 55, sunIntensity: 1.2, ambient: 0.75 };
 
+/**
+ * Céu do mapa (painel "Camadas & Luz" do editor, junto de `lighting`).
+ *
+ * `skyId` é uma CHAVE, não um caminho de arquivo — quem resolve `skyId` →
+ * `/assets/sky/*.png` é `apps/game/src/scene/skyCatalog.ts` (a lista real de
+ * arquivos, derivada de `assets-new/sky`, vive só lá; este pacote não sabe
+ * nada de asset, só guarda a escolha). Chave desconhecida = cliente cai no
+ * default dele, não é erro de schema.
+ */
+export const SkySchema = z.object({ skyId: z.string() });
+export type SkyConfig = z.infer<typeof SkySchema>;
+export const DEFAULT_SKY: SkyConfig = { skyId: "day" };
+
+/**
+ * UMA entrada de partícula ambiental do mapa (painel "Camadas & Luz").
+ *
+ * `particleId` também é chave, não asset — o catálogo real (textura, cor,
+ * blending por tipo) mora em `apps/game/src/vfx/AmbientParticles.tsx`, pro
+ * mesmo motivo do céu: este pacote não referencia arquivo nenhum.
+ */
+export const AmbientParticleConfigSchema = z.object({
+  particleId: z.string(),
+  enabled: z.boolean().default(true),
+  /** 0..1 — controla QUANTIDADE (não é opacidade); ver AmbientParticles */
+  intensity: z.number().min(0).max(1).default(0.5),
+  scale: z.number().positive().default(1),
+  speed: z.number().positive().default(1),
+});
+export type AmbientParticleConfig = z.infer<typeof AmbientParticleConfigSchema>;
+
 export const GameMapSchema = z
   .object({
     id: z.string(),
@@ -176,6 +206,10 @@ export const GameMapSchema = z
     ramps: z.array(z.number().int()).default([]),
     /** sol/ambiente do editor. Opcional p/ back-compat (mapas antigos usam DEFAULT_LIGHTING). */
     lighting: LightingSchema.default(DEFAULT_LIGHTING),
+    /** céu do mapa. Opcional p/ back-compat (mapas antigos usam DEFAULT_SKY). */
+    sky: SkySchema.default(DEFAULT_SKY),
+    /** partículas ambientais do mapa. Vazio = nenhuma (comportamento de antes). */
+    ambientParticles: z.array(AmbientParticleConfigSchema).default([]),
     /**
      * Tamanho de bloco (ServerConfig.gameplay.hexScale) em que as POSIÇÕES de
      * props/spawns/rotas deste mapa foram autoradas.
@@ -255,6 +289,8 @@ export function createBlankMap(id: string, name: string, width = 32, height = 32
     // mapa novo nasce em unidades nativas; o editor grava a escala real no save
     authoredHexScale: 1,
     lighting: { ...DEFAULT_LIGHTING },
+    sky: { ...DEFAULT_SKY },
+    ambientParticles: [],
     metadata: { version: MAP_SCHEMA_VERSION, generatedAt: new Date().toISOString() },
   };
 }

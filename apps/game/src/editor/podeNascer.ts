@@ -39,6 +39,10 @@ const PERMITIDO: Record<string, ReadonlySet<SurfaceType>> = {
   tree: new Set<SurfaceType>(["grass", "dirt"]),
   grass: new Set<SurfaceType>(["grass", "dirt"]),
   bush: new Set<SurfaceType>(["grass", "dirt"]),
+  /** flor/planta/samambaia/cogumelo — mesmo chão da grama: sub-bosque, não
+   * sustenta em pedra/areia/neve nem embaixo d'água */
+  flower: new Set<SurfaceType>(["grass", "dirt"]),
+  plant: new Set<SurfaceType>(["grass", "dirt"]),
 
   /**
    * ÁRVORE SECA — o oposto da viva.
@@ -57,6 +61,8 @@ const PERMITIDO: Record<string, ReadonlySet<SurfaceType>> = {
    * valem: pedra em duna e em campo de gelo é comum.
    */
   rock: new Set<SurfaceType>(["grass", "dirt", "sand", "snow"]),
+  /** pedra pequena/de caminho — mesma regra da rocha grande */
+  stone: new Set<SurfaceType>(["grass", "dirt", "sand", "snow"]),
   hill: new Set<SurfaceType>(["grass", "dirt", "sand", "snow"]),
   mountain: new Set<SurfaceType>(["grass", "dirt", "sand", "snow"]),
 
@@ -70,7 +76,7 @@ const PERMITIDO: Record<string, ReadonlySet<SurfaceType>> = {
 };
 
 /** grupos que não aceitam LADEIRA */
-const EXIGE_PLANO = new Set(["tree", "grass", "bush", "tree_bare", "building"]);
+const EXIGE_PLANO = new Set(["tree", "grass", "bush", "tree_bare", "building", "flower", "plant"]);
 
 /**
  * Desnível que já conta como ladeira, em NÍVEIS entre células vizinhas.

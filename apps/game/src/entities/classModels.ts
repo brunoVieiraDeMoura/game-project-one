@@ -43,7 +43,12 @@ import type { CharacterKey, WeaponFamily, WeaponMount } from "../assets";
  *    (duas dagas), não uma aproximação.
  */
 
-const CLASS_MODEL: Record<WeaponFamily, { character: CharacterKey; weapons: WeaponMount[] }> = {
+const CLASS_MODEL: Record<WeaponFamily, { character: CharacterKey; weapons: WeaponMount[]; scale?: number }> = {
+  // Teste isolado do Espadachim com rig Mixamo (leia1.txt) foi revertido a
+  // pedido do usuário — volta pro `knight` do KayKit (`Rig_Medium`), arma no
+  // `handslotr`, sem `scale` extra (default 1). O acervo `knight_mixamo`
+  // (`assets.ts`, `scripts/prep-knight-mixamo.mjs`) fica no repo pra retomar
+  // depois, só não está mais ligado aqui.
   swordsman: { character: "knight", weapons: [{ weapon: "sword_2handed", slot: "handslotr" }] },
   thief: {
     character: "rogue_hooded",
@@ -70,6 +75,8 @@ export interface ClassModel {
   character: CharacterKey;
   family: WeaponFamily;
   weapons: WeaponMount[];
+  /** multiplicador em cima do `charScale` global — default 1 (ver `CLASS_MODEL`) */
+  scale: number;
 }
 
 /**
@@ -180,5 +187,42 @@ export function weaponFamilyFor(jobId: number | undefined | null): WeaponFamily 
 
 export function classModelFor(jobId: number | undefined | null): ClassModel {
   const family = weaponFamilyFor(jobId);
-  return { family, ...CLASS_MODEL[family] };
+  const model = CLASS_MODEL[family];
+  return { family, ...model, scale: model.scale ?? 1 };
+}
+
+/**
+ * Espadachim OU alguma evolução da linhagem dele (Knight, Crusader, Lord
+ * Knight, Paladin, Rune Knight, Royal Guard, Dragon Knight, Imperial Guard,
+ * baby/high-novice/transcendente de todas essas) — não só o job base.
+ *
+ * Reusa `SWORDSMAN_IDS` (via `weaponFamilyFor`) de propósito: é a MESMA
+ * árvore, já fechada transitivamente contra `job-classes.json`, que decide o
+ * modelo visual. Áudio de combate (`audio/combatVoice`, `audio/combatWeapon`)
+ * usa esta função como o único portão de classe — nunca `jobId === 1`
+ * (perderia as evoluções) nem o nome exibido na UI (frágil a
+ * localização/typo).
+ */
+export function isSwordmanClass(jobId: number | undefined | null): boolean {
+  return weaponFamilyFor(jobId) === "swordsman";
+}
+
+/**
+ * Arqueiro (Archer) e evoluções (Hunter, Sniper, Ranger, transcendentes/baby)
+ * — mesmo espírito de `isSwordmanClass`: reusa `ARCHER_IDS` via
+ * `weaponFamilyFor`, nunca uma lista de ids paralela.
+ */
+export function isArcherClass(jobId: number | undefined | null): boolean {
+  return weaponFamilyFor(jobId) === "archer";
+}
+
+/**
+ * Mage e evoluções (Wizard, High Wizard, Warlock, transcendentes/baby) — MESMA
+ * família (`MAGE_IDS`) que também cobre Acolyte/Priest/Arch_Bishop/Cardinal
+ * (cajado compartilhado, ver comentário de `MAGE_IDS`). Áudio de combate do
+ * Mago (`audio/combatVoice`, `audio/coldBoltCast`) usa este portão, mesmo
+ * espírito de `isSwordmanClass`/`isArcherClass`.
+ */
+export function isMageClass(jobId: number | undefined | null): boolean {
+  return weaponFamilyFor(jobId) === "mage";
 }

@@ -1,19 +1,33 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { windUniforms } from "../props/wind";
 
 /**
- * Partículas ambientais LEVES (poeira, brasa, faísca, brilho mágico, névoa
- * d'água) — `assets-new/particles` (Kenney) → `public/assets/particles`.
+ * Partículas ambientais LEVES (poeira, neve, brasa, faísca, brilho mágico,
+ * névoa d'água) — `assets-new/particles` (Kenney) → `public/assets/particles`.
  *
  * UM `InstancedMesh` por emissor, geometria e material compartilhados entre
  * TODAS as instâncias daquele emissor (1 draw call, `count` livre — 20 ou
  * 2000 custam o mesmo em draw calls). Nenhuma partícula é um objeto React:
  * a posição-base de cada uma é escrita UMA VEZ no `instanceMatrix` na
- * montagem; a deriva/subida/ciclo de vida daí em diante é 100% GPU, lida a
- * partir de `uTime` (um `useFrame` só, por emissor — não por partícula) e de
- * uma semente por instância (`aSeed`, atributo instanced, gera fase/tamanho
- * diferentes sem nenhum uniform por partícula).
+ * montagem; a deriva/subida/varredura/ciclo de vida daí em diante é 100% GPU,
+ * lida a partir de `uTime` (um `useFrame` só, por emissor — não por
+ * partícula) e de uma semente por instância (`aSeed`, atributo instanced,
+ * gera fase/tamanho diferentes sem nenhum uniform por partícula).
+ *
+ * DOIS PADRÕES DE MOVIMENTO, não um só (era o problema da rodada anterior:
+ * tudo "flutua no lugar", que serve pra brasa/brilho mas não pra "poeira
+ * atravessando a área" nem "neve caindo"):
+ *  • `sweep = 0` (brasa, faísca, brilho, névoa) — paira perto da ORIGEM,
+ *    com pequena deriva senoidal; é o emissor LOCAL clássico (fogueira,
+ *    margem de lago).
+ *  • `sweep > 0` (poeira, neve) — soma um deslocamento CONTÍNUO na direção
+ *    do vento GLOBAL (`props/wind.ts: windUniforms`, o MESMO uniform que já
+ *    move grama/árvore — reaproveitado, não duplicado) proporcional ao
+ *    ciclo de vida: a partícula nasce numa borda, atravessa a área ao longo
+ *    da vida e reaparece do outro lado. É isso que lê como "atravessando o
+ *    mapa" em vez de "balançando no mesmo lugar".
  *
  * Billboard: em vez de girar o `instanceMatrix` pra encarar a câmera (que
  * exigiria recompor a matriz por partícula por quadro — exatamente o update
@@ -21,37 +35,67 @@ import * as THREE from "three";
  * PRÓPRIO shader pelos eixos direita/cima extraídos de `viewMatrix` — a
  * mesma conta pra N instâncias, de graça.
  *
- * Culling: bounding sphere cobrindo origem+raio+altura pro frustum culling
- * padrão do three pegar sozinho, MAIS um corte por distância (esconde o
- * emissor inteiro além de `cullDistance`) — um `useFrame` por EMISSOR, não
- * por partícula, mesma classe de custo do `SunRig` seguindo o player.
+ * Culling: bounding sphere cobrindo origem+raio+alcance (subida/queda +
+ * varredura) pro frustum culling padrão do three pegar sozinho, MAIS um
+ * corte por distância (esconde o emissor inteiro além de `cullDistance`) —
+ * um `useFrame` por EMISSOR, não por partícula, mesma classe de custo do
+ * `SunRig` seguindo o player.
  */
 
-export type ParticleKind = "dust" | "ember" | "spark" | "magic" | "mist";
+export type ParticleKind = "dust" | "snow" | "ember" | "spark" | "magic" | "mist";
 
 interface Preset {
   url: string;
   color: string;
   blending: THREE.Blending;
   size: number;
+  /** deslocamento vertical ao longo do ciclo de vida — negativo = cai */
   rise: number;
   speed: number;
   drift: number;
   opacity: number;
+  /** alcance (unidades de mundo) da varredura na direção do vento global —
+   * 0 = paira perto da origem (emissor local); >0 = atravessa a área */
+  sweep: number;
 }
 
 const PRESETS: Record<ParticleKind, Preset> = {
-  // poeira — área seca, deriva lenta, quase sem subida
-  dust: { url: "/assets/particles/dust.png", color: "#c9b78c", blending: THREE.NormalBlending, size: 0.5, rise: 0.8, speed: 0.18, drift: 0.35, opacity: 0.5 },
-  // brasa — fogueira, sobe rápido, aditivo (brilha)
-  ember: { url: "/assets/particles/ember.png", color: "#ff9a3c", blending: THREE.AdditiveBlending, size: 0.35, rise: 2.2, speed: 0.55, drift: 0.25, opacity: 0.85 },
+  // poeira — área seca, VARRE a área na direção do vento (não paira no lugar)
+  dust: { url: "/assets/particles/dust.png", color: "#c9b78c", blending: THREE.NormalBlending, size: 0.5, rise: 0.6, speed: 0.16, drift: 0.3, opacity: 0.45, sweep: 22 },
+  // neve — cai devagar, varre um pouco menos que a poeira (mais pesada).
+  // SEM asset de floco real no pacote (assets-new/particles não tem nada
+  // com forma de floco/folha/pétala — auditado, ver relatório): usa
+  // `circle_01` (disco branco suave), técnica comum e honesta pra neve, não
+  // pretende ser floco desenhado.
+  snow: { url: "/assets/particles/snow.png", color: "#ffffff", blending: THREE.NormalBlending, size: 0.35, rise: -3.5, speed: 0.22, drift: 0.4, opacity: 0.8, sweep: 10 },
+  // brasa — fogueira, sobe rápido, aditivo (brilha), paira perto da origem
+  ember: { url: "/assets/particles/ember.png", color: "#ff9a3c", blending: THREE.AdditiveBlending, size: 0.35, rise: 2.2, speed: 0.55, drift: 0.25, opacity: 0.85, sweep: 0 },
   // faísca — acompanha a fogueira, mais rápida e pequena
-  spark: { url: "/assets/particles/spark.png", color: "#ffd27a", blending: THREE.AdditiveBlending, size: 0.22, rise: 3.0, speed: 0.9, drift: 0.4, opacity: 0.9 },
+  spark: { url: "/assets/particles/spark.png", color: "#ffd27a", blending: THREE.AdditiveBlending, size: 0.22, rise: 3.0, speed: 0.9, drift: 0.4, opacity: 0.9, sweep: 0 },
   // brilho mágico — área mágica, flutua devagar, aditivo suave
-  magic: { url: "/assets/particles/magic.png", color: "#b98cff", blending: THREE.AdditiveBlending, size: 0.6, rise: 0.5, speed: 0.12, drift: 0.5, opacity: 0.7 },
+  magic: { url: "/assets/particles/magic.png", color: "#b98cff", blending: THREE.AdditiveBlending, size: 0.6, rise: 0.5, speed: 0.12, drift: 0.5, opacity: 0.7, sweep: 0 },
   // névoa d'água — perto do lago, deriva quase parada, translúcida
-  mist: { url: "/assets/particles/mist.png", color: "#dff0f5", blending: THREE.NormalBlending, size: 1.1, rise: 0.15, speed: 0.06, drift: 0.6, opacity: 0.3 },
+  mist: { url: "/assets/particles/mist.png", color: "#dff0f5", blending: THREE.NormalBlending, size: 1.1, rise: 0.15, speed: 0.06, drift: 0.6, opacity: 0.3, sweep: 0 },
 };
+
+/** guarda de runtime — `map.ambientParticles[].particleId` vem de fora
+ * (config do mapa, salva pelo editor) como string solta, não como
+ * `ParticleKind`; isso valida antes de indexar `PRESETS` (chave
+ * desconhecida ali seria `undefined.blending` explodindo o material). */
+export function isParticleKind(v: string): v is ParticleKind {
+  return v === "dust" || v === "snow" || v === "ember" || v === "spark" || v === "magic" || v === "mist";
+}
+
+/** catálogo pro editor listar (id + rótulo em pt-br) — mesma fonte que
+ * `PRESETS`, pra nunca ficar dessincronizado do que o cliente sabe desenhar */
+export const PARTICLE_CATALOG: { id: ParticleKind; label: string }[] = [
+  { id: "dust", label: "Poeira (varre a área)" },
+  { id: "snow", label: "Neve (cai + varre)" },
+  { id: "ember", label: "Brasa (emissor local)" },
+  { id: "spark", label: "Faísca (emissor local)" },
+  { id: "magic", label: "Brilho mágico (emissor local)" },
+  { id: "mist", label: "Névoa d'água (emissor local)" },
+];
 
 const textureCache = new Map<string, THREE.Texture>();
 function textureFor(url: string): THREE.Texture {
@@ -70,6 +114,9 @@ uniform float uSize;
 uniform float uRise;
 uniform float uSpeed;
 uniform float uDrift;
+uniform float uSweep;
+uniform vec2 uWindDir;
+uniform float uWindStrength;
 attribute float aSeed;
 varying vec2 vUv;
 varying float vFade;
@@ -82,6 +129,12 @@ void main() {
   world.y += cycle * uRise;
   world.x += sin(t * 0.7 + aSeed * 11.0) * uDrift;
   world.z += cos(t * 0.5 + aSeed * 9.0) * uDrift;
+  // VARREDURA: desloca na direção do vento GLOBAL (mesmo uniform da grama/
+  // árvore) proporcional ao ciclo — 0 no nascimento, uSweep unidades no
+  // fim da vida, então reaparece do outro lado. uSweep=0 (emissor local)
+  // zera o termo inteiro, sem if nenhum.
+  vec2 windDir = normalize(uWindDir + vec2(1e-5, 0.0));
+  world.xz += windDir * (cycle * uSweep * (0.4 + 0.6 * uWindStrength));
   vFade = smoothstep(0.0, 0.15, cycle) * smoothstep(1.0, 0.85, cycle);
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
@@ -110,6 +163,7 @@ export function AmbientParticles({
   radius = 2.5,
   cullDistance = 90,
   scale = 1,
+  speedScale = 1,
 }: {
   kind: ParticleKind;
   origin: readonly [number, number, number];
@@ -124,6 +178,8 @@ export function AmbientParticles({
    * "obviamente visível"; em vez de mudar o preset global, quem monta pede
    * mais escala aqui */
   scale?: number;
+  /** multiplica velocidade de deriva/subida/varredura do preset (config de mapa) */
+  speedScale?: number;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const preset = PRESETS[kind];
@@ -151,11 +207,18 @@ export function AmbientParticles({
           uOpacity: { value: preset.opacity },
           uSize: { value: preset.size * scale },
           uRise: { value: preset.rise },
-          uSpeed: { value: preset.speed },
+          uSpeed: { value: preset.speed * speedScale },
           uDrift: { value: preset.drift },
+          uSweep: { value: preset.sweep * speedScale },
+          // MESMOS objetos do vento da vegetação — referência compartilhada,
+          // não cópia: quando `WindSystem` avança `uWindTime` em outro
+          // material, `uWindDir`/`uWindStrength` aqui já são os valores
+          // atuais, sem nenhuma sincronização extra.
+          uWindDir: windUniforms.uWindDir,
+          uWindStrength: windUniforms.uWindStrength,
         },
       }),
-    [preset, scale],
+    [preset, scale, speedScale],
   );
 
   // posição-base de cada instância — escrita UMA VEZ, nunca mais tocada
@@ -179,12 +242,13 @@ export function AmbientParticles({
      * deslocada por `instanceMatrix`, não pela geometria, então a esfera daí
      * saía centrada na ORIGEM DO MUNDO com raio ~0,5 — qualquer emissor longe
      * de (0,0,0) ficava fora do frustum e o three parava de desenhar o
-     * `InstancedMesh` INTEIRO. Era por isso que "5 InstancedMesh confirmados
-     * por script" não aparecia na tela: cortado antes do draw call, não
-     * depois. A esfera certa é centrada no PRÓPRIO `origin`.
+     * `InstancedMesh` INTEIRO. A esfera certa é centrada no PRÓPRIO `origin`,
+     * com raio suficiente pra cobrir raio de nascimento + subida/queda +
+     * varredura (as partículas de vento chegam a viajar `sweep` unidades).
      */
-    m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(origin[0], origin[1], origin[2]), radius + preset.rise + 1);
-  }, [count, origin, radius, preset.rise]);
+    const alcance = radius + Math.abs(preset.rise) + preset.sweep + 1;
+    m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(origin[0], origin[1], origin[2]), alcance);
+  }, [count, origin, radius, preset.rise, preset.sweep]);
 
   useEffect(() => () => {
     geometry.dispose();

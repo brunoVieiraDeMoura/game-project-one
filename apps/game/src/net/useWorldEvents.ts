@@ -16,9 +16,44 @@ import { useFriendStore } from "./friendStore";
 import { useLootStore } from "../hud/lootStore";
 import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
+import { vozDeAtaque, vozDeConjuracao, vozDeDano } from "../audio/combatVoice";
+import { efeitoDeAtaqueBasico, efeitoDeSkill } from "../audio/combatWeapon";
+import { aoComecarCastDeColdBolt, aoLiberarCastDeColdBolt } from "../audio/coldBoltCast";
+import { aoAparecerItemNoChao, aoGanharItem, registrarMorteDeMonstro } from "../audio/itemSfx";
+import { pegandoItem } from "./pickupStore";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
 import { clearEquipPending, settleStatusWatch, alcanceDaArma } from "./equipmentStore";
 import { useCardStore } from "./cardStore";
+import { useSkillCatalog } from "./skillCatalog";
+import { ICICLE_TOTAL_MS, emitirDanoEmCascata } from "../vfx/ColdBoltImpact";
+
+/** constante do rAthena p/ Cold Bolt — mesma usada em `vfx/SkillVfx` pra
+ * escolher o visual das 5 estalactites em vez do flash genérico */
+const AEGIS_COLD_BOLT = "MG_COLDBOLT";
+
+/**
+ * `__testarColdBolt(gid)` no console — visualizar o efeito sem precisar
+ * lançar a skill de verdade contra um monstro (leia1.txt, "testando pra ver
+ * se fica bom"). `gid` tem que ser uma entidade JÁ no `worldStore` (`__world()`
+ * lista as vivas) — o VFX se posiciona por `gid`, igual a um impacto de
+ * verdade. Mesmo espírito do `__vfx`/`__dano`/`__skillsReset`.
+ */
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __testarColdBolt?: (gid: number, dano?: number) => void }).__testarColdBolt = (
+    gid,
+    dano = 5000,
+  ) => {
+    const skillId = Object.values(useSkillCatalog.getState().byId).find((s) => s.aegisName === AEGIS_COLD_BOLT)?.id ?? 14;
+    useSkillCatalog.getState().ensure([skillId]);
+    useVfxStore.getState().spawn({
+      kind: "impact",
+      skillId,
+      gid,
+      expiresAt: performance.now() + ICICLE_TOTAL_MS + 100,
+    });
+    emitirDanoEmCascata(gid, dano, false, false);
+  };
+}
 
 /**
  * Entidades e movimento vindos do servidor → worldStore.
@@ -67,7 +102,25 @@ export function useWorldEvents(): void {
     };
     const onStop = (p: { gid: number; x: number; y: number }) =>
       useWorldStore.getState().stop(p.gid, p.x, p.y);
-    const onVanish = (p: { gid: number }) => useWorldStore.getState().vanish(p.gid);
+    const onVanish = (p: { gid: number; reason: number }) => {
+      /**
+       * `reason === 1` é `CLR_DEAD` (`rathena/src/map/clif.hpp: enum clr_type`)
+       * — morte de verdade, não saída de vista/teleporte/logout. Captura
+       * ANTES de `vanish()` apagar a entidade: é a única chance de saber o
+       * `job` (mobId) e a célula onde ele morreu, que é o dado que
+       * `audio/itemSfx` usa pra correlacionar um drop raro ao monstro que o
+       * gerou (ver o comentário lá — não existe um id de origem no pacote de
+       * drop em si).
+       */
+      const CLR_DEAD = 1;
+      if (p.reason === CLR_DEAD) {
+        const entidade = useWorldStore.getState().entities[p.gid];
+        if (entidade && entidade.kind === "mob") {
+          registrarMorteDeMonstro(entidade.job, entidade.x, entidade.y);
+        }
+      }
+      useWorldStore.getState().vanish(p.gid);
+    };
 
     const onAction = (p: {
       gid: number;
@@ -87,10 +140,33 @@ export function useWorldEvents(): void {
        * permite ao cliente parar de repetir o pedido — e não vê-lo, estando do
        * lado do alvo, é o que dispara a repetição.
        */
-      if (p.gid === selfGid) useAttackStore.getState().marcarAtaqueVisto(performance.now());
+      if (p.gid === selfGid) {
+        useAttackStore.getState().marcarAtaqueVisto(performance.now());
+        /**
+         * Áudio de combate (`audio/combatVoice`/`combatWeapon`, uma entrada
+         * por classe — Espadachim e Arqueiro hoje) — MESMO evento que já
+         * prova "foi o meu ataque", nenhum listener novo.
+         *
+         * Mesmo guard de `NetPlayer` pro pulso de ataque atrasado (ver
+         * `pickupStore.pegandoItem`): um `action:attack` já em voo no
+         * servidor (`stepaction`) pode resolver DEPOIS de `buscarItem` já ter
+         * mandado `item:pickup` — sem o guard, pegar item no meio de um
+         * combate tocava a voz/som de ataque (inclusive "erro"/miss, se o
+         * golpe atrasado deu `damage === 0`) por cima do som de coleta.
+         */
+        if (!pegandoItem(performance.now())) {
+          vozDeAtaque();
+          efeitoDeAtaqueBasico(p.damage, damageKind(p.action).crit);
+        }
+      }
       // e o contrário: quem bate em VOCÊ vira prioridade da assistência de mira
       // (ver `net/ameacas`) — o mesmo pacote, sem custo nenhum a mais
-      else if (p.targetGid === selfGid) marcarAmeaca(p.gid, performance.now());
+      else if (p.targetGid === selfGid) {
+        marcarAmeaca(p.gid, performance.now());
+        // dano de VERDADE, não esquiva/erro contra você (`damage === 0` não é
+        // "levar dano" — é o oponente errando)
+        if (p.damage > 0) vozDeDano();
+      }
       // e o golpe é a deixa da animação de ataque de QUEM bateu — próprio
       // personagem ou qualquer outra entidade (ver `net/combatAnim`)
       marcarAtaque(p.gid, performance.now());
@@ -209,6 +285,10 @@ export function useWorldEvents(): void {
       // e o aviso no alto da tela: sem ele, pegar coisa do chão não tinha
       // retorno nenhum — só abrindo o Alt+E dava para saber o que entrou
       useLootStore.getState().registrar(p.itemId, p.amount, performance.now());
+      // SFX de coleta — só toca se houver um `item:pickup` recente pendente
+      // (ver `audio/itemSfx.aoGanharItem`); outra origem de `inv:add` não
+      // acende o pedido, então não soa.
+      aoGanharItem();
     };
     const onInvRemove = (p: { index: number; amount: number }) =>
       usePlayerStore.getState().removeItem(p.index, p.amount);
@@ -252,14 +332,34 @@ export function useWorldEvents(): void {
       action: number;
     }) => {
       // a skill SAIU: a barra de conjuração do HUD não tem mais o que contar
-      if (p.sourceGid === useWorldStore.getState().selfGid) useCastStore.getState().parar();
+      if (p.sourceGid === useWorldStore.getState().selfGid) {
+        useCastStore.getState().parar();
+        // áudio de combate (Espadachim) — só a PRÓPRIA skill do jogador, nunca
+        // a de outro personagem por perto; `p.kind` é o mesmo campo que
+        // decide buff×dano duas linhas abaixo, não uma segunda classificação
+        efeitoDeSkill(p.kind === "buff" ? "buff" : "target", p.skillId);
+        // grito de conjuração (Mago) — QUALQUER skill, não só as com efeito
+        // de arma configurado; ver `audio/combatVoice.vozDeConjuracao`
+        vozDeConjuracao();
+        // Cold Bolt: liberação + impacto 500ms depois, ver `audio/coldBoltCast`
+        aoLiberarCastDeColdBolt(p.skillId);
+      }
       // e é a deixa da animação de LIBERAÇÃO — o tiro/gesto final da magia
       marcarCastRelease(p.sourceGid, performance.now());
+      // aquece o catálogo pro `aegisName` abaixo — na primeira vez que
+      // QUALQUER personagem lança uma skill nunca vista, este cast ainda
+      // cai no flash genérico (fetch é assíncrono); o próximo já acerta
+      useSkillCatalog.getState().ensure([p.skillId]);
+      // Cold Bolt precisa da sequência inteira no ar (5 estalactites
+      // escalonadas, ver `vfx/ColdBoltImpact`) — o `EFFECT_MS` genérico do
+      // flash pontual (600ms) poda a última antes dela cair.
+      const aegis = useSkillCatalog.getState().byId[p.skillId]?.aegisName;
+      const isColdBolt = p.kind !== "buff" && aegis === AEGIS_COLD_BOLT;
       useVfxStore.getState().spawn({
         kind: p.kind === "buff" ? "buff" : "impact",
         skillId: p.skillId,
         gid: p.kind === "buff" ? p.sourceGid : p.targetGid,
-        expiresAt: performance.now() + EFFECT_MS,
+        expiresAt: performance.now() + (isColdBolt ? ICICLE_TOTAL_MS + 100 : EFFECT_MS),
       });
       /**
        * O número de dano da skill, MESMA fonte que o ataque básico
@@ -271,13 +371,19 @@ export function useWorldEvents(): void {
        */
       if (p.kind === "target") {
         const selfGid = useWorldStore.getState().selfGid;
-        useDamageFeed.getState().push({
-          gid: p.targetGid,
-          value: p.damage,
-          crit: damageKind(p.action).crit,
-          miss: p.damage === 0,
-          onSelf: p.targetGid === selfGid,
-        });
+        const onSelf = p.targetGid === selfGid;
+        const crit = damageKind(p.action).crit;
+        if (isColdBolt && p.damage > 0) {
+          emitirDanoEmCascata(p.targetGid, p.damage, crit, onSelf);
+        } else {
+          useDamageFeed.getState().push({
+            gid: p.targetGid,
+            value: p.damage,
+            crit,
+            miss: p.damage === 0,
+            onSelf,
+          });
+        }
       }
     };
 
@@ -286,6 +392,8 @@ export function useWorldEvents(): void {
       // efeito na cena
       if (p.sourceGid === useWorldStore.getState().selfGid) {
         useCastStore.getState().comecar(p.skillId, p.durationMs || 0);
+        // Cold Bolt: som de "carregando a magia", ver `audio/coldBoltCast`
+        aoComecarCastDeColdBolt(p.skillId);
       }
       // a animação de conjuração vale para QUALQUER caster, não só o próprio
       // personagem — é ela que faz o gesto de "carregando a magia" na cena
@@ -319,7 +427,12 @@ export function useWorldEvents(): void {
       y: number;
       subX: number;
       subY: number;
-    }) => useGroundItems.getState().put(p);
+    }) => {
+      useGroundItems.getState().put(p);
+      // drop raro — correlação com a morte de monstro mais próxima (ver
+      // `audio/itemSfx.aoAparecerItemNoChao`); sem morte por perto, não toca
+      aoAparecerItemNoChao(p.itemId, p.x, p.y);
+    };
     const onGroundItemGone = (p: { gid: number }) => useGroundItems.getState().remove(p.gid);
 
     const onNpcDialog = (p: { gid: number; kind: string; text?: string; options?: string[] }) => {

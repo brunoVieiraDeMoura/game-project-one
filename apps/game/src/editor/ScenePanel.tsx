@@ -1,6 +1,9 @@
+import type { AmbientParticleConfig } from "@ragnarok/map-format";
 import { useEditorStore, LAYERS, type LayerId } from "./editorStore";
 import { useGameplayConfig } from "../play/useGameplayConfig";
 import { Panel, RpgButton, ink } from "../ui/rpg";
+import { SKY_CATALOG } from "../scene/skyCatalog";
+import { PARTICLE_CATALOG } from "../vfx/AmbientParticles";
 
 /**
  * Painel Cena: iluminação (sol azimute/elevação/intensidade + ambiente) e
@@ -27,6 +30,12 @@ export function ScenePanel({ embedded }: { embedded?: boolean } = {}) {
       {slider("Sol — altura", lighting.sunElevation, 5, 90, 1, (n) => setLighting({ sunElevation: n }))}
       {slider("Sol — intensidade", lighting.sunIntensity, 0, 3, 0.1, (n) => setLighting({ sunIntensity: n }))}
       {slider("Ambiente", lighting.ambient, 0, 2, 0.05, (n) => setLighting({ ambient: n }))}
+
+      <div style={{ height: 1, background: ink.border, margin: "8px 0" }} />
+      <SkyPicker />
+
+      <div style={{ height: 1, background: ink.border, margin: "8px 0" }} />
+      <AmbientParticlesPanel />
 
       <div style={{ height: 1, background: ink.border, margin: "8px 0" }} />
       <GroundPreview />
@@ -178,6 +187,86 @@ function GroundPreview() {
           </p>
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * Céu do mapa — dropdown alimentado por `scene/skyCatalog.ts` (derivado dos
+ * arquivos reais em `assets-new/sky` → `public/assets/sky`; nomes daqui
+ * nunca são inventados, são os do catálogo). Salva em `map.sky.skyId` pelo
+ * mesmo mecanismo de `setLighting`.
+ */
+function SkyPicker() {
+  const sky = useEditorStore((s) => s.sky);
+  const setSky = useEditorStore((s) => s.setSky);
+  return (
+    <>
+      <div style={{ font: "700 11px system-ui", color: ink.dim, marginBottom: 6 }}>Céu</div>
+      <select
+        aria-label="Céu do mapa"
+        value={sky.skyId}
+        onChange={(e) => setSky({ skyId: e.target.value })}
+        style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: `1px solid ${ink.border}`, background: "rgba(255,255,255,0.05)", color: ink.text, font: "12px system-ui" }}
+      >
+        {SKY_CATALOG.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+}
+
+/** entrada default de uma partícula ainda não configurada neste mapa */
+function defaultEntry(particleId: string): AmbientParticleConfig {
+  return { particleId, enabled: false, intensity: 0.5, scale: 1, speed: 1 };
+}
+
+/**
+ * Partículas ambientais do mapa — um bloco por tipo do catálogo
+ * (`vfx/AmbientParticles.tsx: PARTICLE_CATALOG`, a MESMA lista que o
+ * cliente sabe desenhar — nunca inventa tipo novo aqui). `enabled` liga o
+ * tipo; intensidade/escala/velocidade só aparecem com o tipo ligado, pra não
+ * poluir o painel com 5 blocos de slider o tempo todo.
+ */
+function AmbientParticlesPanel() {
+  const list = useEditorStore((s) => s.ambientParticles);
+  const setList = useEditorStore((s) => s.setAmbientParticles);
+
+  const entryFor = (id: string) => list.find((p) => p.particleId === id) ?? defaultEntry(id);
+  const upsert = (id: string, patch: Partial<AmbientParticleConfig>) => {
+    const atual = entryFor(id);
+    const novo = { ...atual, ...patch };
+    const semEssa = list.filter((p) => p.particleId !== id);
+    setList([...semEssa, novo]);
+  };
+
+  return (
+    <>
+      <div style={{ font: "700 11px system-ui", color: ink.dim, marginBottom: 6 }}>Partículas ambientais</div>
+      {PARTICLE_CATALOG.map((c) => {
+        const e = entryFor(c.id);
+        return (
+          <div key={c.id} style={{ marginBottom: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, font: "12px system-ui", color: ink.text, cursor: "pointer" }}>
+              <input type="checkbox" checked={e.enabled} onChange={(ev) => upsert(c.id, { enabled: ev.target.checked })} />
+              {c.label}
+            </label>
+            {e.enabled && (
+              <div style={{ marginLeft: 22, marginTop: 4 }}>
+                <div style={{ font: "10px system-ui", color: ink.faint }}>Intensidade: {e.intensity.toFixed(2)}</div>
+                <input type="range" aria-label={`${c.label} — intensidade`} min={0} max={1} step={0.05} value={e.intensity} onChange={(ev) => upsert(c.id, { intensity: Number(ev.target.value) })} style={{ width: "100%" }} />
+                <div style={{ font: "10px system-ui", color: ink.faint }}>Escala: {e.scale.toFixed(2)}</div>
+                <input type="range" aria-label={`${c.label} — escala`} min={0.25} max={4} step={0.05} value={e.scale} onChange={(ev) => upsert(c.id, { scale: Number(ev.target.value) })} style={{ width: "100%" }} />
+                <div style={{ font: "10px system-ui", color: ink.faint }}>Velocidade: {e.speed.toFixed(2)}</div>
+                <input type="range" aria-label={`${c.label} — velocidade`} min={0.1} max={3} step={0.05} value={e.speed} onChange={(ev) => upsert(c.id, { speed: Number(ev.target.value) })} style={{ width: "100%" }} />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }

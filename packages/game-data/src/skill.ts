@@ -88,6 +88,10 @@ export const SkillSchema = z.object({
   id: z.number().int().positive(),
   aegisName: z.string().min(1),
   name: z.string().min(1),
+  /** nome do arquivo em `public/assets/skills/` (game e admin têm cópia
+   * própria) — mesma convenção do `icon` de StatusEffectDefSchema. Ausente =
+   * UI cai no placeholder por seed (`IconSquare`), nunca quebra. */
+  icon: z.string().optional(),
   maxLevel: z.number().int().positive(),
 
   type: SkillTypeSchema,

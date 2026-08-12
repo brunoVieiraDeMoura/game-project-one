@@ -37,6 +37,18 @@ export const CHARACTER_URLS = {
    * ladrão.
    */
   ranger: `${BASE}/characters/Ranger.glb`,
+  /**
+   * Teste isolado da linhagem Espadachim (leia1.txt, "personagem novo"):
+   * rig Mixamo (`mixamorig:*`, 41 joints) — NÃO é `Rig_Medium`, não divide
+   * osso nem clip com o resto do acervo KayKit. Gerado por
+   * `scripts/prep-knight-mixamo.mjs` a partir de `assets-new/characters-test/`
+   * (mescla o clip de ataque, que vinha num arquivo separado, zera o root
+   * motion de walk/run, liga a textura). Ver `CLIPS_DO_PROPRIO_MODELO`
+   * abaixo — este é o único `CharacterKey` cujos clips não vêm de
+   * `useSharedClips()`. `knight` (KayKit) continua intocado: NPC/mob ainda
+   * apontam pra ele (`entities/mobModels.ts`).
+   */
+  knight_mixamo: `${BASE}/characters/Knight_Mixamo.gltf`,
 } as const;
 export type CharacterKey = keyof typeof CHARACTER_URLS;
 
@@ -70,8 +82,12 @@ export type WeaponKey = keyof typeof WEAPON_URLS;
  * `handslotl`/`handslotr`; usar a forma com ponto aqui faria
  * `getObjectByName` nunca achar o osso (conferido com `__weaponDebug` no
  * `/class-preview`, todas as 20 tentativas voltavam `boneFound: false`).
+ *
+ * `mixamorigRightHand` é o mesmo fenômeno no rig Mixamo do
+ * `knight_mixamo`: o `:` de `mixamorig:RightHand` também é removido pelo
+ * sanitizador — sobra sem underscore nem ponto.
  */
-export type HandSlot = "handslotl" | "handslotr";
+export type HandSlot = "handslotl" | "handslotr" | "mixamorigRightHand";
 export interface WeaponMount {
   weapon: WeaponKey;
   slot: HandSlot;
@@ -128,6 +144,40 @@ const CLIP_SETS: Record<WeaponFamily, ClipSet> = {
 
 /** compat: quem só conhecia o CLIP fixo de antes (mago genérico) continua igual */
 export const CLIP = CLIP_SETS.mage;
+
+/**
+ * Modelo que traz o PRÓPRIO conjunto de clips, por url — desvio do caminho
+ * `CLIP_SETS[family]` acima.
+ *
+ * O acervo KayKit inteiro divide um rig (`Rig_Medium`, 23 joints) e uma
+ * biblioteca de clips externa (`useSharedClips`); `CLIP_SETS` só escolhe
+ * QUAIS nomes daquela biblioteca cada família toca. Um modelo de outro rig
+ * (aqui: Mixamo, 41 joints `mixamorig:*`) não pode usar aquela biblioteca —
+ * osso nenhum casa — então ele carrega os clips de dentro do próprio
+ * arquivo (`gltf.animations`) e entra aqui em vez de `CLIP_SETS`.
+ *
+ * Chaveado por URL, não por `CharacterKey` ou `WeaponFamily`: é o que
+ * `useCharacter` recebe, então os 6 chamadores (`NetPlayer`, `NetEntity`,
+ * `CharacterPortrait`, `Player`, `Monster`, `NpcWalker`) continuam iguais —
+ * nenhum precisa saber que este personagem é diferente.
+ *
+ * `cast`/`castRelease`/`jump` não têm clip próprio no acervo trazido para
+ * este teste — aproximação temporária (idle/attack/idle), não lacuna
+ * esquecida.
+ */
+const CLIPS_DO_PROPRIO_MODELO: Partial<Record<string, ClipSet>> = {
+  [CHARACTER_URLS.knight_mixamo]: {
+    idle: "idle",
+    walk: "walk",
+    run: "run",
+    attack: "attack",
+    hit: "hit",
+    death: "death",
+    cast: "idle",
+    castRelease: "attack",
+    jump: "idle",
+  },
+};
 
 /** pré-carrega tudo (drei cacheia por url) */
 export function preloadAssets() {
@@ -193,10 +243,16 @@ export function useCharacter(
   family: WeaponFamily = "mage",
 ): CharacterHandle {
   const gltf = useGLTF(url);
-  const clips = useSharedClips();
+  // incondicional (regra dos hooks) mesmo quando o modelo traz os próprios
+  // clips — os 4 .glb já estão em cache do `preloadAssets`, custo é zero
+  const compartilhados = useSharedClips();
   const animSpeed = useRef(animationSpeed);
   animSpeed.current = animationSpeed;
-  const clipSet = CLIP_SETS[family];
+  // ver `CLIPS_DO_PROPRIO_MODELO`: modelo de rig não-KayKit (ex. knight_mixamo)
+  // traz os próprios clips embutidos em vez de usar a biblioteca compartilhada
+  const proprios = CLIPS_DO_PROPRIO_MODELO[url];
+  const clips = proprios ? gltf.animations : compartilhados;
+  const clipSet = proprios ?? CLIP_SETS[family];
 
   const scene = useMemo(() => {
     /**

@@ -266,8 +266,10 @@ describe("o horizonte cobre onde a névoa fecha, e entidade nunca usa o raio da 
   it("vale para a config padrão", () => {
     const v = conferir({});
     expect(v.detalhe).toBeCloseTo(130, 0);
-    // referência usada no resto da auditoria (ver play/viewRadius)
-    expect(v.horizonte).toBeCloseTo(600, 0);
+    // referência usada no resto da auditoria (ver play/viewRadius) — 390 desde
+    // a otimização de renderização (ADICIONAL_DE_HORIZONTE 470→260): horizonte
+    // mais perto, névoa fecha mais cedo, sem cortar geometria de golpe
+    expect(v.horizonte).toBeCloseTo(390, 0);
   });
 
   it("vale para a config ANTIGA convertida (a que está salva no servidor)", () => {

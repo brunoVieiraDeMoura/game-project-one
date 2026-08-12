@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { ATAQUE_BASICO_ID } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway, type HotkeySlotPayload } from "../net/gateway";
+import { tocarMoveuItem } from "../audio/itemSfx";
 
 /**
  * Quais skills/itens o jogador colocou em cada slot da barra.
@@ -182,26 +183,38 @@ export const useSkillBar = create<SkillBarState>()(
           if (previous !== -1) sendToServer(previous, SLOT_VAZIO);
           sendToServer(slot, { kind: "item", id: itemId });
         }
+        // som de "item mudou de container" — só quando o slot MUDOU de
+        // verdade (soltar o item de volta no mesmo slot que já ocupava não é
+        // movimento nenhum, e não deveria soar como um)
+        if (previous !== slot) tocarMoveuItem();
       },
 
       // "ammo" nunca chama sendToServer — de propósito, sem equivalente no
       // rAthena (ver paraServidor). Continua 100% local, como sempre foi.
-      assignAmmo: (slot, itemId) =>
+      assignAmmo: (slot, itemId) => {
+        let previous = -1;
         set((s) => {
           const slots = s.slots.map((x) => ({ ...x }));
-          const previous = slots.findIndex((x) => x.kind === "ammo" && x.id === itemId);
+          previous = slots.findIndex((x) => x.kind === "ammo" && x.id === itemId);
           if (previous !== -1) slots[previous] = { ...SLOT_VAZIO };
           slots[slot] = { kind: "ammo", id: itemId };
           return { slots };
-        }),
+        });
+        if (previous !== slot) tocarMoveuItem();
+      },
 
       clear: (slot) => {
+        // capturado ANTES de zerar: precisa saber se havia item/munição ali
+        // pra decidir se toca o som — limpar skill, ou um slot já vazio, não
+        // é "item saindo da barra"
+        const eraItemOuMunicao = get().slots[slot]?.kind === "item" || get().slots[slot]?.kind === "ammo";
         set((s) => {
           const slots = s.slots.map((x) => ({ ...x }));
           slots[slot] = { ...SLOT_VAZIO };
           return { slots };
         });
         if (get().serverSynced) sendToServer(slot, SLOT_VAZIO);
+        if (eraItemOuMunicao) tocarMoveuItem();
       },
 
       swap: (from, to) => {

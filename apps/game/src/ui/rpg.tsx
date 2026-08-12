@@ -157,6 +157,9 @@ export function IconSquare({
   size = 34,
   label,
   loading,
+  imageSrc,
+  fill,
+  radius = 0,
 }: {
   seed?: string;
   standard?: boolean;
@@ -164,25 +167,66 @@ export function IconSquare({
   label?: string;
   /** nome ainda não chegou do catálogo — mostra o anel em vez do rótulo/cor final */
   loading?: boolean;
+  /** ícone de verdade (`public/assets/...`) — presente e carregando com sucesso
+   * substitui o quadrado colorido por seed; erro de carga volta pro
+   * placeholder sozinho (`onError` troca o estado local), nunca quebra a UI */
+  imageSrc?: string;
+  /**
+   * `size` vira só a dica pro raio do `LoadingRing` — a caixa em si ocupa
+   * 100% do PAI (que precisa ter tamanho de verdade, ex.: `inset:"12%"`
+   * dentro de uma célula de CSS grid). Existe porque alguns chamadores
+   * (grade de skills, `SkillsWindow.tsx`) não sabem o pixel exato em tempo
+   * de autoria — só a cor/texto do placeholder é invariante a isso (enche
+   * qualquer caixa igual); uma `<img>` real não é, e SEM este prop ela
+   * renderizava no tamanho de `size` (999px, valor-sentinela histórico) e o
+   * `overflow:hidden` do pai cortava tudo menos um canto em branco — achado
+   * ao vivo dando ícone real pela primeira vez pras skills do Arqueiro.
+   */
+  fill?: boolean;
+  /** canto arredondado do ícone (px) — 0 mantém quadrado vivo (itens, etc);
+   * skills usam a mesma referência visual do slot que as envolve
+   * (`ui-skills.jpg`: ícone redondo POR DENTRO da moldura de madeira, não
+   * um quadrado colado nela) */
+  radius?: number;
 }) {
+  const [imgFailed, setImgFailed] = useState(false);
   const color = standard ? BOOK.woodLight : colorFromSeed(seed ?? "x");
+  const useImage = !loading && imageSrc && !imgFailed;
   return (
     <div
       title={loading ? undefined : label}
       style={{
-        width: size,
-        height: size,
-        background: loading ? BOOK.wood : color,
+        width: fill ? "100%" : size,
+        height: fill ? "100%" : size,
+        background: loading ? BOOK.wood : useImage ? "transparent" : color,
         boxShadow: `inset 0 0 0 ${UI_SCALE}px ${BOOK.wood}`,
+        borderRadius: radius,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         color: BOOK.parchmentLight,
         font: "700 10px system-ui",
         textShadow: `1px 1px 0 ${BOOK.wood}`,
+        overflow: "hidden",
       }}
     >
-      {loading ? <LoadingRing size={size} /> : label ? label.slice(0, 3) : ""}
+      {loading ? (
+        <LoadingRing size={size} />
+      ) : useImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageSrc}
+          alt={label ?? ""}
+          width={size}
+          height={size}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          onError={() => setImgFailed(true)}
+        />
+      ) : label ? (
+        label.slice(0, 3)
+      ) : (
+        ""
+      )}
     </div>
   );
 }

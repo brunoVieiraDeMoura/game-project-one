@@ -27,6 +27,8 @@ function sampleMap(id: string, w = 3, h = 2): GameMap {
     ramps: [],
   authoredHexScale: 1,
     lighting: { sunAzimuth: 40, sunElevation: 55, sunIntensity: 1.2, ambient: 0.75 },
+    sky: { skyId: "day" },
+    ambientParticles: [],
     metadata: { sourceLegacyMap: id, version: 1, generatedAt: "2026-07-19T00:00:00.000Z" },
   };
 }

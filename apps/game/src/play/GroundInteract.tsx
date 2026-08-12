@@ -10,7 +10,7 @@ import { isolado } from "../core/diagnostics/isolamento";
 import {
   MARKER_SEGS,
   TERRAIN_GROUP,
-  baseDoProp,
+  baseDoPropClicado,
   moldarMarcador,
   nearestHit,
   topmostXZ,
@@ -297,7 +297,7 @@ export function GroundInteract({
      * `snapAndavel` acha a célula livre ao lado.
      */
     if (maisProximoProp && (!maisProximoChao || maisProximoProp.distance <= maisProximoChao.distance)) {
-      const pe = baseDoProp(maisProximoProp.object, props);
+      const pe = baseDoPropClicado(maisProximoProp, props);
       if (pe) return pe;
     }
     const candidatos: Hit[] = [...hitsProp, ...hitsChao];

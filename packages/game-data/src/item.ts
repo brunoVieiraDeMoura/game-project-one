@@ -79,7 +79,18 @@ export const ItemNoUseSchema = z.object({
 });
 
 export const ItemSchema = z.object({
-  id: z.number().int().positive(),
+  /**
+   * `nameid` no protocolo binário do RO (`clif.cpp: client_nameid()`) é
+   * `uint16` em todo pacote de item enquanto `PACKETVER < 20181121` (este
+   * projeto usa 20130618 — ver CLAUDE.md, é invariante travado com o
+   * gateway). Acima de 65535 o rAthena manda `UNKNOWN_ITEM_ID` (=512=Apple)
+   * no lugar, silenciosamente — dado real correto (banco, drop table)
+   * conviveu com todo item exibido/pego como Apple até o operador notar.
+   * Achado ao vivo criando `901001`/`901002` de teste (docs/audit ou
+   * conversa da Fase de itens). Item custom precisa ficar abaixo disto —
+   * não é limite arbitrário, é o tamanho real do campo na rede.
+   */
+  id: z.number().int().positive().max(65535),
   aegisName: z.string().min(1),
   name: z.string().min(1),
   type: ItemTypeSchema,
