@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { gateway } from "../net/gateway";
 import { ATAQUE_BASICO, ATAQUE_BASICO_ID } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
@@ -369,6 +369,8 @@ function PaginaVazia({ online }: { online: boolean }) {
  * dano, elemento, alvo e raio de área.
  */
 function Detalhe({ linha }: { linha: Linha }) {
+  const moldura = useNineSlice(SLOT_FRAME);
+  const bordaIcone = pxLivro(9);
   const basica = linha.id === ATAQUE_BASICO_ID;
   const info = linha.info;
   const tipo = basica ? "Ativa" : info ? (SK_TYPE_NAMES[info.type] ?? info.type) : "—";
@@ -412,14 +414,32 @@ function Detalhe({ linha }: { linha: Linha }) {
       </div>
 
       <div style={{ ...noPergaminho(SK_LAYOUT_ART.icon), pointerEvents: "none" }}>
-        <IconSquare
-          seed={`sk-${linha.id}`}
-          size={pxLivro(SK_LAYOUT_ART.icon.w)}
-          radius={px(8)}
-          label={linha.nome}
-          loading={linha.nome === undefined}
-          imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
-        />
+        {moldura && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderStyle: "solid",
+              borderWidth: bordaIcone,
+              borderImageSource: `url(${moldura})`,
+              borderImageSlice: SLOT_FRAME.slice ?? 24,
+              borderImageWidth: `${bordaIcone}px`,
+              borderImageRepeat: "stretch",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        <div style={{ position: "absolute", inset: bordaIcone / 3, overflow: "hidden" }}>
+          <IconSquare
+            seed={`sk-${linha.id}`}
+            size={pxLivro(SK_LAYOUT_ART.icon.w)}
+            fill
+            radius={bordaIcone * 0.66}
+            label={linha.nome}
+            loading={linha.nome === undefined}
+            imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
+          />
+        </div>
       </div>
 
       <div
@@ -557,6 +577,7 @@ function Icone({
 }) {
   const moldura = useNineSlice(SLOT_FRAME);
   const [hover, setHover] = useState(false);
+  const bordaGrade = pxLivro(9);
   const podeSubir = linha.upgradable && pontos > 0;
   const noMaximo = linha.maxNivel > 0 && linha.nivel >= linha.maxNivel;
 
@@ -576,45 +597,38 @@ function Icone({
         transition: "transform 110ms ease-out",
       }}
     >
-      <div style={{ position: "absolute", inset: "12%", overflow: "hidden" }}>
-        <IconSquare
-          seed={`sk-${linha.id}`}
-          size={64}
-          fill
-          radius={px(8)}
-          label={linha.nome}
-          loading={linha.nome === undefined}
-          imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
-        />
-      </div>
       {moldura && (
         <div
           style={{
             position: "absolute",
             inset: 0,
             borderStyle: "solid",
-            borderWidth: pxLivro(9),
+            borderWidth: bordaGrade,
             borderImageSource: `url(${moldura})`,
             borderImageSlice: SLOT_FRAME.slice ?? 24,
-            borderImageWidth: `${pxLivro(9)}px`,
+            borderImageWidth: `${bordaGrade}px`,
             borderImageRepeat: "stretch",
             pointerEvents: "none",
           }}
         />
       )}
-      {/* contorno dourado da escolhida — é o que a referência marca */}
-      {escolhida && (
-        <div
-          style={{
-            position: "absolute",
-            inset: px(2),
-            border: `${Math.max(2, px(2))}px solid ${SK_COLORS.selected}`,
-            borderRadius: px(3),
-            boxShadow: `0 0 ${px(6)}px rgba(232,187,84,0.7)`,
-            pointerEvents: "none",
-          }}
+      <div style={{ position: "absolute", inset: bordaGrade / 3, overflow: "hidden" }}>
+        <IconSquare
+          seed={`sk-${linha.id}`}
+          size={64}
+          fill
+          radius={bordaGrade * 0.66}
+          label={linha.nome}
+          loading={linha.nome === undefined}
+          imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
         />
-      )}
+      </div>
+      {/* respiro dourado — só a que está aberta na descrição à esquerda.
+          Pulso em vez de contorno fixo: contorno fixo virava uma SEGUNDA
+          borda por cima da moldura (o "não fazer 2 bordas" do pedido) — o
+          brilho variando no tempo já chama o olho sozinho, sem desenhar
+          outra linha. */}
+      {escolhida && <PulsoDaEscolhida raio={px(10)} />}
 
       {/* balão "1/10", no canto de baixo à esquerda, como na referência */}
       <span
@@ -665,6 +679,30 @@ function Icone({
       )}
     </div>
   );
+}
+
+/**
+ * Brilho dourado respirando em volta do ícone da escolhida — mesma receita do
+ * `LoadingRing` (`ui/rpg.tsx`): mexe em `boxShadow` por ref a cada quadro, sem
+ * `@keyframes` (o projeto é estilo inline, sem folha própria pra declarar
+ * animação). Onda de seno em vez de opacidade linear: um pulso que acelera e
+ * desacelera nas pontas lê como "vivo", linear lê como pisca-pisca de aviso.
+ */
+function PulsoDaEscolhida({ raio }: { raio: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const passo = (t: number) => {
+      if (ref.current) {
+        const alpha = 0.35 + (Math.sin(t / 450) * 0.5 + 0.5) * 0.4; // respira ~0.35..0.75
+        ref.current.style.boxShadow = `0 0 ${raio}px rgba(232,187,84,${alpha})`;
+      }
+      raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <div ref={ref} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />;
 }
 
 /**

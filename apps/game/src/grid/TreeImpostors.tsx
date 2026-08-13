@@ -205,10 +205,12 @@ export function buildTreeAtlas(species: { assetId: string; scene: THREE.Object3D
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.needsUpdate = true;
 
-  registrarEvento("cena", "impostorArvore:atlas", {
-    especies: species.length,
-    ms: Math.round((performance.now() - t0) * 10) / 10,
-  });
+  const ms = Math.round((performance.now() - t0) * 10) / 10;
+  registrarEvento("cena", "impostorArvore:atlas", { especies: species.length, ms });
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.info(`[TREE_ATLAS] espécies=${species.length} ms=${ms} (bake por-espécie já cacheado por WeakMap<scene>)`);
+  }
   return { texture, rectByAssetId, sizeByAssetId };
 }
 

@@ -332,6 +332,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 // espelho no console (como __world/__vfx): "o HUD está errado ou o pacote não
 // chegou?" só se responde vendo o estado cru
 if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __playerStoreTmp?: unknown }).__playerStoreTmp = usePlayerStore;
   (window as unknown as { __player?: () => unknown }).__player = () => {
     const s = usePlayerStore.getState();
     return {

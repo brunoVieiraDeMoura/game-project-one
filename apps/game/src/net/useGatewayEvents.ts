@@ -42,6 +42,10 @@ export function useGatewayEvents(): void {
       useSessionStore.getState().setChars(p.chars, p.slots);
     const onCharError = (p: { reason: string }) => useSessionStore.getState().setError(p.reason);
     const onWorld = (p: Parameters<typeof store.setWorld>[0]) => {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info(`[GAME_LOAD] T0 world:enter mapa="${p.mapName}" t=${Math.round(performance.now())}ms`);
+      }
       useSessionStore.getState().setWorld(p);
       /**
        * Entrar num mapa esquece o mundo que ficou para trás.

@@ -1,6 +1,7 @@
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import type { GameMap, MapProp } from "@ragnarok/map-format";
+import * as THREE from "three";
 import { PropInstance } from "../props/PropInstance";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 
@@ -40,6 +41,31 @@ import { registrarEvento } from "../core/diagnostics/flightRecorder";
  * Corolário que importa: os objetos precisam estar `visible` — é `traverseVisible`,
  * não `traverse`. Escondê-los seria o jeito óbvio e teria desligado a correção
  * inteira em silêncio.
+ *
+ * ## Por que virou INCREMENTAL (correção, `voo-1786573041420.json`)
+ *
+ * A versão original chamava `gl.compileAsync(scene, camera)` **uma vez**, com
+ * a `scene` INTEIRA — que já teria terreno, céu e todo o resto além dos
+ * props do depósito. Medido ao vivo: **2784 ms** de bloqueio síncrono do main
+ * thread (33 espécies, 177 programas), virando um quadro de 2338,9 ms real
+ * (`quadro #324`) — em `compileAsync` nesta combinação GPU/driver (GTX 1660
+ * Ti via ANGLE/D3D11), "Async" no nome não é garantia nenhuma de não travar:
+ * o custo apareceu inteiro, de uma vez, num `requestAnimationFrame` só.
+ *
+ * Isto SEMPRE aconteceu atrás da cortina (este componente só existe montado
+ * enquanto `aquecendo` — `precompilarProps={aquecendo}` em `PlayView.tsx` —
+ * então o jogador nunca via o resultado), mas um bloqueio de quase 3s é
+ * exatamente o tipo de tarefa longa que arrisca perder o pong do heartbeat
+ * do gateway (ver `net/gateway.ts`, `instalarDiagnosticoDeConexao`) — 2,3-2,8s
+ * é uma fração e tanto do `pingTimeout` padrão do socket.io.
+ *
+ * A troca: em vez de UM `compileAsync(scene, ...)` cobrindo tudo, compila
+ * UMA espécie por `requestAnimationFrame` — `gl.compileAsync(alvo, camera)`
+ * com `alvo` = o `Object3D` de UM prop do depósito (não a cena inteira), lido
+ * direto de `group.children[i]`. Menor escopo (não re-percorre terreno/céu/
+ * espécies já compiladas) E espalhado — nenhum quadro paga mais que uma
+ * espécie. 33 espécies a ~60fps é ~550ms de RELÓGIO, mas fatiado em ~33
+ * pedaços que cabem cada um dentro de um quadro, não uma tacada só.
  */
 
 /** onde as instâncias de aquecimento ficam: fora do frustum, sob o mapa */
@@ -75,45 +101,61 @@ export function especies(props: readonly MapProp[]): MapProp[] {
 
 export function PreCompilarProps({ map }: { map: GameMap }) {
   const gl = useThree((s) => s.gl);
-  const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
   const lista = useMemo(() => especies(map.props), [map.props]);
+  const grupoRef = useRef<THREE.Group>(null);
 
   useEffect(() => {
     if (lista.length === 0) return;
     let vivo = true;
+    let indice = 0;
+    let rafId = 0;
     const t0 = performance.now();
+
     /**
-     * Num quadro seguinte, não neste.
+     * Um `Object3D` do depósito por vez — não a cena inteira.
      *
-     * O efeito roda no commit, ANTES de o R3F ter montado os objetos na cena —
-     * compilar agora percorreria uma cena que ainda não tem os props. Um
-     * `requestAnimationFrame` basta: no próximo quadro eles estão lá.
+     * `group.children[i]` é o `<primitive>` que `PropInstance` monta para
+     * UMA espécie (ver `props/PropInstance.tsx`); pode ter vários meshes
+     * (casca+folha) por baixo, e `compileAsync`/`compile` desce por
+     * `traverseVisible` neles todos sozinho — não precisa listar mesh a
+     * mesh aqui.
+     *
+     * Roda no PRÓXIMO quadro, não neste — o efeito comita ANTES de o R3F ter
+     * montado os `<primitive>` de verdade na árvore (mesma razão de sempre).
      */
-    const id = requestAnimationFrame(() => {
+    const compilarProximo = () => {
       if (!vivo) return;
-      // `compile` síncrono é o caminho de quem não tem `compileAsync` (three
-      // antigo): pior, mas ainda atrás da cortina, que é o que importa
-      const pronto = gl.compileAsync
-        ? gl.compileAsync(scene, camera)
-        : (gl.compile(scene, camera), Promise.resolve());
-      void Promise.resolve(pronto).then(() => {
-        if (!vivo) return;
+      const grupo = grupoRef.current;
+      const alvo = grupo?.children[indice];
+      if (!alvo) {
         registrarEvento("cena", "precompilou", {
           especies: lista.length,
           ms: Math.round(performance.now() - t0),
           programas: gl.info.programs?.length ?? 0,
         });
+        return;
+      }
+      indice++;
+      // `compile` síncrono é o caminho de quem não tem `compileAsync` (three
+      // antigo): pior, mas ainda atrás da cortina, que é o que importa
+      const pronto = gl.compileAsync
+        ? gl.compileAsync(alvo, camera)
+        : (gl.compile(alvo, camera), Promise.resolve());
+      void Promise.resolve(pronto).then(() => {
+        if (!vivo) return;
+        rafId = requestAnimationFrame(compilarProximo);
       });
-    });
+    };
+    rafId = requestAnimationFrame(compilarProximo);
     return () => {
       vivo = false;
-      cancelAnimationFrame(id);
+      cancelAnimationFrame(rafId);
     };
-  }, [gl, scene, camera, lista]);
+  }, [gl, camera, lista]);
 
   return (
-    <group name="precompilar">
+    <group name="precompilar" ref={grupoRef}>
       {lista.map((p) => (
         // o mesmo `<Suspense>` por prop do mundo real: um `.glb` que ainda não
         // chegou não pode derrubar a cena, nem aqui

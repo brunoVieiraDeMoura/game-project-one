@@ -402,4 +402,5 @@ usePlayerStore.subscribe((estado, anterior) => {
 // pareciam a mesma coisa de fora.
 if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as unknown as { __hotbar?: () => SkillBarSlot[] }).__hotbar = () => useSkillBar.getState().slots;
+  (window as unknown as { __skillBarTmp?: unknown }).__skillBarTmp = useSkillBar;
 }

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { GameMap } from "@ragnarok/map-format";
-import { buildHorizonGeometry, nivelMinimoNaVizinhanca, JANELA_NIVEL_MINIMO, PASSO_HORIZONTE } from "./HorizonMesh";
+import {
+  buildHorizonGeometry,
+  nivelMinimoNaVizinhanca,
+  JANELA_NIVEL_MINIMO,
+  PASSO_HORIZONTE,
+  intensidadeFogDaBorda,
+  distanciaAteLimiteDoMapa,
+  LIMIAR_BORDA_FOG,
+} from "./HorizonMesh";
 import { SQUARE_SIZE } from "./squareGrid";
 import { COLOR_WATER } from "./squareChunks";
 
@@ -212,6 +220,90 @@ describe("buildHorizonGeometry", () => {
       const cor = b.geometry.getAttribute("color");
       expect(cor.getX(0)).not.toBeCloseTo(COLOR_WATER.r, 2);
       b.geometry.dispose();
+    });
+  });
+
+  describe("distanciaAteLimiteDoMapa — os 4 lados por igual, sem direção preferencial", () => {
+    // mapa grande o bastante pra nenhuma distância testada (até 50 células =
+    // 100 unidades) se aproximar do lado OPOSTO e confundir o resultado
+    const LARGURA = 1000; // X: Oeste (x=0) .. Leste (x=LARGURA)
+    const ALTURA = 800; // Z: Sul (z=0) .. Norte (z=ALTURA) — "+z é norte" (cameraNorth)
+    const celula = (n: number) => n * SQUARE_SIZE;
+
+    it.each([
+      ["Oeste", (d: number) => ({ x: d, z: ALTURA / 2 })],
+      ["Leste", (d: number) => ({ x: LARGURA - d, z: ALTURA / 2 })],
+      ["Sul", (d: number) => ({ x: LARGURA / 2, z: d })],
+      ["Norte", (d: number) => ({ x: LARGURA / 2, z: ALTURA - d })],
+    ] as const)("borda %s: 1 célula → intensidade média+; 5/10/50 células → zero", (_lado, pos) => {
+      const p1 = pos(celula(1));
+      expect(intensidadeFogDaBorda(distanciaAteLimiteDoMapa(p1.x, p1.z, LARGURA, ALTURA))).toBeGreaterThanOrEqual(0.5);
+      for (const n of [5, 10, 50]) {
+        const p = pos(celula(n));
+        expect(intensidadeFogDaBorda(distanciaAteLimiteDoMapa(p.x, p.z, LARGURA, ALTURA))).toBe(0);
+      }
+    });
+
+    it.each([
+      ["Norte+Oeste", { x: 0, z: ALTURA }],
+      ["Norte+Leste", { x: LARGURA, z: ALTURA }],
+      ["Sul+Oeste", { x: 0, z: 0 }],
+      ["Sul+Leste", { x: LARGURA, z: 0 }],
+    ] as const)("canto %s a 1 célula de AMBOS os lados: sem buraco, intensidade continua média+", (_canto, canto) => {
+      // 1 célula PARA DENTRO nos dois eixos ao mesmo tempo
+      const dx = canto.x === 0 ? celula(1) : -celula(1);
+      const dz = canto.z === 0 ? celula(1) : -celula(1);
+      const x = canto.x + dx;
+      const z = canto.z + dz;
+      const dist = distanciaAteLimiteDoMapa(x, z, LARGURA, ALTURA);
+      // no canto a distância até a borda mais próxima é a MESMA de estar a 1
+      // célula de um só lado (min dos dois eixos, ambos = 1 célula) — nunca
+      // maior, que seria o "buraco" (fog mais fraca bem no canto)
+      expect(dist).toBeCloseTo(celula(1), 5);
+      expect(intensidadeFogDaBorda(dist)).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it("centro do mapa: fora do alcance da fog da borda nos 4 lados", () => {
+      expect(intensidadeFogDaBorda(distanciaAteLimiteDoMapa(LARGURA / 2, ALTURA / 2, LARGURA, ALTURA))).toBe(0);
+    });
+  });
+
+  describe("intensidadeFogDaBorda — fog da borda depende da distância PERSONAGEM→LIMITE, não câmera→fragmento", () => {
+    it("1 célula da borda (2 unidades): opacidade mínima MÉDIA (≥0,5)", () => {
+      expect(intensidadeFogDaBorda(1 * SQUARE_SIZE)).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it("na própria borda (distância 0): máximo", () => {
+      expect(intensidadeFogDaBorda(0)).toBe(1);
+    });
+
+    it("câmera já FORA do mapa (distância negativa, clampada em 0 por quem chama): máximo", () => {
+      expect(intensidadeFogDaBorda(-10)).toBe(1);
+    });
+
+    it("5 células (10 unidades): contribuição extra já zerou — fog normal manda sozinha", () => {
+      expect(intensidadeFogDaBorda(5 * SQUARE_SIZE)).toBe(0);
+    });
+
+    it("10 células: zero, mesma razão", () => {
+      expect(intensidadeFogDaBorda(10 * SQUARE_SIZE)).toBe(0);
+    });
+
+    it("50 células: zero — a fog da borda NUNCA fica mais fraca que a 5/10 células (não oscila, só decresce e para)", () => {
+      expect(intensidadeFogDaBorda(50 * SQUARE_SIZE)).toBe(0);
+    });
+
+    it("monotônica: quanto mais perto da borda, maior ou igual a intensidade — nunca cai ao se aproximar", () => {
+      const distancias = [0, 1, 2, 3, 4, 5, 10, 20];
+      const valores = distancias.map((d) => intensidadeFogDaBorda(d));
+      for (let i = 1; i < valores.length; i++) {
+        expect(valores[i]!).toBeLessThanOrEqual(valores[i - 1]!);
+      }
+    });
+
+    it("LIMIAR_BORDA_FOG é a distância exata onde a contribuição chega a zero", () => {
+      expect(intensidadeFogDaBorda(LIMIAR_BORDA_FOG)).toBe(0);
+      expect(intensidadeFogDaBorda(LIMIAR_BORDA_FOG - 0.01)).toBeGreaterThan(0);
     });
   });
 

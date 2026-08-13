@@ -172,6 +172,9 @@ export function NetPlayer({
    */
   const jobId = usePlayerStore((s) => s.stats.class);
   const classModel = classModelFor(jobId);
+  // gid do PRÓPRIO personagem — ver `entities/weaponAnchors`, é o que
+  // `EquippedWeapons` usa pra registrar a ponta da arma sob a chave certa
+  const selfGid = useWorldStore((s) => s.selfGid);
   const resolvedCharacterKey = characterKey ?? classModel.character;
   const { scene, play, playOnce } = useCharacter(
     CHARACTER_URLS[resolvedCharacterKey],
@@ -1148,7 +1151,7 @@ export function NetPlayer({
     <group ref={group}>
       <group ref={model} scale={gameplay.charScale * classModel.scale}>
         <primitive object={scene} />
-        {!characterKey && <EquippedWeapons scene={scene} weapons={classModel.weapons} />}
+        {!characterKey && <EquippedWeapons scene={scene} weapons={classModel.weapons} gid={selfGid} />}
       </group>
       {/* barras de HP/SP embaixo do personagem, como no RO — FORA do grupo que
           gira, senão viram junto com o boneco a cada mudança de direção */}

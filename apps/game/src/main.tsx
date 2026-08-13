@@ -73,6 +73,33 @@ if (import.meta.env.DEV) {
    */
   observarCriacaoDeContexto();
   observarTarefasLongas();
+  /**
+   * DIAGNÓSTICO TEMPORÁRIO — investigação de DC durante troca de mapa.
+   *
+   * `observarTarefasLongas` já alimenta o flight recorder, mas só aparece lá
+   * dentro de uma captura (`__voo`). Isto aqui é o mesmo sinal nativo
+   * (`PerformanceObserver` + `longtask`), só que direto no console — pra
+   * correlacionar visualmente com `[GAME_LOAD]`/`[MAP_CACHE]`/`[HEARTBEAT]`
+   * sem precisar exportar/ler um JSON à parte. `attribution` do navegador
+   * costuma vir vazio (não é bug daqui, é limitação da API); o que importa é
+   * DURAÇÃO + INSTANTE, que já bastam pra saber se um `[LONG_TASK]` cobre o
+   * mesmo intervalo em que o heartbeat parou de bater.
+   */
+  if (typeof PerformanceObserver !== "undefined") {
+    try {
+      const obs = new PerformanceObserver((lista) => {
+        for (const e of lista.getEntries()) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[LONG_TASK] duration=${Math.round(e.duration)}ms start=${Math.round(e.startTime)}ms`,
+          );
+        }
+      });
+      obs.observe({ entryTypes: ["longtask"] });
+    } catch {
+      // `longtask` não existe em todo navegador — ausência não é erro
+    }
+  }
 }
 
 /**

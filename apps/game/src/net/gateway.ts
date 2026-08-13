@@ -162,6 +162,12 @@ export interface ServerEvents {
   "hotkey:list": (p: HotkeySlotPayload[]) => void;
   "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff"; action: number }) => void;
   "skill:casting": (p: { skillId: number; sourceGid: number; targetGid: number; x: number; y: number; durationMs: number }) => void;
+  /** skill de alvo no CHÃO (Thunder Storm etc.) terminou de conjurar, mesmo
+   * sem acertar ninguém — ver `audio/mage/multiHitCastAudio`/`net/useWorldEvents` */
+  "skill:ground-cast": (p: { skillId: number; level: number; sourceGid: number; x: number; y: number }) => void;
+  /** skill de alvo no CHÃO acertou alguém — chega DEPOIS de `skill:ground-cast`,
+   * pode chegar mais de uma vez (Thunder Storm tem até 10 hits) */
+  "skill:ground-hit": (p: { skillId: number; sourceGid: number }) => void;
   "skill:ground": (p: { gid: number; creatorGid: number; x: number; y: number; unitId: number; visible: boolean }) => void;
   "skill:ground-gone": (p: { gid: number }) => void;
   /** recarga da skill; a duração é do servidor (ZC_SKILL_POSTDELAY) */
@@ -274,6 +280,7 @@ export function gateway(): GatewaySocket {
       (window as unknown as { __gateway?: GatewaySocket }).__gateway = socket;
       instalarPingSimulado(socket);
       instalarGravadorDeRede(socket);
+      instalarDiagnosticoDeConexao(socket);
     }
   }
   return socket;
@@ -340,6 +347,68 @@ function instalarGravadorDeRede(s: GatewaySocket): void {
     const alvo = args[0] as Cell | undefined;
     registrarEvento("network", "move:to", { alvo: `${alvo?.x},${alvo?.y}` }, performance.now());
   });
+}
+
+/**
+ * DIAGNÓSTICO TEMPORÁRIO — investigação de DC durante troca de mapa.
+ *
+ * Loga o heartbeat de BAIXO NÍVEL do Engine.IO (não o `world:ready`/eventos de
+ * jogo): `ping` chega do SERVIDOR, o Engine.IO client responde `pong`
+ * automaticamente — e essa resposta só roda quando a fila de eventos do
+ * navegador está livre para processá-la. Se o main thread ficar bloqueado por
+ * uma tarefa síncrona longa o bastante (bake de atlas, parse de mapa, GLTF),
+ * o `pong` atrasa; se atrasar mais que `pingInterval + pingTimeout` do
+ * `socket.io` no gateway (`apps/gateway/src/server.ts`, sem override = padrão
+ * 25000+20000 ms), o SERVIDOR derruba a conexão por falta de resposta — e o
+ * cliente só percebe o `disconnect` quando a tarefa termina e a fila volta a
+ * rodar. Isso separa objetivamente "o socket ficou mudo" (heartbeat parou de
+ * bater, DC é consequência de bloqueio local) de "o socket seguiu ativo e
+ * mesmo assim caiu" (aí o suspeito é o gateway/rAthena, não o cliente).
+ */
+function instalarDiagnosticoDeConexao(s: GatewaySocket): void {
+  let ultimoPingRecebido = 0;
+  let ultimoPongEnviado = 0;
+
+  const ligarEngine = () => {
+    // `io.engine` só existe depois do transporte de baixo nível abrir —
+    // religa a cada `connect` porque uma reconexão troca a instância
+    const engine = (s.io as unknown as { engine?: { on: (ev: string, cb: (p: { type: string }) => void) => void } })
+      .engine;
+    if (!engine) return;
+    engine.on("packet", (p) => {
+      if (p.type !== "ping") return;
+      ultimoPingRecebido = performance.now();
+      // eslint-disable-next-line no-console
+      console.info(`[HEARTBEAT] ping recebido do gateway em t=${Math.round(ultimoPingRecebido)}ms`);
+    });
+    engine.on("packetCreate", (p) => {
+      if (p.type !== "pong") return;
+      ultimoPongEnviado = performance.now();
+      const atraso = ultimoPingRecebido > 0 ? Math.round(ultimoPongEnviado - ultimoPingRecebido) : null;
+      // eslint-disable-next-line no-console
+      console.info(`[HEARTBEAT] pong enviado em t=${Math.round(ultimoPongEnviado)}ms (atraso vs. ping: ${atraso}ms)`);
+    });
+  };
+
+  s.on("connect", () => {
+    // eslint-disable-next-line no-console
+    console.info(`[SOCKET] connect id=${s.id} t=${Math.round(performance.now())}ms`);
+    ligarEngine();
+  });
+  s.on("disconnect", (reason) => {
+    const desdeUltimoPong = ultimoPongEnviado > 0 ? Math.round(performance.now() - ultimoPongEnviado) : null;
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[SOCKET] disconnect reason="${reason}" t=${Math.round(performance.now())}ms ` +
+        `(${desdeUltimoPong}ms desde o último pong enviado — perto de ~45000ms aponta pra` +
+        ` pingTimeout+pingInterval padrão do socket.io por bloqueio local; bem menor aponta pra outra causa)`,
+    );
+  });
+  s.io.on("reconnect_attempt", (n) => {
+    // eslint-disable-next-line no-console
+    console.info(`[SOCKET] reconnect_attempt #${n} t=${Math.round(performance.now())}ms`);
+  });
+  ligarEngine();
 }
 
 /**

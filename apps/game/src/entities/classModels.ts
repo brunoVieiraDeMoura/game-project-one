@@ -220,7 +220,7 @@ export function isArcherClass(jobId: number | undefined | null): boolean {
  * Mage e evoluções (Wizard, High Wizard, Warlock, transcendentes/baby) — MESMA
  * família (`MAGE_IDS`) que também cobre Acolyte/Priest/Arch_Bishop/Cardinal
  * (cajado compartilhado, ver comentário de `MAGE_IDS`). Áudio de combate do
- * Mago (`audio/combatVoice`, `audio/coldBoltCast`) usa este portão, mesmo
+ * Mago (`audio/combatVoice`, `audio/mage/multiHitCastAudio`) usa este portão, mesmo
  * espírito de `isSwordmanClass`/`isArcherClass`.
  */
 export function isMageClass(jobId: number | undefined | null): boolean {

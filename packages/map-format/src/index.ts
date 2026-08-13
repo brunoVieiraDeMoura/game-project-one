@@ -261,6 +261,61 @@ export const GameMapSchema = z
 export type GameMap = z.infer<typeof GameMapSchema>;
 
 /**
+ * Lado de UMA célula, em unidades de mundo — cópia de `SQUARE_SIZE`
+ * (`apps/game/src/grid/squareGrid.ts`), não import: `map-format` é o pacote
+ * de BAIXO (o jogo depende dele, não o contrário), então não há como puxar a
+ * constante de lá sem inverter a dependência. É a MESMA regra de "número
+ * copiado" que já vale para `net/pathfind.ts: MAX_WALK_PATH_DEFAULT`
+ * (espelha `battle_config.max_walk_path` do servidor) — ver CLAUDE.md: mudar
+ * um lado sem o outro é falha muda. Se `SQUARE_SIZE` mudar, este número tem
+ * que acompanhar.
+ */
+const SQUARE_SIZE_COPIADO = 2;
+
+/**
+ * Largura do cinturão de borda que todo mapa novo ganha automaticamente ao
+ * redor do miolo andável — em UNIDADES DE MUNDO, a única escala física FIXA
+ * deste projeto, não em pixel.
+ *
+ * Por que não pixel: a referência visual (`Desktop/ref/EDITOR DE MAPA +
+ * FOG.jpg`) rotula a borda como "50px", mas não existe — em lugar NENHUM do
+ * projeto — uma razão fixa pixel↔unidade-de-mundo para mapa (conferido: a
+ * coluna "Dimensões" do admin, o schema, `createBlankMap` já recebido, tudo
+ * trabalha em CÉLULA crua; e numa câmera 3D em perspectiva essa razão não
+ * PODE ser fixa por construção — o mesmo metro de chão ocupa mais ou menos
+ * pixel de tela conforme a distância/zoom da câmera muda quadro a quadro).
+ * "50px" na imagem é unidade de DESENHO do diagrama (uma ferramenta de
+ * mockup 2D), não uma medida do motor do jogo — inventar um fator de
+ * conversão só para ter um número "derivado de 50px" seria a mesma proporção
+ * arbitrária que se pediu para não inventar. O que a imagem passa de
+ * verdade, e que ESTE número preserva, é a ESTRUTURA: largura FIXA (não
+ * proporcional ao mapa — ver `createBlankMap`), a mesma em todo lado, medida
+ * PARA DENTRO do limite físico.
+ *
+ * 6 unidades de mundo = 3 células (`DEFAULT_BORDER_WIDTH`) na escala real do
+ * jogo (`SQUARE_SIZE_COPIADO = 2`) — larga o bastante para plantar árvore ou
+ * pedra sem ficar uma linha de 1 célula, estreita o bastante para não comer
+ * mapa pequeno de propósito (ver clamp em `createBlankMap`).
+ *
+ * A borda é `collision: "wall"` — não andável — mas continua célula comum
+ * para todo o resto: `editor/editScope.ts` já classifica bloqueio ligado à
+ * moldura como escopo "border" por flood fill, o MESMO mecanismo que já vale
+ * para o cinturão de mata dos mapas importados do rAthena (`prt_fild08`
+ * etc) — não é um sistema novo, é o mapa em branco passando a alimentar um
+ * que já existia e ficava vazio (`scopeCounts` sempre dava border=0 num mapa
+ * novo). Como `surface` continua "grass" ali (só a colisão muda),
+ * `squareChunks.cellLayer` desenha grama normal e `visualLevel` sobe 1 nível
+ * por TIPO — a borda lê como uma faixa gramada ligeiramente elevada, pronta
+ * pra receber árvore/pedra/decoração no editor (escopo "border"/"all"), não
+ * como parede de pedra.
+ */
+export const DEFAULT_BORDER_WIDTH_WORLD_UNITS = 6;
+
+/** `DEFAULT_BORDER_WIDTH_WORLD_UNITS` convertido para célula (arredondado —
+ * célula é a unidade que `collision`/`heightmap`/`surface` realmente usam). */
+export const DEFAULT_BORDER_WIDTH = Math.round(DEFAULT_BORDER_WIDTH_WORLD_UNITS / SQUARE_SIZE_COPIADO);
+
+/**
  * Cria um mapa novo em branco, terreno square (chão de grama plano) — o
  * mesmo `terrainMode` dos mapas importados do rAthena (`prt_fild08` etc).
  *
@@ -268,9 +323,30 @@ export type GameMap = z.infer<typeof GameMapSchema>;
  * o projeto não usando mais hexágono nenhum — só o padrão real do rAthena.
  * `cellSize` fica só por compatibilidade do schema; o modo square usa o
  * tamanho fixo de `grid/squareGrid.ts`, não este campo.
+ *
+ * `borderWidth` grava o cinturão não-andável (ver `DEFAULT_BORDER_WIDTH`).
+ * Clampado para nunca comer o mapa inteiro: mesmo no menor mapa que o editor
+ * aceita (4×4), sobra pelo menos 1 célula andável de cada lado — sem isso um
+ * mapa minúsculo com borda larga nasceria sem miolo nenhum para jogar.
  */
-export function createBlankMap(id: string, name: string, width = 32, height = 32, cellSize = 5): GameMap {
+export function createBlankMap(
+  id: string,
+  name: string,
+  width = 32,
+  height = 32,
+  cellSize = 5,
+  borderWidth = DEFAULT_BORDER_WIDTH,
+): GameMap {
   const n = width * height;
+  const collision = new Array<CollisionType>(n).fill("walkable");
+  const bw = Math.max(0, Math.min(borderWidth, Math.floor((Math.min(width, height) - 1) / 2)));
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      if (col < bw || row < bw || col >= width - bw || row >= height - bw) {
+        collision[row * width + col] = "wall";
+      }
+    }
+  }
   return {
     id,
     name,
@@ -278,7 +354,7 @@ export function createBlankMap(id: string, name: string, width = 32, height = 32
     cellSize,
     terrainMode: "square",
     heightmap: new Array(n).fill(0),
-    collision: new Array(n).fill("walkable"),
+    collision,
     surface: new Array(n).fill("grass"),
     terrainStyle: {},
     waterLevel: null,

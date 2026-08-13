@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
 import { cellIndex } from "@ragnarok/map-format";
@@ -309,7 +310,101 @@ export function buildHorizonGeometry(map: GameMap): HorizonBuild {
   return { geometry, vertices: pos.count, triangulos, ms: performance.now() - t0 };
 }
 
-export function HorizonMesh({ map }: { map: GameMap }) {
+/**
+ * FOG DA BORDA — reforço LOCALIZADO da fog exatamente onde a fog normal (por
+ * distância de câmera) não dá conta: quando o PERSONAGEM está perto do
+ * limite físico do mapa, mas o pedaço "logo depois da borda" (a franja de
+ * `PADDING_MUNDO`) ainda está PERTO DEMAIS da câmera para a fog normal
+ * (`scene/skyFog.ts`, `smoothstep(fogNear, fogFar, distânciaDoFragmento)`)
+ * ter começado a desbotar — `fogNear` é uma fração de `renderDistance`
+ * (`play/viewRadius.ts`), tipicamente 90+ unidades, bem mais longe que a
+ * franja fica de um jogador parado a poucas células do limite.
+ *
+ * Dois efeitos DIFERENTES, que coexistem sem um substituir o outro:
+ *  • fog NORMAL: `smoothstep(fogNear, fogFar, distância câmera→FRAGMENTO)` —
+ *    inalterada, roda depois desta, no chunk `fog_fragment` (`scene/skyFog.ts`).
+ *  • fog da BORDA (aqui): função da distância PERSONAGEM→LIMITE DO MAPA, não
+ *    da câmera nem do fragmento — só se aplica a fragmentos FORA do
+ *    retângulo do mapa (`vHorizMundo` fora de `[0,uMapSize]`), escrita em
+ *    `color_fragment`, ANTES da fog normal — a normal ainda roda por cima
+ *    depois, então o resultado final nunca fica MENOS enevoado que qualquer
+ *    um dos dois sozinho, só mais (ou igual).
+ *
+ * **Por que PERSONAGEM, não câmera (correção — a v1 usava `camera.position`
+ * e só funcionava nas bordas laterais/de trás)**: a `FollowCamera` fica
+ * ATRÁS do personagem, na direção oposta ao azimute de movimento (até
+ * `distance × maxZoom` = 91 unidades por padrão) — andando NA DIREÇÃO de uma
+ * borda, a câmera fica do lado de DENTRO do mapa, longe daquela borda
+ * específica, então a distância câmera→limite nunca ficava pequena bem na
+ * hora em que o jogador estava de fato entrando nela; numa borda ao LADO ou
+ * atrás dele, a câmera calhava de estar mais perto por acaso — daí "só
+ * funciona nas laterais". O personagem (`playerPos`, o mesmo ref que
+ * `FollowCamera`/`SunRig` já usam) não tem esse deslocamento: a distância
+ * até qualquer um dos 4 lados reflete de verdade o quanto falta pra sair do
+ * mapa, seja pra onde for que ele esteja andando.
+ *
+ * `intensidadeFogDaBorda` é pura e testável sem GPU — o valor calculado em
+ * JS (não uma fórmula reescrita em GLSL) é o que vai pro uniform, então o
+ * shader só faz um `mix`, sem repetir a conta.
+ */
+
+/**
+ * Distância (unidades de mundo) até a margem em que a fog da borda passa a
+ * contribuir. Além disso, a fog normal governa sozinha (contribuição = 0).
+ *
+ * 4,5 unidades = 2,25 células (`SQUARE_SIZE = 2`): a 1 célula (2 unidades) já
+ * dá `1 - 2/4,5 ≈ 0,56` — acima da "opacidade média" (0,5) pedida, com folga
+ * pra não cair abaixo por arredondamento. A 2,25 células a contribuição some
+ * e a fog normal, que já cobre distâncias maiores corretamente, assume.
+ */
+export const LIMIAR_BORDA_FOG = 4.5;
+
+/**
+ * 0 (sem contribuição extra) a 1 (fog da borda no máximo) — pura, mesmo
+ * padrão de `nivelMinimoNaVizinhanca` nesta arquivo: sem `<Canvas>`, sem GPU.
+ */
+export function intensidadeFogDaBorda(distanciaPersonagemAteLimite: number): number {
+  return Math.min(1, Math.max(0, 1 - distanciaPersonagemAteLimite / LIMIAR_BORDA_FOG));
+}
+
+/** distância (unidades de mundo) do ponto (x,z) até a margem MAIS PRÓXIMA do
+ * retângulo `[0,largura] × [0,altura]` — 0 se já está EM CIMA ou além da
+ * margem em algum eixo (ponto fora do mapa conta como "na borda", não some a
+ * distância negativa). Testa os 4 lados por igual: `margemX` cobre
+ * Oeste/Leste, `margemZ` cobre Norte/Sul, e o `min` dos dois pega qual dos
+ * quatro está mais perto — não assume nenhuma direção preferencial. */
+export function distanciaAteLimiteDoMapa(x: number, z: number, largura: number, altura: number): number {
+  const margemX = Math.min(x, largura - x);
+  const margemZ = Math.min(z, altura - z);
+  return Math.max(0, Math.min(margemX, margemZ));
+}
+
+type MaterialComFogDaBorda = THREE.Material & { uIntensidadeBordaFog?: { value: number } };
+
+export function HorizonMesh({
+  map,
+  playerPos,
+}: {
+  map: GameMap;
+  /**
+   * Posição do PERSONAGEM (não da câmera) — quem decide a intensidade da fog
+   * da borda.
+   *
+   * BUG corrigido: a primeira versão usava `state.camera.position`. A
+   * `FollowCamera` posiciona a câmera ATRÁS do personagem, na direção OPOSTA
+   * ao azimute (`play/FollowCamera.tsx`: `t.x + r·sin(az)`, `r` até
+   * `distance × maxZoom` = 13×7 = 91 unidades por padrão) — andando NA
+   * DIREÇÃO de uma borda, a câmera fica ATRÁS, ou seja, do lado de DENTRO do
+   * mapa, longe daquela borda; numa borda ao LADO ou atrás do personagem
+   * (fora da linha de visão), a câmera calha de ficar mais perto dela por
+   * acaso. Resultado medido: a fog da borda pegava bem os lados/trás e
+   * falhava bem na borda que o jogador estava efetivamente enfrentando —
+   * exatamente o "só funciona nas laterais" relatado. Opcional só porque
+   * `HorizonMesh` não tem outro consumidor hoje (só `PlayView`); sem o ref, a
+   * fog da borda fica desligada (intensidade sempre 0) em vez de adivinhar.
+   */
+  playerPos?: React.MutableRefObject<THREE.Vector3>;
+}) {
   const primeira = useRef(true);
 
   const build = useMemo(() => {
@@ -351,6 +446,12 @@ export function HorizonMesh({ map }: { map: GameMap }) {
      * draw call a mais.
      */
     mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uIntensidadeBordaFog = { value: 0 };
+      shader.uniforms.uMapSize = { value: new THREE.Vector2(map.size.width * SQUARE_SIZE, map.size.height * SQUARE_SIZE) };
+      // guarda o shader para o `useFrame` atualizar a intensidade a cada
+      // quadro (mesmo padrão de `uTempo` da água em `SquareTerrain.tsx`)
+      (mat as MaterialComFogDaBorda).uIntensidadeBordaFog = shader.uniforms.uIntensidadeBordaFog;
+
       shader.vertexShader = shader.vertexShader
         .replace("#include <common>", `#include <common>\nvarying vec3 vHorizMundo;`)
         .replace(
@@ -358,7 +459,10 @@ export function HorizonMesh({ map }: { map: GameMap }) {
           `#include <begin_vertex>\nvHorizMundo = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
         );
       shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", `#include <common>\nvarying vec3 vHorizMundo;\n${GROUND_NOISE_GLSL}`)
+        .replace(
+          "#include <common>",
+          `#include <common>\nvarying vec3 vHorizMundo;\nuniform float uIntensidadeBordaFog;\nuniform vec2 uMapSize;\n${GROUND_NOISE_GLSL}`,
+        )
         .replace(
           "#include <color_fragment>",
           `#include <color_fragment>
@@ -368,11 +472,44 @@ export function HorizonMesh({ map }: { map: GameMap }) {
   // configurável: esta malha não tem UI de ajuste, é só para não ficar lisa
   float n = groundFbm(vHorizMundo.xz * 0.4 * 0.35);
   diffuseColor.rgb *= 1.0 + (n - 0.5) * 0.35 * 0.8;
-}`,
+}
+#ifdef USE_FOG
+{
+  // FOG DA BORDA (ver doc acima do componente): só nos fragmentos FORA do
+  // retângulo físico do mapa, e só quando o PERSONAGEM está perto o bastante
+  // do limite pra fog normal (por distância até o FRAGMENTO, não até a borda)
+  // ainda não ter desbotado essa franja. \`corDoCeu\` e \`vDirCeu\` já existem
+  // aqui — são os mesmos que \`scene/skyFog.ts\` injeta em fog_pars_fragment,
+  // que compila ANTES de color_fragment no template do three.
+  bool foraDoMapa = vHorizMundo.x < 0.0 || vHorizMundo.x > uMapSize.x || vHorizMundo.z < 0.0 || vHorizMundo.z > uMapSize.y;
+  if (foraDoMapa && uIntensidadeBordaFog > 0.0) {
+    diffuseColor.rgb = mix(diffuseColor.rgb, corDoCeu(normalize(vDirCeu).y), uIntensidadeBordaFog);
+  }
+}
+#endif`,
         );
     };
     return mat;
   }, []);
+
+  /**
+   * Atualiza a intensidade da fog da borda a cada quadro — um `float` só,
+   * mesmo custo de `uTempo` da água (`SquareTerrain.tsx`); não é a mesma
+   * classe de trabalho que o comentário do arquivo diz que esta malha evita
+   * (rebuild de geometria por movimento do jogador). Hook REGISTRADO sempre
+   * (mesmo padrão de sempre neste projeto) — o corpo sai cedo se isolado.
+   */
+  useFrame(() => {
+    if (isolado("semHorizonte")) return;
+    const u = (material as MaterialComFogDaBorda).uIntensidadeBordaFog;
+    if (!u) return; // fog desligada (sem `scene.fog`) — onBeforeCompile nunca correu esse ramo
+    if (!playerPos) return; // sem ref de personagem, sem intensidade — nunca adivinha pela câmera
+    const largura = map.size.width * SQUARE_SIZE;
+    const altura = map.size.height * SQUARE_SIZE;
+    const p = playerPos.current;
+    const dist = distanciaAteLimiteDoMapa(p.x, p.z, largura, altura);
+    u.value = intensidadeFogDaBorda(dist);
+  });
   useEffect(() => () => material.dispose(), [material]);
 
   // isolamento (Fase C, `?iso=semHorizonte`): checado DEPOIS dos hooks —

@@ -428,15 +428,6 @@ function SkillSlot({
         transition: "transform 110ms ease-out, filter 110ms ease-out",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          inset: borda / 3,
-          borderRadius: borda * 0.66,
-          background: hover ? SB_COLORS.slotHover : SB_COLORS.slot,
-          transition: "background 110ms ease-out",
-        }}
-      />
       {frame && (
         <div
           style={{
@@ -453,27 +444,28 @@ function SkillSlot({
         />
       )}
 
-      <div
-        style={{
-          position: "absolute",
-          inset: borda / 3,
-          overflow: "hidden",
-          borderRadius: borda * 0.66,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          pointerEvents: "none",
-        }}
-      >
-        {preenchido &&
-          (nome ? (
+      {preenchido && (
+        <div
+          style={{
+            position: "absolute",
+            inset: borda / 3,
+            overflow: "hidden",
+            borderRadius: borda * 0.66,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {nome ? (
             <IconSquare seed={seed ?? nome} label={nome} size={px(48)} fill radius={borda * 0.66} imageSrc={iconSrc} />
           ) : (
             // slot ocupado, nome ainda não chegou do catálogo — anel de
             // carregamento, NUNCA a constante Aegis nem "Unknown" piscando
             <IconSquare loading size={px(48)} />
-          ))}
-      </div>
+          )}
+        </div>
+      )}
 
       {cooldownSkillId != null && <Cooldown skillId={cooldownSkillId} raio={borda * 0.66} />}
 

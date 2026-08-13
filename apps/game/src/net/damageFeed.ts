@@ -17,8 +17,14 @@ export interface NetDamage {
   crit: boolean;
   /** true = esquiva/erro (o RO mostra "Miss") */
   miss: boolean;
-  /** true = o alvo é o próprio jogador (número vermelho) */
+  /** true = o alvo é o próprio jogador */
   onSelf: boolean;
+  /**
+   * true = dano de SKILL (amarelo), false/ausente = ataque básico (branco).
+   * Crítico (`crit`) tem prioridade visual sobre os dois — sai vermelho
+   * independente da origem. Ver `vfx/damageNumberStyle` pra tipografia.
+   */
+  skill?: boolean;
   /**
    * Mensagem de combate que NÃO é um número — "Sem flechas!" e afins. Mesmo
    * mecanismo de texto flutuante, sem inventar um segundo sistema: o rAthena

@@ -24,6 +24,15 @@ export interface VfxInstance {
   expiresAt: number;
   /** gid da unidade de skill no chão (para casar com o "sumiu") */
   unitGid?: number;
+  /**
+   * Dano TOTAL da skill — só preenchido quando quem desenha o efeito precisa
+   * repartir/mostrar o número por hit em vez do genérico `damageFeed`
+   * (ex.: `vfx/mage/cold-bolt/ColdBoltImpact`, 5 estalactites → 5 números). Ausente em todo
+   * resto do jogo, que continua passando pelo `damageFeed` de sempre.
+   */
+  damage?: number;
+  crit?: boolean;
+  onSelf?: boolean;
 }
 
 interface VfxState {

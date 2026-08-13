@@ -9,6 +9,7 @@ import { windCategoryFor, windMaterialFor } from "./wind";
 import { registrarInstancias } from "./instancedPropRegistry";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 import { isolado } from "../core/diagnostics/isolamento";
+import { Y_DEPOSITO } from "../play/PreCompilarProps";
 
 /**
  * VEGETAÇÃO INSTANCIADA — substitui "1 `Mesh` por prop" (`PropInstance.tsx`) por
@@ -258,10 +259,18 @@ export function VegetationInstancer({
   map,
   center,
   radius,
+  aoPrecompilar,
 }: {
   map: GameMap;
   center: { x: number; z: number };
   radius: number;
+  /**
+   * Chamado quando a fila de precompile (uma espécie por quadro, ver o
+   * efeito abaixo) esvazia — ou já na hora, se não há nenhuma espécie
+   * instanciável no mapa. `PlayView.tsx` usa isto pra `gameReady` não
+   * declarar pronto com precompile ainda rodando (ver o comentário lá).
+   */
+  aoPrecompilar?: () => void;
 }) {
   const porEspecie = useMemo(() => agruparPorEspecie(map.props), [map]);
   const especies = useMemo(() => especiesDoMapa(map.props), [map]);
@@ -312,31 +321,84 @@ export function VegetationInstancer({
    * spawn (o jogador anda até lá antes do `VegetationInstancer` ter
    * desenhado aquela espécie alguma vez) paga o link do programa em pleno
    * gameplay — o mesmo defeito que a Fase E2 documentou para entidade,
-   * agora para vegetação instanciada. `compileAsync` usa `traverseVisible`
-   * (não filtra por `count`), então cobre TODAS as espécies do mapa de uma
-   * vez, mesmo as que ainda não têm nenhuma instância ativa.
+   * agora para vegetação instanciada.
+   *
+   * ## Por que virou INCREMENTAL, com dummy fora do frustum
+   * (correção, `voo-1786573041420.json`)
+   *
+   * A versão original chamava `gl.compileAsync(scene, camera)` UMA vez com a
+   * `scene` INTEIRA — medido ao vivo: 502 ms para compilar 33 espécies/60
+   * programas num quadro só (`quadro #313`, `especies=33 ms=502
+   * programas=60`). Este componente, diferente de `PreCompilarProps`, é
+   * montado O TEMPO TODO (não só durante `aquecendo` — `PlayView.tsx` nunca
+   * o condiciona ao aquecimento), e o `<Suspense fallback={null}>` que o
+   * embrulha lá NÃO bloqueia `cenaMontada` — então nada garantia que este
+   * precompile terminasse antes de `GAME_READY`; só terminava cedo NESTE
+   * laudo por coincidência de timing.
+   *
+   * A troca: UMA espécie por `requestAnimationFrame`, cada uma contra um
+   * `InstancedMesh` DESCARTÁVEL de 1 instância só (`count=1`) — precisa ser
+   * `InstancedMesh` mesmo (não um `Mesh` comum) porque é a flag
+   * `USE_INSTANCING` que muda o programa; um `Mesh` comum compilaria a
+   * variante ERRADA. Depositado em `Y_DEPOSITO` (mesma constante de
+   * `PreCompilarProps` — fora do frustum de qualquer câmera do mapa) para
+   * não arriscar aparecer um quadro na origem enquanto o dummy está na cena.
+   * Geometria/material são os MESMOS objetos do `camada.partes` real
+   * (compartilhados, nunca clonados) — só o `InstancedMesh` (o wrapper) e o
+   * `Group` são descartáveis, e saem da cena assim que aquela espécie
+   * termina de compilar.
    */
   useEffect(() => {
-    if (camadas.length === 0) return;
+    if (camadas.length === 0) {
+      // nada pra precompilar (mapa sem vegetação instanciável) — avisa na
+      // hora, senão `gameReady` esperaria um sinal que nunca chegaria
+      aoPrecompilar?.();
+      return;
+    }
     let vivo = true;
+    let indice = 0;
+    let rafId = 0;
     const t0 = performance.now();
-    const id = requestAnimationFrame(() => {
+
+    const compilarProxima = () => {
       if (!vivo) return;
-      const pronto = gl.compileAsync ? gl.compileAsync(scene, camera) : (gl.compile(scene, camera), Promise.resolve());
-      void Promise.resolve(pronto).then(() => {
-        if (!vivo) return;
+      if (indice >= camadas.length) {
         registrarEvento("cena", "vegetacaoInstanciada:precompilou", {
           especies: camadas.length,
           ms: Math.round(performance.now() - t0),
           programas: gl.info.programs?.length ?? 0,
         });
+        aoPrecompilar?.();
+        return;
+      }
+      const camada = camadas[indice]!;
+      indice++;
+      // grupo descartável só pra puxar a variante USE_INSTANCING do
+      // material real — nunca entra no raycast/clique nem no censo de props
+      const escrutinio = new THREE.Group();
+      escrutinio.position.set(0, Y_DEPOSITO, 0);
+      for (const parte of camada.partes) {
+        const dummy = new THREE.InstancedMesh(parte.geometry, parte.material, 1);
+        dummy.setMatrixAt(0, _m.identity());
+        dummy.instanceMatrix.needsUpdate = true;
+        escrutinio.add(dummy);
+      }
+      scene.add(escrutinio);
+      const pronto = gl.compileAsync
+        ? gl.compileAsync(escrutinio, camera)
+        : (gl.compile(escrutinio, camera), Promise.resolve());
+      void Promise.resolve(pronto).then(() => {
+        scene.remove(escrutinio);
+        if (!vivo) return;
+        rafId = requestAnimationFrame(compilarProxima);
       });
-    });
+    };
+    rafId = requestAnimationFrame(compilarProxima);
     return () => {
       vivo = false;
-      cancelAnimationFrame(id);
+      cancelAnimationFrame(rafId);
     };
-  }, [gl, camera, scene, camadas]);
+  }, [gl, camera, scene, camadas, aoPrecompilar]);
 
   if (isolado("semProps")) return null;
 

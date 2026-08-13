@@ -219,7 +219,7 @@ export function IconSquare({
           alt={label ?? ""}
           width={size}
           height={size}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
           onError={() => setImgFailed(true)}
         />
       ) : label ? (

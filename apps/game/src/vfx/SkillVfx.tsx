@@ -8,11 +8,51 @@ import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { useVfxStore, type VfxInstance } from "./vfxStore";
 import { moldarMalhaTerreno } from "../play/pickGround";
-import { ColdBoltImpact } from "./ColdBoltImpact";
+import { ColdBoltImpact } from "./mage/cold-bolt/ColdBoltImpact";
+import { ColdBoltCastFrost } from "./mage/cold-bolt/ColdBoltCastFrost";
+import { FireLanceImpact } from "./mage/fire-lance/FireLanceImpact";
+import { FireLanceCastFire } from "./mage/fire-lance/FireLanceCastFire";
+import { ThunderStormImpact } from "./mage/thunder-storm/ThunderStormImpact";
+import { ThunderStormCastElectric } from "./mage/thunder-storm/ThunderStormCastElectric";
+import { mobModel, NPC_MODEL } from "../entities/mobModels";
+import { classModelFor } from "../entities/classModels";
 
-/** constante do rAthena p/ Cold Bolt (skill_db) — decide o visual especial de
- * impacto (`ColdBoltImpact`) em vez do flash genérico */
-const AEGIS_COLD_BOLT = "MG_COLDBOLT";
+/** skills de "N hits com VFX próprio" (skill_db, nome Aegis — nunca id, ele
+ * diverge de projeto pra projeto no rAthena) — cada uma tem um par
+ * cast/impacto PRÓPRIO em vez do disco de área/flash genérico. Lookup por
+ * Aegis em vez de um `if` por skill nova (o registro de duração fica em
+ * `vfx/mage/multiHitRegistry`, usado por `net/useWorldEvents`; aqui só
+ * escolhe QUAL componente desenhar — são preocupações diferentes, mesma
+ * fonte de nomes Aegis). */
+const CAST_VFX: Record<string, typeof ColdBoltCastFrost> = {
+  MG_COLDBOLT: ColdBoltCastFrost,
+  MG_FIREBOLT: FireLanceCastFire,
+  MG_THUNDERSTORM: ThunderStormCastElectric,
+};
+const IMPACT_VFX: Record<string, typeof ColdBoltImpact> = {
+  MG_COLDBOLT: ColdBoltImpact,
+  MG_FIREBOLT: FireLanceImpact,
+  MG_THUNDERSTORM: ThunderStormImpact,
+};
+
+/**
+ * Tamanho visual do ALVO — MESMO catálogo que `net/NetEntity` já usa pra
+ * escalar o modelo 3D (`mobModel`/`classModelFor`, nunca uma tabela nova) —
+ * pra escalar o aro/flash/fragmentos do impacto proporcionalmente (pedido:
+ * "um Poring pequeno e um monstro grande não devem receber o mesmo tamanho
+ * de impacto"). `charScale` (multiplicador GLOBAL de sessão) fica de fora
+ * de propósito: ele é igual pra toda entidade, não diferencia espécie — só
+ * o `scale` PRÓPRIO de cada bicho/classe importa aqui.
+ */
+function targetVisualScale(gid: number | undefined): number {
+  if (gid === undefined) return 1;
+  const entity = useWorldStore.getState().entities[gid];
+  if (!entity) return 1;
+  if (entity.kind === "mob") return mobModel(entity.job).scale;
+  if (entity.kind === "player") return classModelFor(entity.job).scale;
+  if (entity.kind === "npc") return NPC_MODEL.scale;
+  return 1;
+}
 
 /** subdivisões dos discos moldados — mesma ordem de grandeza da mira e do marcador de destino */
 const VFX_MOLD_SEGS = 8;
@@ -138,15 +178,51 @@ function VfxNode({
     return <AreaCell cx={initial.x} cz={initial.z} raioMundo={cellSize / 2} terrain={terrain} />;
   }
   if (effect.kind === "cast") {
+    // skills de "N hits" ganham o VFX próprio no CASTER em vez do disco de
+    // área genérico — nenhuma delas é skill de chão pro cliente (mesmo
+    // Thunder Storm, cujo "cast" pedido é no caster, não no alvo), então o
+    // disco sempre saía do tamanho mínimo (`areaRadius` 0) sem dizer nada.
+    const CastComponent = areaInfo?.aegisName ? CAST_VFX[areaInfo.aegisName] : undefined;
+    if (CastComponent) {
+      // `effect.gid` é o CASTER pra "cast" de skill de alvo (ver
+      // `net/useWorldEvents.onSkillCasting`) — sentinela -1 se por algum
+      // motivo vier ausente, só faz `anchorDeArma` não achar nada e o
+      // componente cair no fallback (peito do personagem), nunca quebra.
+      return <CastComponent x={initial.x} y={initial.y} z={initial.z} sourceGid={effect.gid ?? -1} expiresAt={effect.expiresAt} />;
+    }
     const raioMundo = Math.max(0.5, (areaInfo?.areaRadius ?? 0) + 0.5) * cellSize;
     return <AreaDisc cx={initial.x} cz={initial.z} raioMundo={raioMundo} terrain={terrain} />;
   }
 
-  const isColdBolt = effect.kind === "impact" && impactInfo?.aegisName === AEGIS_COLD_BOLT;
+  const ImpactComponent =
+    effect.kind === "impact" && impactInfo?.aegisName ? IMPACT_VFX[impactInfo.aegisName] : undefined;
+  // só calcula (lookup no worldStore) quando realmente vai ser usado
+  const targetScale = useMemo(
+    () => (ImpactComponent ? targetVisualScale(effect.gid) : 1),
+    [ImpactComponent, effect.gid],
+  );
 
   return (
     <group ref={group} position={[initial.x, initial.y + 0.05, initial.z]} scale={cellSize}>
-      {effect.kind === "buff" ? <BuffRing /> : isColdBolt ? <ColdBoltImpact /> : <ImpactFlash />}
+      {effect.kind === "buff" ? (
+        <BuffRing />
+      ) : ImpactComponent === ThunderStormImpact ? (
+        // única exceção com prop própria no lookup genérico: Thunder Storm é
+        // AoE de verdade (skill_db `type:"area"`) — os raios decorativos
+        // caem espalhados no raio REAL da área, não num chute fixo. Cold
+        // Bolt/Fire Lance continuam com a MESMA assinatura de sempre.
+        <ThunderStormImpact
+          damage={effect.damage}
+          crit={effect.crit}
+          onSelf={effect.onSelf}
+          targetScale={targetScale}
+          areaRadius={impactInfo?.areaRadius}
+        />
+      ) : ImpactComponent ? (
+        <ImpactComponent damage={effect.damage} crit={effect.crit} onSelf={effect.onSelf} targetScale={targetScale} />
+      ) : (
+        <ImpactFlash />
+      )}
     </group>
   );
 }

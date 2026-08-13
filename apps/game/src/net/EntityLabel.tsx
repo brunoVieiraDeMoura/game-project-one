@@ -25,8 +25,10 @@ import { WorldBar } from "./WorldBar";
  * nome subiu junto (0,10 → 0,115), senão ficava miúdo ao lado dela.
  */
 const PLACA = {
-  nome: 0.115,
-  contorno: 0.01,
+  // "mesma tipografia" do dano (vfx/damageNumberStyle): fonte bold + contorno
+  // mais grosso + leve blur (glow). Tamanho subiu um pouco junto (pedido).
+  nome: 0.14,
+  contorno: 0.015,
   barraW: 0.62,
   barraH: 0.085,
   /** altura acima do topo do modelo */
@@ -61,9 +63,11 @@ export function EntityLabel({
     <Billboard position={[0, height + cellSize * PLACA.acima, 0]}>
       <Text
         fontSize={cellSize * PLACA.nome}
+        fontWeight="bold"
         color={targeted ? "#ffd166" : "#ffffff"}
         outlineWidth={cellSize * PLACA.contorno}
         outlineColor="#000000"
+        outlineBlur={cellSize * 0.012}
         anchorX="center"
         anchorY="bottom"
       >

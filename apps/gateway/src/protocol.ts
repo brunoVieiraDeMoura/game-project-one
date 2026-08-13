@@ -105,6 +105,39 @@ export interface ServerEvents {
 	"hotkey:list": (payload: HotkeySlot[]) => void;
 	"skill:cast": (payload: SkillCast) => void;
 	"skill:casting": (payload: SkillCasting) => void;
+	/**
+	 * Skill de ALVO NO CHÃO (`TargetType: Ground` no skill_db, ex. Thunder
+	 * Storm) TERMINOU de conjurar — ZC.NOTIFY_GROUNDSKILL (0x117,
+	 * `clif_skill_poseffect`). Achado auditando por que Thunder Storm nunca
+	 * soltava o áudio de liberação (leia1.txt): skills de alvo (`TargetType:
+	 * Attack`, Cold Bolt/Fire Bolt) sempre confirmam via `skill:cast`
+	 * (NOTIFY_SKILL/USE_SKILL) porque SEMPRE há um alvo — skill de chão pode
+	 * ser lançada em célula vazia, sem acertar ninguém, e aí NENHUM pacote de
+	 * dano sai. Este pacote é o único sinal garantido de "a conjuração
+	 * terminou" pra esse tipo de skill — dispara mesmo com zero acertos,
+	 * e SEMPRE ANTES de qualquer `skill:ground-hit` (rathena/src/map/
+	 * skill.cpp: `skill_castend_pos2` manda `clif_skill_poseffect` antes de
+	 * chamar `castendPos2`, que é quem gera os hits de verdade).
+	 *
+	 * NÃO carrega dano nem alvo (é célula, não `targetGid`) — por isso não
+	 * reaproveita `SkillCast`. Quem tratar isto do lado do jogo trata como
+	 * "liberação sem dano conhecido", nunca inventa um número.
+	 */
+	"skill:ground-cast": (payload: SkillGroundCast) => void;
+	/**
+	 * Skill de alvo no CHÃO ACERTOU alguém — ZC.NOTIFY_SKILL_POSITION (0x115,
+	 * `clif_skill_damage2`). Só existe pra permitir distinguir "conjuração
+	 * terminou E acertou" de "conjuração terminou E não acertou ninguém"
+	 * (leia1.txt: Thunder Storm não deve soltar o som de impacto se a célula
+	 * clicada estava vazia) — NUNCA usado pra número de dano/VFX (isso
+	 * continua sem existir no cliente, gap conhecido e separado).
+	 *
+	 * Pode chegar MAIS DE UMA VEZ por conjuração (Thunder Storm tem
+	 * `HitCount` até 10 no skill_db, um pacote por hit/alvo) — quem consome
+	 * isto do lado do jogo já é responsável por tocar o som UMA vez só (ver
+	 * `audio/mage/multiHitCastAudio.aoRegistrarAcertoDeChao`).
+	 */
+	"skill:ground-hit": (payload: SkillGroundHit) => void;
 	"skill:ground": (payload: SkillGround) => void;
 	"skill:ground-gone": (payload: { gid: number }) => void;
 	/**
@@ -294,6 +327,21 @@ export interface SkillCasting {
 	x: number;
 	y: number;
 	durationMs: number;
+}
+
+/** Skill de alvo no chão terminou de conjurar (ver comentário em `ServerEvents`). */
+export interface SkillGroundCast {
+	skillId: number;
+	level: number;
+	sourceGid: number;
+	x: number;
+	y: number;
+}
+
+/** Skill de alvo no chão acertou alguém (ver comentário em `ServerEvents`). */
+export interface SkillGroundHit {
+	skillId: number;
+	sourceGid: number;
 }
 
 /** Unidade de skill no chão (área, armadilha, parede). */

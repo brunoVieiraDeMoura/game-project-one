@@ -18,41 +18,50 @@ import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { vozDeAtaque, vozDeConjuracao, vozDeDano } from "../audio/combatVoice";
 import { efeitoDeAtaqueBasico, efeitoDeSkill } from "../audio/combatWeapon";
-import { aoComecarCastDeColdBolt, aoLiberarCastDeColdBolt } from "../audio/coldBoltCast";
+import { aoComecarCastMultiHit, aoConcluirCastDeChao, aoLiberarCastMultiHit, aoRegistrarAcertoDeChao } from "../audio/mage/multiHitCastAudio";
 import { aoAparecerItemNoChao, aoGanharItem, registrarMorteDeMonstro } from "../audio/itemSfx";
 import { pegandoItem } from "./pickupStore";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
 import { clearEquipPending, settleStatusWatch, alcanceDaArma } from "./equipmentStore";
 import { useCardStore } from "./cardStore";
 import { useSkillCatalog } from "./skillCatalog";
-import { ICICLE_TOTAL_MS, emitirDanoEmCascata } from "../vfx/ColdBoltImpact";
+import { MULTI_HIT_TOTAL_MS } from "../vfx/mage/multiHitRegistry";
 
 /** constante do rAthena p/ Cold Bolt — mesma usada em `vfx/SkillVfx` pra
  * escolher o visual das 5 estalactites em vez do flash genérico */
 const AEGIS_COLD_BOLT = "MG_COLDBOLT";
 
 /**
- * `__testarColdBolt(gid)` no console — visualizar o efeito sem precisar
- * lançar a skill de verdade contra um monstro (leia1.txt, "testando pra ver
- * se fica bom"). `gid` tem que ser uma entidade JÁ no `worldStore` (`__world()`
- * lista as vivas) — o VFX se posiciona por `gid`, igual a um impacto de
- * verdade. Mesmo espírito do `__vfx`/`__dano`/`__skillsReset`.
+ * `__testarColdBolt(gid)` / `__testarFireLance(gid)` / `__testarThunderStorm(gid)`
+ * no console — visualizar o efeito sem precisar lançar a skill de verdade
+ * contra um monstro (leia1.txt, "testando pra ver se fica bom"). `gid` tem
+ * que ser uma entidade JÁ no `worldStore` (`__world()` lista as vivas) — o
+ * VFX se posiciona por `gid`, igual a um impacto de verdade. Mesmo espírito
+ * do `__vfx`/`__dano`/`__skillsReset`.
  */
-if (import.meta.env.DEV && typeof window !== "undefined") {
-  (window as unknown as { __testarColdBolt?: (gid: number, dano?: number) => void }).__testarColdBolt = (
+function testarSkillMultiHit(aegis: string, gid: number, dano: number): void {
+  const skillId = Object.values(useSkillCatalog.getState().byId).find((s) => s.aegisName === aegis)?.id ?? 14;
+  useSkillCatalog.getState().ensure([skillId]);
+  useVfxStore.getState().spawn({
+    kind: "impact",
+    skillId,
     gid,
-    dano = 5000,
-  ) => {
-    const skillId = Object.values(useSkillCatalog.getState().byId).find((s) => s.aegisName === AEGIS_COLD_BOLT)?.id ?? 14;
-    useSkillCatalog.getState().ensure([skillId]);
-    useVfxStore.getState().spawn({
-      kind: "impact",
-      skillId,
-      gid,
-      expiresAt: performance.now() + ICICLE_TOTAL_MS + 100,
-    });
-    emitirDanoEmCascata(gid, dano, false, false);
+    expiresAt: performance.now() + (MULTI_HIT_TOTAL_MS[aegis] ?? 3000) + 100,
+    damage: dano,
+    crit: false,
+    onSelf: false,
+  });
+}
+
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  const w = window as unknown as {
+    __testarColdBolt?: (gid: number, dano?: number) => void;
+    __testarFireLance?: (gid: number, dano?: number) => void;
+    __testarThunderStorm?: (gid: number, dano?: number) => void;
   };
+  w.__testarColdBolt = (gid, dano = 5000) => testarSkillMultiHit(AEGIS_COLD_BOLT, gid, dano);
+  w.__testarFireLance = (gid, dano = 5000) => testarSkillMultiHit("MG_FIREBOLT", gid, dano);
+  w.__testarThunderStorm = (gid, dano = 5000) => testarSkillMultiHit("MG_THUNDERSTORM", gid, dano);
 }
 
 /**
@@ -208,6 +217,7 @@ export function useWorldEvents(): void {
         crit: damageKind(p.action).crit,
         miss: p.damage === 0,
         onSelf: p.targetGid === selfGid,
+        skill: false,
       });
     };
     const onName = (p: { gid: number; name: string }) => useWorldStore.getState().rename(p.gid, p.name);
@@ -341,8 +351,9 @@ export function useWorldEvents(): void {
         // grito de conjuração (Mago) — QUALQUER skill, não só as com efeito
         // de arma configurado; ver `audio/combatVoice.vozDeConjuracao`
         vozDeConjuracao();
-        // Cold Bolt: liberação + impacto 500ms depois, ver `audio/coldBoltCast`
-        aoLiberarCastDeColdBolt(p.skillId);
+        // Cold Bolt/Fire Lance/Thunder Storm: liberação + impacto 500ms
+        // depois, ver `audio/mage/multiHitCastAudio`
+        aoLiberarCastMultiHit(p.skillId);
       }
       // e é a deixa da animação de LIBERAÇÃO — o tiro/gesto final da magia
       marcarCastRelease(p.sourceGid, performance.now());
@@ -350,17 +361,16 @@ export function useWorldEvents(): void {
       // QUALQUER personagem lança uma skill nunca vista, este cast ainda
       // cai no flash genérico (fetch é assíncrono); o próximo já acerta
       useSkillCatalog.getState().ensure([p.skillId]);
-      // Cold Bolt precisa da sequência inteira no ar (5 estalactites
-      // escalonadas, ver `vfx/ColdBoltImpact`) — o `EFFECT_MS` genérico do
-      // flash pontual (600ms) poda a última antes dela cair.
+      // Cold Bolt/Fire Lance/Thunder Storm precisam da sequência inteira no
+      // ar (5 hits escalonados, ver `vfx/mage/multiHitRegistry`) — o
+      // `EFFECT_MS` genérico do flash pontual (600ms) poda o último hit
+      // antes dele cair. Lookup por Aegis em vez de um boolean por skill.
       const aegis = useSkillCatalog.getState().byId[p.skillId]?.aegisName;
-      const isColdBolt = p.kind !== "buff" && aegis === AEGIS_COLD_BOLT;
-      useVfxStore.getState().spawn({
-        kind: p.kind === "buff" ? "buff" : "impact",
-        skillId: p.skillId,
-        gid: p.kind === "buff" ? p.sourceGid : p.targetGid,
-        expiresAt: performance.now() + (isColdBolt ? ICICLE_TOTAL_MS + 100 : EFFECT_MS),
-      });
+      const multiHitTotalMs = aegis !== undefined ? MULTI_HIT_TOTAL_MS[aegis] : undefined;
+      const isMultiHit = p.kind !== "buff" && multiHitTotalMs !== undefined;
+      const selfGid = useWorldStore.getState().selfGid;
+      const onSelf = p.targetGid === selfGid;
+      const crit = damageKind(p.action).crit;
       /**
        * O número de dano da skill, MESMA fonte que o ataque básico
        * (`onAction` acima) — sem isto só o flash de impacto aparecia e o
@@ -368,22 +378,35 @@ export function useWorldEvents(): void {
        * distinção que o `USESKILL_ACK` já fazia lá no gateway: "buff" nunca
        * tem dano de verdade (é sempre 0), e mostrar "Miss" para uma cura seria
        * mentir.
+       *
+       * Cold Bolt NÃO passa pelo `damageFeed` (o número branco/vermelho
+       * flutuante de sempre) — o total vai DENTRO do próprio efeito
+       * (`damage`/`crit`/`onSelf` no `spawn` abaixo) e é `ColdBoltImpact`
+       * quem desenha os 5 números, um por estalactite, no MESMO instante
+       * (`onHit`) em que ela decide que aquela estalactite chegou. Nenhum
+       * timer novo: é o mesmo `life >= ICICLE_IMPACT_FRACTION` que já
+       * disparava o flash de impacto antes desta troca.
        */
-      if (p.kind === "target") {
-        const selfGid = useWorldStore.getState().selfGid;
-        const onSelf = p.targetGid === selfGid;
-        const crit = damageKind(p.action).crit;
-        if (isColdBolt && p.damage > 0) {
-          emitirDanoEmCascata(p.targetGid, p.damage, crit, onSelf);
-        } else {
-          useDamageFeed.getState().push({
-            gid: p.targetGid,
-            value: p.damage,
-            crit,
-            miss: p.damage === 0,
-            onSelf,
-          });
-        }
+      useVfxStore.getState().spawn({
+        kind: p.kind === "buff" ? "buff" : "impact",
+        skillId: p.skillId,
+        gid: p.kind === "buff" ? p.sourceGid : p.targetGid,
+        expiresAt: performance.now() + (isMultiHit ? (multiHitTotalMs ?? 0) + 100 : EFFECT_MS),
+        ...(isMultiHit && p.kind === "target" ? { damage: p.damage, crit, onSelf } : {}),
+      });
+      // Miss (`damage === 0`) continua pelo `damageFeed` de sempre MESMO
+      // nessas skills — `*Impact` só desenha número pra dano > 0
+      // (`splitDamage` não faz sentido pra "errou"), então sem isto um hit
+      // que erra ficava mudo: caindo sem "Miss" nenhum.
+      if (p.kind === "target" && (!isMultiHit || p.damage === 0)) {
+        useDamageFeed.getState().push({
+          gid: p.targetGid,
+          value: p.damage,
+          crit,
+          miss: p.damage === 0,
+          onSelf,
+          skill: true,
+        });
       }
     };
 
@@ -392,8 +415,9 @@ export function useWorldEvents(): void {
       // efeito na cena
       if (p.sourceGid === useWorldStore.getState().selfGid) {
         useCastStore.getState().comecar(p.skillId, p.durationMs || 0);
-        // Cold Bolt: som de "carregando a magia", ver `audio/coldBoltCast`
-        aoComecarCastDeColdBolt(p.skillId);
+        // Cold Bolt/Fire Lance/Thunder Storm: som de "carregando a magia",
+        // ver `audio/mage/multiHitCastAudio`
+        aoComecarCastMultiHit(p.skillId);
       }
       // a animação de conjuração vale para QUALQUER caster, não só o próprio
       // personagem — é ela que faz o gesto de "carregando a magia" na cena
@@ -405,6 +429,42 @@ export function useWorldEvents(): void {
         ...(p.x || p.y ? { cell: { x: p.x, y: p.y } } : { gid: p.sourceGid }),
         expiresAt: performance.now() + Math.max(300, p.durationMs || 0),
       });
+    };
+
+    /**
+     * Skill de alvo no CHÃO (`skill:ground-cast`, ZC.NOTIFY_GROUNDSKILL)
+     * terminou de conjurar — achado auditando por que Thunder Storm nunca
+     * soltava áudio/voz de liberação (leia1.txt): skill de alvo (Cold
+     * Bolt/Fire Bolt) sempre confirma via `skill:cast` porque sempre há um
+     * `targetGid`; skill de CHÃO (Thunder Storm) pode cair em célula vazia
+     * sem acertar ninguém, e aí nenhum `skill:cast` sai — este é o único
+     * sinal garantido de "terminou" pra esse tipo. Sem dano/alvo conhecido
+     * (é célula, não entidade): só o que a liberação em si já cobre —
+     * mesmo escopo de `onSkillCast`, sem inventar VFX/dano que o pacote não
+     * carrega.
+     */
+    const onSkillGroundCast = (p: { skillId: number; sourceGid: number; x: number; y: number }) => {
+      if (p.sourceGid !== useWorldStore.getState().selfGid) return;
+      useCastStore.getState().parar();
+      vozDeConjuracao();
+      // NÃO toca `hit` aqui — este evento dispara mesmo sem acertar
+      // ninguém; `aoConcluirCastDeChao` só para o loop e espera uma
+      // confirmação real (ver `onSkillGroundHit` abaixo e o comentário de
+      // `audio/mage/multiHitCastAudio`)
+      aoConcluirCastDeChao(p.skillId);
+    };
+
+    /**
+     * Skill de alvo no CHÃO ACERTOU alguém (`skill:ground-hit`,
+     * ZC.NOTIFY_SKILL_POSITION) — chega DEPOIS de `onSkillGroundCast`, nunca
+     * antes. É o ÚNICO gatilho do som de impacto pra esse tipo de skill
+     * (leia1.txt: Thunder Storm não deve soltar `hit` se a célula clicada
+     * estava vazia). Sem dano/VFX aqui de propósito — mesmo escopo
+     * (audio-only) do resto deste módulo.
+     */
+    const onSkillGroundHit = (p: { skillId: number; sourceGid: number }) => {
+      if (p.sourceGid !== useWorldStore.getState().selfGid) return;
+      aoRegistrarAcertoDeChao(p.skillId);
     };
 
     const onSkillGround = (p: { gid: number; x: number; y: number; skillId?: number }) =>
@@ -447,6 +507,8 @@ export function useWorldEvents(): void {
     socket.on("hotkey:list", onHotkeys);
     socket.on("skill:cast", onSkillCast);
     socket.on("skill:casting", onSkillCasting);
+    socket.on("skill:ground-cast", onSkillGroundCast);
+    socket.on("skill:ground-hit", onSkillGroundHit);
     socket.on("skill:ground", onSkillGround);
     socket.on("skill:ground-gone", onSkillGroundGone);
     socket.on("npc:dialog", onNpcDialog);
@@ -493,6 +555,8 @@ export function useWorldEvents(): void {
       socket.off("hotkey:list", onHotkeys);
       socket.off("skill:cast", onSkillCast);
       socket.off("skill:casting", onSkillCasting);
+      socket.off("skill:ground-cast", onSkillGroundCast);
+      socket.off("skill:ground-hit", onSkillGroundHit);
       socket.off("skill:ground", onSkillGround);
       socket.off("skill:ground-gone", onSkillGroundGone);
       socket.off("npc:dialog", onNpcDialog);

@@ -705,15 +705,8 @@ function SlotEquip({
         style={{
           position: "absolute",
           inset: borda / 3,
+          overflow: "hidden",
           borderRadius: borda * 0.66,
-          background: hover ? ST_COLORS.slotHover : ST_COLORS.slot,
-          transition: "background 110ms ease-out",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -721,7 +714,7 @@ function SlotEquip({
         }}
       >
         {item ? (
-          <IconSquare seed={`item-${item.itemId}`} size={d * 0.62} />
+          <IconSquare seed={`item-${item.itemId}`} fill radius={borda * 0.66} />
         ) : (
           <img src={art} alt="" draggable={false} style={{ width: "62%", height: "62%", opacity: 0.85 }} />
         )}

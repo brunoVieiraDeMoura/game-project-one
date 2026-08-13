@@ -32,28 +32,34 @@ export function useMap(id: string): { map: GameMap | null; error: string | null 
     if (!id) return;
 
     const emCache = cache.get(id);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info(`[MAP_CACHE] ${emCache ? "HIT" : "MISS"} ${id}`);
+    }
     if (emCache) {
       /**
-       * Um microtask de folga, de propósito — não `setMap(emCache)` direto
-       * aqui em cima.
+       * Direto — sem `queueMicrotask` de folga. A versão anterior deste
+       * arquivo adiava este `setMap` por um microtask torcendo para o
+       * `setMap(null)` de cima comitar sozinho antes, e ASSIM forçar
+       * `<Scene>`/`SquareTerrain` a desmontar de verdade antes do mapa
+       * novo chegar — mas o React pode empacotar os dois de qualquer jeito
+       * (o `queueMicrotask` não garante um commit em separado), e foi
+       * exatamente isso que aconteceu ao vivo: `<Scene>` não desmontava, o
+       * cache de chunk por coordenada (`cx,cz`) do mapa ANTERIOR ficava de
+       * pé recebendo os dados do mapa NOVO, a invalidação incremental
+       * (`chunksSujos`, pensada só para EDIÇÃO dentro do mesmo mapa)
+       * comparava dois mapas diferentes célula a célula, e o mesmo `key`
+       * de chunk entrava duas vezes em `visible` — "Encountered two
+       * children with the same key", um `useMemo` reconstruindo o mapa
+       * inteiro por engano, e a cortina nunca resolvendo.
        *
-       * O `setMap(null)` acima e este `setMap` são o sinal que `<Scene>`/
-       * `SquareTerrain` usam para saber que HOUVE troca de mapa (o longo
-       * comentário em `PlayView.tsx` sobre `ultimoMapa` documenta por que:
-       * `{map && <Scene/>}` desmonta e remonta quando `map` passa por
-       * `null`). Se os dois `setState` corressem no MESMO commit React os
-       * empacotaria num só, o `null` nunca chegaria a comitar, `<Scene>`
-       * NUNCA desmontaria para o mapa novo, e o cache de chunk do mapa
-       * ANTERIOR (`SquareTerrain`, por posição de chunk) ficaria vivo sob os
-       * dados do mapa seguinte — que não tem a invalidação incremental
-       * (`chunksSujos`) preparada pra isso, só para EDIÇÃO dentro do MESMO
-       * mapa. O microtask garante que o `null` pinta primeiro; o ganho
-       * continua sendo pular rede + os 160.000 `zod.parse`, não pular o
-       * remonte.
+       * A garantia de remonte agora é `key={mapId}` no `<Scene>`/
+       * `<SinalizaCenaPronta>` (`views/PlayView.tsx`) — identidade do
+       * React, não timing de commit. Com ela, este hook não precisa mais
+       * fingir um "null primeiro": pode entregar o mapa em cache direto,
+       * mais rápido, e o remonte continua garantido de qualquer jeito.
        */
-      queueMicrotask(() => {
-        if (!cancelled) setMap(emCache);
-      });
+      setMap(emCache);
       return () => {
         cancelled = true;
       };
@@ -75,6 +81,8 @@ export function useMap(id: string): { map: GameMap | null; error: string | null 
             ...(window as unknown as { __mapParseMs?: Record<string, number> }).__mapParseMs,
             [id]: Math.round(ms),
           };
+          // eslint-disable-next-line no-console
+          console.info(`[MAP_CACHE] MISS ${id} — fetch+zod.parse: ${Math.round(ms)}ms`);
         }
         return parsed;
       })

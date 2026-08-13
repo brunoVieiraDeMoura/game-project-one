@@ -231,6 +231,7 @@ export function alcanceEfetivoDaSkill(id: number): number {
  * `__skillsReset()` no console resolve sem recarregar a página.
  */
 if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __skillCatalogTmp?: unknown }).__skillCatalogTmp = useSkillCatalog;
   (window as unknown as { __skillsReset?: () => void; __skills?: () => unknown }).__skillsReset = () =>
     useSkillCatalog.setState({ byId: {} });
   (window as unknown as { __skillsReset?: () => void; __skills?: () => unknown }).__skills = () =>

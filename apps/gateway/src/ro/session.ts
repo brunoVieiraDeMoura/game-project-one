@@ -25,6 +25,8 @@ import type {
 	SkillCast,
 	SkillCasting,
 	SkillGround,
+	SkillGroundCast,
+	SkillGroundHit,
 	StatusBlock,
 } from "../protocol.js";
 import { entityKindFromObjectType } from "./entity-kind.js";
@@ -131,6 +133,10 @@ export declare interface RoSession {
 	on(event: "hotkeys", listener: (payload: HotkeySlot[]) => void): this;
 	on(event: "skill-cast", listener: (payload: SkillCast) => void): this;
 	on(event: "skill-casting", listener: (payload: SkillCasting) => void): this;
+	/** skill de alvo no CHÃO terminou de conjurar — ver comentário em `protocol.ts: ServerEvents["skill:ground-cast"]` */
+	on(event: "skill-ground-cast", listener: (payload: SkillGroundCast) => void): this;
+	/** skill de alvo no CHÃO acertou alguém — ver comentário em `protocol.ts: ServerEvents["skill:ground-hit"]` */
+	on(event: "skill-ground-hit", listener: (payload: SkillGroundHit) => void): this;
 	on(event: "skill-ground", listener: (payload: SkillGround) => void): this;
 	on(event: "skill-ground-gone", listener: (payload: { gid: number }) => void): this;
 	on(event: "skill-cooldown", listener: (payload: { skillId: number; durationMs: number }) => void): this;
@@ -1231,6 +1237,50 @@ export class RoSession extends EventEmitter {
 					x: pkt.xPos,
 					y: pkt.yPos,
 					durationMs: pkt.delayTime ?? 0,
+				});
+			});
+		}
+
+		/**
+		 * Skill de alvo no CHÃO terminou de conjurar (ZC.NOTIFY_GROUNDSKILL,
+		 * 0x117, `clif_skill_poseffect` — `PACKET_ZC_NOTIFY_GROUNDSKILL` em
+		 * `rathena/src/map/packets_struct.hpp:4696`, sem variação por
+		 * PACKETVER). Achado auditando por que Thunder Storm nunca soltava o
+		 * áudio de liberação: `TargetType: Ground` no skill_db não garante
+		 * acerto (célula pode estar vazia), então NOTIFY_SKILL/USE_SKILL
+		 * (que viram `skill-cast`) podem nunca sair — este pacote é o único
+		 * sinal garantido de "a conjuração terminou" pra esse tipo de skill.
+		 * Ver comentário completo em `protocol.ts: ServerEvents["skill:ground-cast"]`.
+		 */
+		if (PACKET.ZC.NOTIFY_GROUNDSKILL) {
+			conn.hook(PACKET.ZC.NOTIFY_GROUNDSKILL, (pkt: any) => {
+				this.emit("skill-ground-cast", {
+					skillId: pkt.SKID,
+					level: pkt.level ?? 1,
+					sourceGid: pkt.AID,
+					x: pkt.xPos,
+					y: pkt.yPos,
+				});
+			});
+		}
+
+		/**
+		 * Skill de alvo no CHÃO ACERTOU alguém (ZC.NOTIFY_SKILL_POSITION, 0x115,
+		 * `clif_skill_damage2` — `PACKET_ZC_NOTIFY_SKILL_POSITION` em
+		 * `rathena/src/map/packets_struct.hpp:4716`, sem variação por
+		 * PACKETVER). Chega DEPOIS do `NOTIFY_GROUNDSKILL` acima (mesma ordem
+		 * do servidor: `skill_castend_pos2` manda o poseffect antes de chamar
+		 * `castendPos2`, que é quem gera os hits) — nunca antes.
+		 *
+		 * Só emite o suficiente pra distinguir "acertou" de "não acertou" do
+		 * lado do áudio (ver `protocol.ts`) — dano/VFX de skill de chão
+		 * continuam sem existir no cliente, gap conhecido e separado.
+		 */
+		if (PACKET.ZC.NOTIFY_SKILL_POSITION) {
+			conn.hook(PACKET.ZC.NOTIFY_SKILL_POSITION, (pkt: any) => {
+				this.emit("skill-ground-hit", {
+					skillId: pkt.SKID,
+					sourceGid: pkt.AID,
 				});
 			});
 		}

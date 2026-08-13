@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GameMapSchema, type GameMap, DEFAULT_LIGHTING } from "@ragnarok/map-format";
 import type { GameplayConfig } from "@ragnarok/game-data";
@@ -693,6 +693,7 @@ function Scene({
   onTerrenoProgresso,
   precarregarTerreno = false,
   precompilarProps = false,
+  aoPrecompilarVegetacao,
 }: {
   map: GameMap;
   gameplay: GameplayConfig;
@@ -716,6 +717,12 @@ function Scene({
    * ele não compilaria nada. Ver `play/PreCompilarProps`.
    */
   precompilarProps?: boolean;
+  /**
+   * Avisa `PlayView` quando `VegetationInstancer` termina de precompilar
+   * (ou não tem nada pra precompilar) — vira `vegetacaoPronta`, que
+   * `gameReady` exige. Ver o comentário longo em `PlayView` sobre por quê.
+   */
+  aoPrecompilarVegetacao?: () => void;
 }) {
   // A grade DESTE mapa: hexágonos do editor ou quadrados do rAthena. Tudo que
   // era `if (isHex)` espalhado pela cena passa por aqui.
@@ -1093,7 +1100,7 @@ function Scene({
             é onde a `props: []` da migração deixou o LOD3/impostor sem o que
             representar (ver o comentário do módulo) — hex/editor mantêm o
             terreno próprio deles, sem mudança. */}
-        {map.terrainMode === "square" && <HorizonMesh map={map} />}
+        {map.terrainMode === "square" && <HorizonMesh map={map} playerPos={playerPos} />}
         {/* Impostores de árvore (grid/TreeImpostors): mesma extensão do
             HorizonMesh, mas para as árvores do mapa em vez do chão — troca
             binária com o PropInstance real no MESMO raio de detalhe
@@ -1115,7 +1122,12 @@ function Scene({
               pra achar prop clicado, instanciado ou não. */}
           {culled && (
             <Suspense fallback={null}>
-              <VegetationInstancer map={map} center={center} radius={PROP_RADIUS} />
+              <VegetationInstancer
+                map={map}
+                center={center}
+                radius={PROP_RADIUS}
+                aoPrecompilar={aoPrecompilarVegetacao}
+              />
             </Suspense>
           )}
           {/*
@@ -1565,6 +1577,7 @@ export function PlayView() {
     setPrecarga(null);
     setPrecargaExpirou(false);
     setAquecido(false);
+    setVegetacaoPronta(false);
     // Reset explícito, ALÉM do idioma monta/desmonta de `SinalizaCenaPronta`:
     // o `<Suspense>` de `<Scene>` some inteiro quando `map` vira `null` no
     // meio de um warp (`{map && (<Suspense>...)}`), e o desmonte do sinalizador
@@ -1572,6 +1585,10 @@ export function PlayView() {
     // protege contra qualquer ordem de commit em que o desmonte ainda não
     // tenha corrido antes do primeiro render do mapa novo.
     setCenaMontada(false);
+    if (import.meta.env.DEV && mapId) {
+      // eslint-disable-next-line no-console
+      console.info(`[GAME_LOAD] T1 mapId mudou para "${mapId}" t=${Math.round(performance.now())}ms`);
+    }
   }, [mapId]);
   useEffect(() => {
     if (!esperaPreCarga) return;
@@ -1641,18 +1658,53 @@ export function PlayView() {
    */
   const [aquecido, setAquecido] = useState(false);
   const aoAquecer = useCallback(() => setAquecido(true), []);
-  const aquecendo = !construindo && !aguardandoCena && Boolean(map) && cenaMontada && !aquecido;
+  /**
+   * Precompile da vegetação instanciada (`props/VegetationInstancer.tsx`)
+   * — SEPARADO de `aquecido` de propósito.
+   *
+   * `AquecerCena` só enxerga `gl.info.programs.length`: na prática, hoje,
+   * ele já espera o precompile da vegetação terminar (compilar espécie nova
+   * conta como programa novo, o que reseta a contagem de quadros parados) —
+   * mas isso é um efeito COLATERAL do jeito que os dois foram medidos, não
+   * uma garantia estrutural. `VegetationInstancer` é montado o tempo todo
+   * (nunca condicionado a `aquecendo`, ao contrário de `PreCompilarProps`),
+   * e o `<Suspense fallback={null}>` que o embrulha em `PlayView` NÃO
+   * bloqueia `cenaMontada` — então, em tese, se as urls de espécie ainda
+   * estivessem em voo quando `EsperaAssetsDoMapa` estourasse o teto
+   * (`assetsExpiraram`), o precompile de vegetação só começaria DEPOIS do
+   * resto já ter revelado. `vegetacaoPronta` fecha essa lacuna: é um sinal
+   * EXPLÍCITO (`VegetationInstancer` chama de volta quando a fila de
+   * precompile — uma espécie por quadro, ver o comentário lá — esvazia, ou
+   * na hora se não há vegetação instanciável no mapa), em vez de depender
+   * de o efeito colateral continuar valendo.
+   */
+  const [vegetacaoPronta, setVegetacaoPronta] = useState(false);
+  const aoPrecompilarVegetacao = useCallback(() => setVegetacaoPronta(true), []);
   /**
    * `GAME_READY` — a única condição que baixa a cortina e revela o HUD.
    *
-   * Precisa das QUATRO coisas ao mesmo tempo: dado pronto (`!construindo`),
+   * Precisa de CINCO coisas ao mesmo tempo: dado pronto (`!construindo`),
    * `<Scene>` comitada (`cenaMontada`, não suspensa — `!aguardandoCena` é
-   * redundante com isso mas deixado explícito por clareza), e o aquecimento
-   * declarado feito (`aquecido`) — que só passa a rodar DEPOIS de `cenaMontada`
-   * (ver acima), então "aquecido" aqui já implica pelo menos alguns quadros
-   * reais desenhados com conteúdo de verdade, não uma cena vazia.
+   * redundante com isso mas deixado explícito por clareza), o aquecimento
+   * declarado feito (`aquecido`) — que só passa a rodar DEPOIS de
+   * `cenaMontada` (ver acima), então "aquecido" aqui já implica pelo menos
+   * alguns quadros reais desenhados com conteúdo de verdade, não uma cena
+   * vazia — e `vegetacaoPronta` (acima). Sem a última, `aquecido` sozinho
+   * podia ficar `true` com o precompile de vegetação ainda rodando —
+   * pequeno agora (uma espécie por quadro, não mais um bloco de segundos),
+   * mas ainda assim trabalho que não devia acontecer depois do jogador ter
+   * controle.
    */
-  const gameReady = !construindo && !aguardandoCena && cenaMontada && aquecido;
+  const gameReady = !construindo && !aguardandoCena && cenaMontada && aquecido && vegetacaoPronta;
+  /**
+   * `aquecendo` fica de pé até `gameReady`, não até `aquecido` sozinho — é
+   * isso que segura a cortina (e mantém `AquecerCena`/`VegetationInstancer`
+   * montados, fazendo o trabalho deles) enquanto só falta `vegetacaoPronta`.
+   * `AquecerCena` já se protege contra chamar `aoTerminar` duas vezes
+   * (`avisado.current`), então continuar montado depois de `aquecido` já
+   * ter virado `true` é seguro — só fica ocioso.
+   */
+  const aquecendo = !construindo && !aguardandoCena && Boolean(map) && cenaMontada && !gameReady;
   const carregando = construindo || aguardandoCena || aquecendo;
 
   /**
@@ -1832,7 +1884,43 @@ export function PlayView() {
         <Suspense fallback={import.meta.env.DEV ? <SondaDeSuspense nome="cena" /> : null}>
           {import.meta.env.DEV && <PerfProbe />}
           {map && (
-            <>
+            <Fragment key={mapId}>
+              {/*
+                `key={mapId}` NO FRAGMENT, não só decoração — é o que corrige
+                um bug real achado ao vivo (warp A→B→A com B tendo pego
+                cache HIT em `useMap`): sem uma key amarrada ao mapa,
+                `<Scene>`/`<SquareTerrain>` podiam continuar na MESMA
+                instância/fiber entre um mapa e outro (a transição
+                `map: objA → null → objB` não é garantia de commit
+                SEPARADO — a suspeita, confirmada ao vivo, é que o React
+                as empacota quando a segunda vem de um `queueMicrotask`
+                logo depois da primeira). Com a mesma instância de
+                `SquareTerrain` viva, o cache de chunk por COORDENADA
+                (`cx,cz`) do mapa ANTERIOR ficava de pé quando os dados do
+                mapa NOVO chegavam — e como as duas coordenadas batem (é a
+                mesma grade 400×400), a lógica de invalidação incremental
+                (`chunksSujos`, feita para EDIÇÃO no editor, nunca para
+                troca de mapa) comparava terrenos de DOIS MAPAS DIFERENTES
+                célula a célula, marcava tudo como "sujo", e o mesmo `key`
+                de chunk acabava e entrando em `visible` DUAS VEZES — uma
+                vez com a geometria velha (ainda "pronta" no cache) e outra
+                com a reconstruída — daí o "Encountered two children with
+                the same key" e, atrás dele, um `useMemo` reconstruindo o
+                mapa inteiro por engano, um long task de ~4s, e a cortina
+                (`cenaMontada`) nunca resolvendo porque a árvore ficava
+                presa reconciliando essa bagunça.
+
+                `key` é a garantia FORTE do React — muda o key, muda a
+                identidade, o React desmonta o de baixo e monta um do zero,
+                sem depender de timing de commit nenhum. Cobre `<Scene>` E
+                `<SinalizaCenaPronta>` juntos (o Fragment é o nó com a key),
+                porque os dois têm de resetar JUNTOS: se só `<Scene>`
+                remontasse, `<SinalizaCenaPronta>` (sem key própria)
+                sobreviveria entre mapas e seu efeito de montagem — que é
+                quem vira `cenaMontada` — nunca disparia de novo para o
+                mapa seguinte, prendendo a cortina embaixo pra sempre na
+                condição OPOSTA (curtain nunca sobe).
+              */}
               <Scene
                 map={map}
                 gameplay={gameplay}
@@ -1843,12 +1931,13 @@ export function PlayView() {
                 onTerrenoProgresso={aoProgredirTerreno}
                 precarregarTerreno={carregandoTerreno}
                 precompilarProps={aquecendo}
+                aoPrecompilarVegetacao={aoPrecompilarVegetacao}
               />
               {/* SIBLING de `<Scene>`, no MESMO boundary — ver o comentário
                   longo em `SinalizaCenaPronta`. Só monta quando este
                   `<Suspense>` de fato resolve, e é ISSO que vira `cenaMontada`. */}
               <SinalizaCenaPronta set={setCenaMontada} />
-            </>
+            </Fragment>
           )}
         </Suspense>
       </Canvas>

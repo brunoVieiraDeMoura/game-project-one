@@ -456,7 +456,7 @@ export function NetEntityView({
 
       <group ref={model} scale={charScale * modelInfo.scale}>
         <primitive object={scene} />
-        {classModel && <EquippedWeapons scene={scene} weapons={classModel.weapons} />}
+        {classModel && <EquippedWeapons scene={scene} weapons={classModel.weapons} gid={gid} />}
       </group>
 
       {entity.name && (
