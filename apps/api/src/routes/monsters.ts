@@ -6,6 +6,7 @@ import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
 import { applyMonsterSpawnSync, type MonsterSpawnWriterPaths } from "../store/monster-spawn-writer.js";
 import { queueReload } from "../store/mysql-item-repository.js";
+import { logCreate, logUpdate, logDelete } from "../audit/log.js";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -75,15 +76,11 @@ export function monsterRoutes(
 
       try {
         const created = await repo.create(toCreate);
-        if (admin && security) {
-          await security.audit({
-            actor: admin,
-            action: "create",
-            targetType: "monster",
-            targetId: String(created.id),
-            payload: created,
-          });
-        }
+        await logCreate(
+          { security, admin, targetType: "monster", targetId: String(created.id), source: "admin/monsters" },
+          created.name,
+          created,
+        );
         if (spawnSync && spawnSync.touchedFiles.length > 0) {
           await queueReload("script");
         }
@@ -131,15 +128,12 @@ export function monsterRoutes(
       try {
         const updated = await repo.update(p.data.id, toUpdate);
         if (!updated) return reply.code(404).send({ error: "not found" });
-        if (admin && security) {
-          await security.audit({
-            actor: admin,
-            action: "update",
-            targetType: "monster",
-            targetId: String(p.data.id),
-            payload: updated,
-          });
-        }
+        await logUpdate(
+          { security, admin, targetType: "monster", targetId: String(p.data.id), source: "admin/monsters" },
+          updated.name,
+          current as unknown as Record<string, unknown>,
+          updated as unknown as Record<string, unknown>,
+        );
         if (spawnSync && spawnSync.touchedFiles.length > 0) {
           await queueReload("script");
         }
@@ -165,16 +159,14 @@ export function monsterRoutes(
       if (admin === undefined) return;
       const p = IdParamSchema.safeParse(req.params);
       if (!p.success) return reply.code(400).send({ error: p.error.issues });
+      const before = await repo.get(p.data.id);
       const removed = await repo.remove(p.data.id);
       if (!removed) return reply.code(404).send({ error: "not found" });
-      if (admin && security) {
-        await security.audit({
-          actor: admin,
-          action: "delete",
-          targetType: "monster",
-          targetId: String(p.data.id),
-        });
-      }
+      await logDelete(
+        { security, admin, targetType: "monster", targetId: String(p.data.id), source: "admin/monsters" },
+        before?.name ?? String(p.data.id),
+        before,
+      );
       return { ok: true };
     });
   };

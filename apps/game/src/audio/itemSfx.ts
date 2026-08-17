@@ -141,9 +141,21 @@ export function aoAparecerItemNoChao(itemId: number, x: number, y: number): void
   if (rate !== undefined && rate < RARE_RATE_MAX) playOneShot(RARE);
 }
 
-/** SÓ PARA TESTE — o app de verdade nunca chama isto. */
-export function __resetForTests(): void {
+/**
+ * Esquece pedido de coleta pendente e mortes recentes — chamar do cleanup de
+ * fim de sessão (`audio/audioLifecycle`). Nenhum `<audio>` toca aqui (o som
+ * de item vem do `oneShotPool`, já parado à parte), mas sem isto um `inv:add`
+ * atrasado de ANTES do disconnect (ou já do PRÓXIMO personagem, se o gid for
+ * reciclado) podia casar com um pedido velho e tocar "pegou item" à toa —
+ * a race condition que o cleanup existe para evitar.
+ */
+export function pararAoDesconectar(): void {
   pedidosPendentes = 0;
   ultimoPedidoEm = 0;
   mortesRecentes = [];
+}
+
+/** SÓ PARA TESTE — o app de verdade nunca chama isto. */
+export function __resetForTests(): void {
+  pararAoDesconectar();
 }

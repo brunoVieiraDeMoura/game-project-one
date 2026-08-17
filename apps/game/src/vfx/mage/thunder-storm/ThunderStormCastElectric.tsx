@@ -4,6 +4,7 @@ import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { CSSProperties } from "react";
 import { anchorDeArma } from "../../../entities/weaponAnchors";
+import { createSeededRng } from "../../core/particleMath";
 
 /**
  * Thunder Storm (MG_THUNDERSTORM) — cast elétrico no CASTER, CSS puro.
@@ -36,8 +37,7 @@ interface OrbitSpec {
 
 function buildOrbit(seed: number, count: number, radiusBase: number, radiusJitter: number): OrbitSpec[] {
   const out: OrbitSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < count; i++) {
     out.push({
       angleDeg: (i / count) * 360 + rnd() * 40,
@@ -59,8 +59,7 @@ interface ArcSpec {
 
 function buildArcs(seed: number): ArcSpec[] {
   const out: ArcSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < ARC_COUNT; i++) {
     out.push({
       rotateDeg: (i / ARC_COUNT) * 360 + rnd() * 50,

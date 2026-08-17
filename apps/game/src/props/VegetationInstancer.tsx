@@ -68,8 +68,21 @@ import { Y_DEPOSITO } from "../play/PreCompilarProps";
  * devolve, sem precisar de um `Object3D` por prop (ver `baseDoPropInstanciado`).
  */
 
-/** categorias que este módulo assume — grama/decoração rasteira + as sólidas com hull */
-export const CATEGORIAS_INSTANCIAVEIS = new Set(["grass", "flower", "plant", "bush", "tree", "tree_bare"]);
+/**
+ * categorias que este módulo assume — grama/decoração rasteira + as sólidas
+ * com hull. `rock`/`stone` entraram na Fase de instancing de pedra
+ * (`render-tecnic.txt` seção 22.9): mesmo padrão já provado pra árvore —
+ * props REPETIDOS (catálogo tem 9 espécies de `rock`, 21 de `stone`) cresciam
+ * draw call linear em `PropInstance` (1 `Mesh` por prop, seção 14/18) sem
+ * motivo — nenhuma das duas precisa de identidade individual (ao contrário
+ * de `building`/`hill`/`mountain`, que ficam de fora de propósito: são
+ * landmark, não decoração repetida). Colisão não muda: `propCells.ts`/
+ * `propBlockers.ts` já derivam bloqueio de `colliderType`/`isSolidProp`,
+ * independente de a malha ser `InstancedMesh` ou `Mesh` — `tree` (hull)
+ * prova isso há tempo. Vento não se aplica (`props/wind.ts` já exclui rock/
+ * stone de propósito — pedra não balança).
+ */
+export const CATEGORIAS_INSTANCIAVEIS = new Set(["grass", "flower", "plant", "bush", "tree", "tree_bare", "rock", "stone"]);
 
 /** grama/flor/planta não projetam sombra — a folhagem é fina demais pra valer o passe extra */
 const SEM_SOMBRA_PROPRIA = new Set(["grass", "flower", "plant"]);
@@ -85,21 +98,135 @@ const SEM_SOMBRA_PROPRIA = new Set(["grass", "flower", "plant"]);
  * inventar um segundo atlas só pra economia marginal violaria a regra de "não
  * duplicar arquitetura por otimização pequena". É só um raio de corte mais
  * curto pro MESMO InstancedMesh que já existe.
+ *
+ * O RAIO em si (a fração) mora em `play/worldVisibility.ts`
+ * (`vegetacaoRasteira`) desde a Fase de coerência de horizonte — é uma
+ * decisão de VISIBILIDADE, do mesmo orçamento central que decide o teto do
+ * impostor de árvore, não algo que este módulo de instancing deveria saber
+ * calcular sozinho. Aqui só sobra a CATEGORIZAÇÃO (quem é rasteiro), que é
+ * sobre a malha, não sobre distância.
  */
 const CATEGORIAS_RASTEIRAS = new Set(["grass", "flower", "plant"]);
-/** fração do raio de detalhe em que a vegetação rasteira já pode sumir */
-const RAIO_RASTEIRA_FRAC = 0.6;
+
+/**
+ * DENSIDADE ADAPTATIVA DE VEGETAÇÃO RASTEIRA (`render-tecnic.txt` seção
+ * 22.7/22.8, item 3 da fila de prioridade da seção 26): antes desta Fase, o
+ * corte de grama/flor/planta era BINÁRIO — 100% de densidade até
+ * `vegetacaoRasteira` (seção 23), depois nada. Uma lâmina de grama a 5
+ * unidades do jogador e outra a 75% do raio de corte tinham a MESMA
+ * contagem de instância por área, embora a segunda cubra muito menos pixel
+ * de tela.
+ *
+ * `ANEIS_DENSIDADE_RASTEIRA` reduz a FRAÇÃO de instâncias ativas por anel de
+ * distância, em vez de só cortar de vez na borda — os números do pedido
+ * original (§14: "0–20m 100% / 20–40m 60% / 40–60m 25%") eram METROS
+ * ABSOLUTOS; aqui são FRAÇÃO DO PRÓPRIO RAIO (`raioEfetivo`, que já é
+ * `vegetacaoRasteira` = 60% de `detalhe`) — um admin que ajusta
+ * `renderDistance` muda a ESCALA dos anéis junto, não a FORMA deles (mesma
+ * razão de `worldVisibility.ts` já expressar tudo em fração/derivação, nunca
+ * em metro fixo independente de config). O pedido original também deixa
+ * explícito que os valores são exemplo, "calcular através de benchmark" —
+ * sem mapa de produção com grama densa pra medir (mesma limitação
+ * documentada nas seções 25/22.11), os três anéis abaixo são um PALPITE
+ * razoável, não um número medido — ajustar sem hesitar assim que houver
+ * conteúdo real pra comparar antes/depois.
+ */
+export interface AnelDensidade {
+  /** até esta fração do raio (0..1), mantém esta fração das instâncias */
+  ateFracaoDoRaio: number;
+  mantem: number;
+}
+
+export const ANEIS_DENSIDADE_RASTEIRA: readonly AnelDensidade[] = [
+  { ateFracaoDoRaio: 0.4, mantem: 1 },
+  { ateFracaoDoRaio: 0.7, mantem: 0.6 },
+  { ateFracaoDoRaio: 1.0, mantem: 0.3 },
+];
+
+/** fração de instâncias a manter numa dada fração de distância (0..1) do raio — pura, testável */
+export function densidadeMantida(fracaoDaDistancia: number, aneis: readonly AnelDensidade[] = ANEIS_DENSIDADE_RASTEIRA): number {
+  for (const anel of aneis) {
+    if (fracaoDaDistancia <= anel.ateFracaoDoRaio) return anel.mantem;
+  }
+  return aneis[aneis.length - 1]?.mantem ?? 1;
+}
+
+/**
+ * Hash determinístico [0,1) por id — mesmo padrão de `hashFlip` em
+ * `grid/TreeImpostors.tsx` (fase de coerência de horizonte): a MESMA
+ * instância de grama sempre cai do mesmo lado do sorteio entre recargas, e
+ * entre um quadro e o seguinte — decimação por `Math.random()` faria a
+ * grama "piscar" (aparecer/sumir) sem o jogador se mover, porque o sorteio
+ * mudaria a cada reescrita de `center`.
+ */
+function hashUnit01(id: string): number {
+  // FNV-1a + finalizador estilo murmur3 — a variante simples (`h = h*31 +
+  // charCode`, a mesma de `hashFlip` em TreeImpostors.tsx) tem espalhamento
+  // péssimo pra ids curtos/numéricos: medido, ids como "g0".."g499" saíam
+  // TODOS abaixo de 0,0001 (nunca "davam a volta" no inteiro de 32 bits, já
+  // que a soma nunca cresce o bastante) — decimação virava "quase tudo
+  // sumido" em vez de uma fração alvo. `hashFlip` se safa porque só lê o BIT
+  // menos significativo (`h & 1`), que já alterna mesmo com essa fraqueza;
+  // aqui o valor de PONTO FLUTUANTE inteiro importa, então precisa de
+  // avalanche de verdade. Medido: 500 ids "g0".."g499", frac esperada 0,30 →
+  // frac medida 0,312 (era 0,004 com o hash simples).
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 0xffffffff;
+}
 
 export function ehCategoriaInstanciavel(assetId: string): boolean {
   const cat = propCategory(assetId);
   return !!cat && CATEGORIAS_INSTANCIAVEIS.has(cat);
 }
 
-interface InstanciaVegetacao {
+export interface InstanciaVegetacao {
   prop: MapProp;
   position: THREE.Vector3;
   quaternion: THREE.Quaternion;
   scale: THREE.Vector3;
+}
+
+/**
+ * Decide QUAIS instâncias de uma espécie desenham neste `center` — pura,
+ * testável sem `<Canvas>` (mesmo padrão de `TreeImpostors.resolverInstancias
+ * Visiveis`). O `useEffect` de `CamadaDeEspecie` só escreve o resultado nos
+ * buffers de GPU.
+ *
+ * Corte por raio (sempre) + densidade adaptativa (só se `rasteira`,
+ * decimação DETERMINÍSTICA por `hashUnit01(prop.id)` — nunca
+ * `Math.random()`, ver o comentário da função). Árvore/arbusto/pedra
+ * mantêm densidade cheia até o próprio raio de corte — o binário 3D↔sumiço/
+ * impostor já é a técnica certa pra essas categorias (seção 22.4).
+ */
+export function instanciasVisiveisNaCamada(
+  instancias: readonly InstanciaVegetacao[],
+  center: { x: number; z: number },
+  raioEfetivo: number,
+  rasteira: boolean,
+): InstanciaVegetacao[] {
+  const r2 = raioEfetivo * raioEfetivo;
+  const out: InstanciaVegetacao[] = [];
+  for (const inst of instancias) {
+    const dx = inst.position.x - center.x;
+    const dz = inst.position.z - center.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > r2) continue;
+    if (rasteira && raioEfetivo > 0) {
+      const mantem = densidadeMantida(Math.sqrt(d2) / raioEfetivo);
+      if (mantem < 1 && hashUnit01(inst.prop.id) >= mantem) continue;
+    }
+    out.push(inst);
+  }
+  return out;
 }
 
 /** agrupa `map.props` das categorias instanciáveis por espécie (`assetId`) — pura, testável */
@@ -189,25 +316,30 @@ function CamadaDeEspecie({
   camada,
   center,
   radius,
+  radiusRasteira,
 }: {
   camada: CamadaInstanciada;
   center: { x: number; z: number };
   radius: number;
+  /** raio (já pronto, de `play/worldVisibility.ts`) pras categorias rasteiras — grama/flor/planta */
+  radiusRasteira: number;
 }) {
   const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const primeira = useRef(true);
   const castShadow = !SEM_SOMBRA_PROPRIA.has(camada.category);
-  const raioEfetivo = CATEGORIAS_RASTEIRAS.has(camada.category) ? radius * RAIO_RASTEIRA_FRAC : radius;
+  const raioEfetivo = CATEGORIAS_RASTEIRAS.has(camada.category) ? radiusRasteira : radius;
+
+  const rasteira = CATEGORIAS_RASTEIRAS.has(camada.category);
 
   useEffect(() => {
     const meshes = refs.current;
-    const r2 = raioEfetivo * raioEfetivo;
+    // a DECISÃO (corte por raio + densidade adaptativa pra categoria
+    // rasteira) mora em `instanciasVisiveisNaCamada` — pura, testada sem
+    // `<Canvas>`. Aqui só sobra escrever o resultado nos buffers de GPU.
+    const visiveis = instanciasVisiveisNaCamada(camada.instancias, center, raioEfetivo, rasteira);
     const ativos: MapProp[] = [];
     let n = 0;
-    for (const inst of camada.instancias) {
-      const dx = inst.position.x - center.x;
-      const dz = inst.position.z - center.z;
-      if (dx * dx + dz * dz > r2) continue;
+    for (const inst of visiveis) {
       _m.compose(inst.position, inst.quaternion, inst.scale);
       for (const mesh of meshes) mesh?.setMatrixAt(n, _m);
       ativos.push(inst.prop);
@@ -230,7 +362,7 @@ function CamadaDeEspecie({
       primeira.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camada, center.x, center.z, radius]);
+  }, [camada, center.x, center.z, raioEfetivo]);
 
   return (
     <>
@@ -259,11 +391,14 @@ export function VegetationInstancer({
   map,
   center,
   radius,
+  radiusRasteira,
   aoPrecompilar,
 }: {
   map: GameMap;
   center: { x: number; z: number };
   radius: number;
+  /** raio (já pronto, de `play/worldVisibility.ts`) pras categorias rasteiras — grama/flor/planta */
+  radiusRasteira: number;
   /**
    * Chamado quando a fila de precompile (uma espécie por quadro, ver o
    * efeito abaixo) esvazia — ou já na hora, se não há nenhuma espécie
@@ -405,7 +540,7 @@ export function VegetationInstancer({
   return (
     <>
       {camadas.map((camada) => (
-        <CamadaDeEspecie key={camada.assetId} camada={camada} center={center} radius={radius} />
+        <CamadaDeEspecie key={camada.assetId} camada={camada} center={center} radius={radius} radiusRasteira={radiusRasteira} />
       ))}
     </>
   );

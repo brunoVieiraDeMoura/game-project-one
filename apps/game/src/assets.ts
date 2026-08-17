@@ -62,6 +62,13 @@ export const WEAPON_URLS = {
   dagger: `${BASE}/weapons/dagger.gltf`,
   staff: `${BASE}/weapons/staff.gltf`,
   /**
+   * teste isolado (`assets-new/weapons-test`, leia1.txt): cajado alternativo,
+   * malha em 3 partes com textura própria (`weapons_bits_texture.png`) — não
+   * substitui `staff` de propósito, fica lado a lado pra comparar/reverter
+   * fácil. Ligado em `entities/classModels.mage` como teste.
+   */
+  staff_test: `${BASE}/weapons/staff_test.gltf`,
+  /**
    * `arrow_bow.gltf` (usado antes) é só a FLECHA sozinha — sem arco nenhum,
    * daí o bug visto no char-select ("archer com uma flecha na mão"). Este é
    * o arco de verdade, com a corda (`Characters/Assets/gltf/bow_withString`).

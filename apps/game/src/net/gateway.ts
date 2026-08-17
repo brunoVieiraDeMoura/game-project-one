@@ -163,12 +163,22 @@ export interface ServerEvents {
   "skill:cast": (p: { skillId: number; level: number; sourceGid: number; targetGid: number; damage: number; count: number; kind: "target" | "buff"; action: number }) => void;
   "skill:casting": (p: { skillId: number; sourceGid: number; targetGid: number; x: number; y: number; durationMs: number }) => void;
   /** skill de alvo no CHÃO (Thunder Storm etc.) terminou de conjurar, mesmo
-   * sem acertar ninguém — ver `audio/mage/multiHitCastAudio`/`net/useWorldEvents` */
+   * sem acertar ninguém — ver `audio/mage/multiHitCastAudio`/`net/useWorldEvents`.
+   * Quando ACERTA alguém, o dano sai por `skill:cast` normal (mesmo pacote de
+   * Cold Bolt/Fire Bolt) — não existe um `skill:ground-hit` separado. */
   "skill:ground-cast": (p: { skillId: number; level: number; sourceGid: number; x: number; y: number }) => void;
-  /** skill de alvo no CHÃO acertou alguém — chega DEPOIS de `skill:ground-cast`,
-   * pode chegar mais de uma vez (Thunder Storm tem até 10 hits) */
-  "skill:ground-hit": (p: { skillId: number; sourceGid: number }) => void;
-  "skill:ground": (p: { gid: number; creatorGid: number; x: number; y: number; unitId: number; visible: boolean }) => void;
+  "skill:ground": (p: {
+    gid: number;
+    creatorGid: number;
+    x: number;
+    y: number;
+    unitId: number;
+    /** id real da skill (skill_db), traduzido de `unitId` no gateway — ver
+     * `apps/gateway/src/ro/session.ts: UNIT_ID_TO_SKILL_ID`. 0 = unidade sem
+     * tradução conhecida ainda (cai no VFX de área genérico). */
+    skillId: number;
+    visible: boolean;
+  }) => void;
   "skill:ground-gone": (p: { gid: number }) => void;
   /** recarga da skill; a duração é do servidor (ZC_SKILL_POSTDELAY) */
   "skill:cooldown": (p: { skillId: number; durationMs: number }) => void;
@@ -189,6 +199,21 @@ export interface ServerEvents {
     action: number;
   }) => void;
   "entity:hp": (p: { gid: number; hp: number; maxHp: number }) => void;
+  /** "estado do corpo" (ZC_STATE_CHANGE) — ver `net/entityOption.ts` pros valores de `opt1` */
+  "entity:option": (p: { gid: number; opt1: number; opt2: number }) => void;
+  /** duração real de opt1/opt2 sem EFST (pacote customizado, ver `apps/gateway/src/protocol.ts`) */
+  "entity:status-duration": (p: { gid: number; bodyState: number; healthState: number; durationMs: number }) => void;
+  /** ícone de status (EFST) ligou — ver `net/statusStore.ts` */
+  "status:start": (p: {
+    gid: number;
+    efstId: number;
+    totalMs: number;
+    remainMs: number;
+    val1: number;
+    val2: number;
+    val3: number;
+  }) => void;
+  "status:end": (p: { gid: number; efstId: number }) => void;
   "chat:message": (p: { gid?: number; text: string; scope: string }) => void;
   "friend:list": (p: FriendPayload[]) => void;
   "friend:state": (p: { accountId: number; charId: number; online: boolean }) => void;

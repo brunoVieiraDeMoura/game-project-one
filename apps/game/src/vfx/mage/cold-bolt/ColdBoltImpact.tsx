@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Html } from "@react-three/drei";
+import { multiHitTotalMs } from "../multiHitShared";
+import { createSeededRng } from "../../core/particleMath";
 
 /**
  * Cold Bolt (MG_COLDBOLT) — lança de gelo em CSS puro (pedido: trocar o
@@ -43,9 +45,14 @@ import { Html } from "@react-three/drei";
  * grande, sem duplicar tabela de tamanho nenhuma.
  */
 
-export const ICICLE_HITS = 5;
+/** teto de estalactites no nível MÁXIMO da skill — a quantidade de VERDADE
+ * por lançamento vem do nível real (`getSkillProjectileCount`,
+ * `vfx/mage/multiHitShared`), nunca fixa em 5 */
+// teto REAL do skill_db (`rathena/db/re/skill_db.yml: HitCount`, Lv10→10),
+// não mais um chute de 5 (achado da auditoria "count real" 2026-08-19).
+export const ICICLE_MAX_HITS = 10;
 /** ms entre o início de uma estalactite e a próxima */
-export const ICICLE_STAGGER_MS = 140;
+export const ICICLE_STAGGER_MS = 200;
 /** ms de queda de UMA estalactite, cabeça → corpo */
 export const ICICLE_FALL_MS = 560;
 /** fração da queda em que ela "chega" (dano/flash/spikes/aro) — o resto da
@@ -56,22 +63,24 @@ export const ICICLE_IMPACT_FRACTION = 0.82;
 const IMPACT_AT_MS = ICICLE_FALL_MS * ICICLE_IMPACT_FRACTION;
 /** ms que CADA número individual leva na trajetória de cachoeira (sobe um
  * pouco, cai na diagonal, some) — maior que o stagger entre hits (140ms) de
- * propósito: os 5 ficam visíveis ao mesmo tempo em algum momento, formando
+ * propósito: os hits ficam visíveis ao mesmo tempo em algum momento, formando
  * a cascata por SOBREPOSIÇÃO de tempo, não por espalhar no espaço. */
 export const DAMAGE_NUMBER_MS = 1000;
 /** janela TOTAL que uma estalactite fica viva no DOM: queda + rabo do burst. */
 export const ICICLE_VISIBLE_MS = IMPACT_AT_MS + DAMAGE_NUMBER_MS;
-/** instante em que o QUINTO hit impacta — é quando o total amarelo dispara */
-const LAST_HIT_AT_MS = (ICICLE_HITS - 1) * ICICLE_STAGGER_MS + IMPACT_AT_MS;
 /** ms que o total amarelo fica no ar depois de disparar */
 export const TOTAL_VISIBLE_MS = 1500;
-/** duração da sequência inteira — o efeito no `vfxStore` tem que viver pelo
- * menos isso, senão o total ou o rabo do último hit são podados cedo */
-export const ICICLE_TOTAL_MS =
-  Math.max((ICICLE_HITS - 1) * ICICLE_STAGGER_MS + ICICLE_VISIBLE_MS, LAST_HIT_AT_MS + TOTAL_VISIBLE_MS) + 100;
+/** duração da sequência inteira PARA `hits` estalactites de verdade — o
+ * efeito no `vfxStore` tem que viver pelo menos isso, senão o total ou o
+ * rabo do último hit são podados cedo. Mesma conta de
+ * `multiHitTotalMs` (fórmula compartilhada com Fire Lance/Thunder
+ * Storm/Soul Strike), só entrando com o timing próprio do gelo. */
+export function icicleTotalMs(hits: number): number {
+  return multiHitTotalMs(hits, ICICLE_STAGGER_MS, IMPACT_AT_MS, DAMAGE_NUMBER_MS, TOTAL_VISIBLE_MS);
+}
 
 /**
- * Reparte um dano total em `ICICLE_HITS` fatias inteiras cuja SOMA bate
+ * Reparte um dano total em `hits` fatias inteiras cuja SOMA bate
  * exatamente com o total (resto do inteiro vai pro ÚLTIMO hit) — nunca perde
  * nem inventa dano por arredondamento. O TOTAL amarelo mostra `damage` cru
  * (o mesmo valor que chegou do servidor), nunca a soma das fatias — as duas
@@ -120,10 +129,13 @@ interface IcicleSpec {
   dmgStackY: number;
 }
 
-function buildSpecs(seed: number, dmgSlices: number[] | undefined): IcicleSpec[] {
+function buildSpecs(seed: number, hits: number, dmgSlices: number[] | undefined): IcicleSpec[] {
   const specs: IcicleSpec[] = [];
-  for (let i = 0; i < ICICLE_HITS; i++) {
-    const angle = (i / ICICLE_HITS) * Math.PI * 2 + seed * Math.PI * 2;
+  for (let i = 0; i < hits; i++) {
+    // ângulo distribuído pelo CÍRCULO INTEIRO (÷ hits, não ÷ ICICLE_MAX_HITS)
+    // — com menos estalactites elas continuam espalhadas, nunca espremidas
+    // num arco pequeno como se sobrasse "espaço" das que não vieram
+    const angle = (i / hits) * Math.PI * 2 + seed * Math.PI * 2;
     specs.push({
       angle,
       delayMs: i * ICICLE_STAGGER_MS,
@@ -135,7 +147,7 @@ function buildSpecs(seed: number, dmgSlices: number[] | undefined): IcicleSpec[]
   return specs;
 }
 
-/** grupo dos 5 impactos — nasce, cai, some; `onHit(i)` marca cada chegada
+/** grupo dos impactos — nasce, cai, some; `onHit(i)` marca cada chegada
  * pra quem quiser sincronizar (ex.: teste manual no console). */
 export function ColdBoltImpact({
   onHit,
@@ -143,10 +155,11 @@ export function ColdBoltImpact({
   crit,
   onSelf,
   targetScale = 1,
+  hits = ICICLE_MAX_HITS,
 }: {
   onHit?: (index: number) => void;
-  /** dano TOTAL da skill (já calculado pelo servidor) — repartido em
-   * `ICICLE_HITS` números, um por estalactite (ver docblock do arquivo) */
+  /** dano TOTAL da skill (já calculado pelo servidor) — repartido em `hits`
+   * números, um por estalactite (ver docblock do arquivo) */
   damage?: number;
   crit?: boolean;
   onSelf?: boolean;
@@ -155,18 +168,27 @@ export function ColdBoltImpact({
    * números de dano (esses ficam grandes e fixos de propósito, legibilidade
    * não deveria depender do bicho que apanhou) */
   targetScale?: number;
+  /** quantidade REAL de estalactites — vem do nível da skill
+   * (`getSkillProjectileCount`, `net/useWorldEvents`), nunca fixa em 5.
+   * Default só cobre chamada antiga/sem o campo (nunca deveria acontecer em
+   * produção, mas mantém o componente utilizável isolado, ex. em teste). */
+  hits?: number;
 }) {
   useIceSpikeStyles();
   const bornAt = useRef(performance.now());
-  const dmgSlices = useMemo(() => (damage !== undefined && damage > 0 ? splitDamage(damage, ICICLE_HITS) : undefined), [damage]);
-  const specs = useMemo(() => buildSpecs(Math.random(), dmgSlices), [dmgSlices]);
+  const hitCount = Math.min(ICICLE_MAX_HITS, Math.max(1, hits));
+  const dmgSlices = useMemo(
+    () => (damage !== undefined && damage > 0 ? splitDamage(damage, hitCount) : undefined),
+    [damage, hitCount],
+  );
+  const specs = useMemo(() => buildSpecs(Math.random(), hitCount, dmgSlices), [hitCount, dmgSlices]);
   const totalRef = useRef<FinalTotalHandle>(null);
   const hitsLanded = useRef(0);
 
   const handleHit = (i: number) => {
     onHit?.(i);
     hitsLanded.current += 1;
-    if (hitsLanded.current === ICICLE_HITS) totalRef.current?.trigger();
+    if (hitsLanded.current === hitCount) totalRef.current?.trigger();
   };
 
   return (
@@ -200,8 +222,7 @@ interface FragmentSpec {
 
 function buildFragments(seed: number): FragmentSpec[] {
   const out: FragmentSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < FRAGMENT_COUNT; i++) {
     const angle = ((i / FRAGMENT_COUNT) * 360 + rnd() * 24) * (Math.PI / 180);
     const dist = 60 + rnd() * 52;
@@ -432,15 +453,20 @@ const ICE_SPIKE_CSS = `
   background: linear-gradient(205deg, rgba(4, 40, 70, 0.05), rgba(4, 40, 70, 0.6));
   opacity: 0.75;
 }
+/* sem filter:blur — já é radial-gradient (borda nasce suave); o blur(3px)
+   só adicionava um degrau extra de raster por cima de um degradê que já
+   desenha macio (mesma família de troca do halo do raio, ver comentário
+   junto de THUNDER_CSS em ThunderStormImpact.tsx). Gradiente com um estágio
+   a mais (45%) no lugar do único degrau de antes (70%) pra não perder a
+   suavidade que o blur dava na transição. */
 .cb-ice-spike__glow {
   position: absolute;
   left: 50%;
   top: 58%;
-  width: 130%;
-  height: 75%;
+  width: 138%;
+  height: 82%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(140, 225, 255, 0.55), rgba(140, 225, 255, 0) 70%);
-  filter: blur(3px);
+  background: radial-gradient(circle, rgba(140, 225, 255, 0.55), rgba(140, 225, 255, 0.32) 45%, rgba(140, 225, 255, 0) 75%);
   animation: cbSpikeGlow 480ms ease-in-out infinite;
 }
 .cb-ice-wrap--impact .cb-ice-spike {
@@ -508,9 +534,11 @@ const ICE_SPIKE_CSS = `
 }
 .cb-ice-wrap--impact .cb-ice-hit__flash { animation: cbHitFlash 240ms ease-out forwards; }
 .cb-ice-wrap--impact .cb-ice-hit__ring { animation: cbHitRing 420ms ease-out forwards; }
-.cb-ice-wrap--impact .cb-ice-hit__frag {
-  animation: cbHitFrag 420ms ease-out forwards;
-}
+/* os 8 fragmentos por estalactite (.cb-ice-hit__frag, até 1200 simultâneos
+   a 30 players) NÃO animam — a CSS animation neles sozinha media ~64% do
+   custo de raster/GPU do impacto (medido; ring+flash+spike cobrem a
+   legibilidade do impacto sem eles). Ficam parados na base opacity:0
+   (regra acima) — nunca aparecem, mas continuam no DOM. */
 @keyframes cbHitFlash {
   0% { opacity: 0; transform: scale(0.4); }
   20% { opacity: 1; transform: scale(1.3); }
@@ -519,10 +547,6 @@ const ICE_SPIKE_CSS = `
 @keyframes cbHitRing {
   0% { opacity: 0.9; transform: scale(0.3); }
   100% { opacity: 0; transform: scale(2.1); }
-}
-@keyframes cbHitFrag {
-  0% { opacity: 1; transform: translate(0, 0) scale(1); }
-  100% { opacity: 0; transform: translate(calc(var(--fx) * var(--tscale, 1)), calc(var(--fy) * var(--tscale, 1))) scale(0.4); }
 }
 
 /* Número de dano individual — cachoeira: nasce perto do topo do corpo, sobe

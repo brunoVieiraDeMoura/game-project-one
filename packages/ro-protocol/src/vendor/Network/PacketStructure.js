@@ -7624,6 +7624,20 @@ PACKET.ZC.STATE_CHANGE3 = function PACKET_ZC_STATE_CHANGE3(fp, end) {
 };
 PACKET.ZC.STATE_CHANGE3.size = 15;
 
+// 0xae0 — PACOTE CUSTOMIZADO deste projeto (game-project), NAO existe no
+// protocolo real do RO. Espelha rathena/src/map/packets_struct.hpp:
+// PACKET_ZC_STATUS_DURATION — duracao final (ja resistida) de um status
+// opt1/opt2 sem Icon: em status.yml (Freeze/Stone/StoneWait/Stun/Sleep/
+// Poison/Curse/Silence/Confusion/Blind). Opcode escolhido por script contra
+// PacketRegister.js (auditoria "contador de duracao" 2026-08-14).
+PACKET.ZC.STATUS_DURATION = function PACKET_ZC_STATUS_DURATION(fp, end) {
+	this.AID = fp.readULong();
+	this.bodyState = fp.readShort();
+	this.healthState = fp.readShort();
+	this.durationMs = fp.readULong();
+};
+PACKET.ZC.STATUS_DURATION.size = 12;
+
 // 0x22a
 PACKET.ZC.NOTIFY_STANDENTRY3 = function PACKET_ZC_NOTIFY_STANDENTRY3(fp, end) {
 	this.GID = fp.readULong();

@@ -144,6 +144,24 @@ export function MapAmbience({ mapId }: { mapId: string | null }) {
 }
 
 /**
+ * Cleanup de fim de sessão (`audio/audioLifecycle`) — para os dois canais NA
+ * HORA, sem esperar o fade de 700ms do desmonte gracioso (`useEffect` de
+ * `MapAmbience` acima). Um disconnect não é uma troca de mapa: o jogador já
+ * está indo pra `/login`, e a última coisa que ele deveria ouvir é a trilha
+ * do mapa anterior morrendo aos poucos por cima da tela de login.
+ * `srcKey`/`el.src` sobrevivem de propósito — o próximo mapa que carregar
+ * essa MESMA faixa (outro personagem, mesma conta) não precisa recarregar do
+ * zero.
+ */
+export function pararAoDesconectar(): void {
+  for (const canal of [musica, ambiente]) {
+    canal.fadeToken++; // invalida qualquer fade em andamento
+    canal.envelope = 0;
+    canal.el.pause();
+  }
+}
+
+/**
  * SÓ PARA TESTE — chama a MESMA lógica que os `useEffect` de `MapAmbience`
  * chamam, sem precisar montar o componente React (este repo não tem
  * jsdom/testing-library; a lógica de canal é testável direto, o componente é

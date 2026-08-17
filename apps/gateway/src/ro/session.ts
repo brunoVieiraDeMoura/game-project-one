@@ -26,7 +26,6 @@ import type {
 	SkillCasting,
 	SkillGround,
 	SkillGroundCast,
-	SkillGroundHit,
 	StatusBlock,
 } from "../protocol.js";
 import { entityKindFromObjectType } from "./entity-kind.js";
@@ -67,6 +66,23 @@ const NAME_RETRY_DELAY_MS = 1500;
  * evita gastar um pacote à toa, não é regra inventada. */
 const MAX_HOTKEYS = 38;
 
+/**
+ * `e_skill_unit_id` (rAthena `skill.hpp`) → id REAL da skill no skill_db.
+ * `UNT_SAFETYWALL = 0x7e` (126) é o começo do enum de "id de unidade pro
+ * cliente ver" — um número TOTALMENTE separado do id da skill que criou a
+ * unidade (`MG_SAFETYWALL` = 12). Sem esta tabela o cliente nunca tinha
+ * como consultar o catálogo de skill_db a partir de um `skill:ground`
+ * (`ZC.SKILL_ENTRY*` só manda `job` = este enum, nunca o skill id) — todo
+ * VFX de área por aegis caía sempre no genérico. Só as duas skills que o
+ * cliente hoje sabe desenhar com VFX próprio (`vfx/SkillVfx.tsx: AREA_VFX`)
+ * — ampliar aqui quando mais entrarem, lendo o valor exato em
+ * `rathena/src/map/skill.hpp: enum e_skill_unit_id`, nunca chutado.
+ */
+const UNIT_ID_TO_SKILL_ID: Record<number, number> = {
+	0x7e: 12, // UNT_SAFETYWALL -> MG_SAFETYWALL
+	0x7f: 18, // UNT_FIREWALL -> MG_FIREWALL
+};
+
 export declare interface RoSession {
 	on(event: "chars", listener: (chars: CharSummary[], slots: number) => void): this;
 	on(
@@ -100,6 +116,24 @@ export declare interface RoSession {
 		}) => void,
 	): this;
 	on(event: "entity-hp", listener: (payload: { gid: number; hp: number; maxHp: number }) => void): this;
+	on(event: "entity-option", listener: (payload: { gid: number; opt1: number; opt2: number }) => void): this;
+	on(
+		event: "entity-status-duration",
+		listener: (payload: { gid: number; bodyState: number; healthState: number; durationMs: number }) => void,
+	): this;
+	on(
+		event: "status-start",
+		listener: (payload: {
+			gid: number;
+			efstId: number;
+			totalMs: number;
+			remainMs: number;
+			val1: number;
+			val2: number;
+			val3: number;
+		}) => void,
+	): this;
+	on(event: "status-end", listener: (payload: { gid: number; efstId: number }) => void): this;
 	on(
 		event: "self-move",
 		listener: (payload: { from: Cell; to: Cell; startTime: number }) => void,
@@ -135,8 +169,6 @@ export declare interface RoSession {
 	on(event: "skill-casting", listener: (payload: SkillCasting) => void): this;
 	/** skill de alvo no CHÃO terminou de conjurar — ver comentário em `protocol.ts: ServerEvents["skill:ground-cast"]` */
 	on(event: "skill-ground-cast", listener: (payload: SkillGroundCast) => void): this;
-	/** skill de alvo no CHÃO acertou alguém — ver comentário em `protocol.ts: ServerEvents["skill:ground-hit"]` */
-	on(event: "skill-ground-hit", listener: (payload: SkillGroundHit) => void): this;
 	on(event: "skill-ground", listener: (payload: SkillGround) => void): this;
 	on(event: "skill-ground-gone", listener: (payload: { gid: number }) => void): this;
 	on(event: "skill-cooldown", listener: (payload: { skillId: number; durationMs: number }) => void): this;
@@ -1186,6 +1218,124 @@ export class RoSession extends EventEmitter {
 			});
 		}
 
+		// --- opt1 (bodyState): petrificado/congelado/atordoado/dormindo -----
+		// ZC_STATE_CHANGE — dispara toda vez que o "estado do corpo" de UMA
+		// ENTIDADE muda (rathena `clif_changeoption_target`, campo `sc->opt1`).
+		// `bodyState` é um ENUM de posição ÚNICA, nunca bitmask combinado
+		// (`status.hpp`: OPT1_STONE=1, OPT1_FREEZE=2, OPT1_STUN=3, OPT1_SLEEP=4,
+		// 0=nenhum) — petrificação/congelamento NÃO passam pelo sistema de
+		// ÍCONE de status (EFST, pra buffs/debuffs com ícone na UI); passam por
+		// AQUI. Repassado CRU — o gateway nunca decide "isto é petrificação",
+		// só entrega o número; quem interpreta é o cliente
+		// (`net/useWorldEvents.ts`).
+		//
+		// DOIS opcodes pro MESMO struct C++ `PACKET_ZC_STATE_CHANGE`
+		// (`rathena/src/map/packets_struct.hpp:4531`): `#if PACKETVER >= 7` ele
+		// vira 0x229 (`effectState` widened pra int32); só builds pré-2010
+		// (`#else`) mandam o legado 0x119 (`effectState` int16). Confirmado por
+		// captura de wire real (`RO_DEBUG=1`) neste PACKETVER (20130618): 0x119
+		// nunca chega, só 0x229 — por isso o ícone nunca apareceu, o gateway só
+		// tinha hook pro opcode que este build não envia. Os dois hooks ficam
+		// registrados (mesmo handler) pra não quebrar builds antigos que ainda
+		// mandem 0x119.
+		const onStateChange = (pkt: any) => {
+			this.emit("entity-option", { gid: pkt.AID, opt1: pkt.bodyState ?? 0, opt2: pkt.healthState ?? 0 });
+		};
+		if (PACKET.ZC.STATE_CHANGE) {
+			conn.hook(PACKET.ZC.STATE_CHANGE, onStateChange);
+		}
+		if (PACKET.ZC.STATE_CHANGE3) {
+			conn.hook(PACKET.ZC.STATE_CHANGE3, onStateChange);
+		}
+
+		// --- duração de opt1/opt2 sem EFST (pacote CUSTOMIZADO) --------------
+		// PACKET_ZC_STATUS_DURATION (0xae0) — não existe no protocolo real do
+		// RO. `rathena/src/map/status.cpp: status_change_start` manda isto
+		// SEMPRE além do ZC_STATE_CHANGE de cima, só pros 10 status sem
+		// `Icon:` em status.yml (Freeze/Stone/StoneWait/Stun/Sleep/Poison/
+		// Curse/Silence/Confusion/Blind) — auditoria "contador de duração"
+		// 2026-08-14, ver `packets_struct.hpp` pro raciocínio completo de por
+		// que esses 10 nunca tinham duração nenhuma antes disto.
+		if (PACKET.ZC.STATUS_DURATION) {
+			conn.hook(PACKET.ZC.STATUS_DURATION, (pkt: any) => {
+				// DEV TEMP — prova SERVER→GATEWAY→CLIENT (auditoria "contador de
+				// duração" 2026-08-14). Remover depois dos testes.
+				console.info(
+					`[DURATION][GATEWAY] target=${pkt.AID} bodyState=${pkt.bodyState} healthState=${pkt.healthState} duration=${pkt.durationMs}`,
+				);
+				this.emit("entity-status-duration", {
+					gid: pkt.AID,
+					bodyState: pkt.bodyState ?? 0,
+					healthState: pkt.healthState ?? 0,
+					durationMs: pkt.durationMs ?? 0,
+				});
+			});
+		}
+
+		// --- status-icon (EFST): buffs/debuffs/skills com duração -----------
+		// "auditoria buffs/debuffs" 2026-08-14. Pacotes válidos pro nosso
+		// PACKETVER 20130618 (`clif_status_change_sub`, rathena/src/map/
+		// clif.cpp, ramo `PACKETVER >= 20120618`):
+		//  • 0x983 (MSG_STATE_CHANGE4) — início COM timer. `display_status_
+		//    timers` está ligado (rathena/conf/battle/client.conf, não
+		//    sobrescrito em rathena-conf/), então este é o caminho normal.
+		//  • 0x984 (MSG_STATE_CHANGE5) — entidade ENTRA na tela já com o
+		//    efeito ativo (sem isto, um buff que começou fora do alcance de
+		//    visão nunca apareceria pra quem acabou de entrar).
+		//  • 0x196 (MSG_STATE_CHANGE) — fim (`state===0`) OU início SEM
+		//    timer conhecido (`state===1`). MESMO opcode do `opt1` só por
+		//    coincidência de numeração — struct DIFERENTE (`MSG_STATE_
+		//    CHANGE`, não `STATE_CHANGE`), o vendor já os separa.
+		//
+		// `index` no vendor é o id EFST NUMÉRICO — o servidor já traduz
+		// SC_* pra EFST_* antes de montar o pacote (`status_db.getIcon`).
+		// Repassado CRU, mesma regra do `opt1` logo acima: o gateway nunca
+		// decide o que o efeito significa, só entrega os números; nome/
+		// ícone/descrição vêm de `/statuses/by-efst` do lado do cliente.
+		if (PACKET.ZC.MSG_STATE_CHANGE4) {
+			conn.hook(PACKET.ZC.MSG_STATE_CHANGE4, (pkt: any) => {
+				this.emit("status-start", {
+					gid: pkt.AID,
+					efstId: pkt.index,
+					totalMs: pkt.TotalMS ?? 0,
+					remainMs: pkt.RemainMS ?? 0,
+					val1: pkt.val?.[0] ?? 0,
+					val2: pkt.val?.[1] ?? 0,
+					val3: pkt.val?.[2] ?? 0,
+				});
+			});
+		}
+		if (PACKET.ZC.MSG_STATE_CHANGE5) {
+			conn.hook(PACKET.ZC.MSG_STATE_CHANGE5, (pkt: any) => {
+				this.emit("status-start", {
+					gid: pkt.AID,
+					efstId: pkt.index,
+					totalMs: pkt.TotalMS ?? 0,
+					remainMs: pkt.RemainMS ?? 0,
+					val1: pkt.val?.[0] ?? 0,
+					val2: pkt.val?.[1] ?? 0,
+					val3: pkt.val?.[2] ?? 0,
+				});
+			});
+		}
+		if (PACKET.ZC.MSG_STATE_CHANGE) {
+			conn.hook(PACKET.ZC.MSG_STATE_CHANGE, (pkt: any) => {
+				if (pkt.state === 0) {
+					this.emit("status-end", { gid: pkt.AID, efstId: pkt.index });
+				} else {
+					this.emit("status-start", {
+						gid: pkt.AID,
+						efstId: pkt.index,
+						totalMs: 0,
+						remainMs: 0,
+						val1: 0,
+						val2: 0,
+						val3: 0,
+					});
+				}
+			});
+		}
+
 		// --- VFX de skill ---------------------------------------------------
 		// "fulano usou a skill X em beltrano": é o que vira efeito visual no
 		// cliente. Dano de skill vem no mesmo pacote (NOTIFY_SKILL).
@@ -1264,27 +1414,6 @@ export class RoSession extends EventEmitter {
 			});
 		}
 
-		/**
-		 * Skill de alvo no CHÃO ACERTOU alguém (ZC.NOTIFY_SKILL_POSITION, 0x115,
-		 * `clif_skill_damage2` — `PACKET_ZC_NOTIFY_SKILL_POSITION` em
-		 * `rathena/src/map/packets_struct.hpp:4716`, sem variação por
-		 * PACKETVER). Chega DEPOIS do `NOTIFY_GROUNDSKILL` acima (mesma ordem
-		 * do servidor: `skill_castend_pos2` manda o poseffect antes de chamar
-		 * `castendPos2`, que é quem gera os hits) — nunca antes.
-		 *
-		 * Só emite o suficiente pra distinguir "acertou" de "não acertou" do
-		 * lado do áudio (ver `protocol.ts`) — dano/VFX de skill de chão
-		 * continuam sem existir no cliente, gap conhecido e separado.
-		 */
-		if (PACKET.ZC.NOTIFY_SKILL_POSITION) {
-			conn.hook(PACKET.ZC.NOTIFY_SKILL_POSITION, (pkt: any) => {
-				this.emit("skill-ground-hit", {
-					skillId: pkt.SKID,
-					sourceGid: pkt.AID,
-				});
-			});
-		}
-
 		// área no chão (Storm Gust, armadilha, Safety Wall…)
 		for (const key of Object.keys(PACKET.ZC)) {
 			if (!/^SKILL_ENTRY\d*$/.test(key)) continue;
@@ -1298,6 +1427,7 @@ export class RoSession extends EventEmitter {
 					y: pkt.yPos,
 					// `job` aqui é o id da UNIDADE de skill, não da skill em si
 					unitId: pkt.job,
+					skillId: UNIT_ID_TO_SKILL_ID[pkt.job] ?? 0,
 					visible: pkt.isVisible !== 0,
 				});
 			});

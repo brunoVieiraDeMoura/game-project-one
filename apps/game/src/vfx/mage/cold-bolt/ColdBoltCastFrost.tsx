@@ -4,6 +4,7 @@ import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { CSSProperties } from "react";
 import { anchorDeArma } from "../../../entities/weaponAnchors";
+import { createSeededRng } from "../../core/particleMath";
 
 /**
  * Cold Bolt (MG_COLDBOLT) — partículas de gelo no CASTER, CSS puro. Cobre os
@@ -68,8 +69,7 @@ interface ParticleSpec {
 
 function buildParticles(seed: number): ParticleSpec[] {
   const out: ParticleSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     out.push({
       angleDeg: (i / PARTICLE_COUNT) * 360 + rnd() * 40,

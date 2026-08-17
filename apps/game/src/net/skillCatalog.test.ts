@@ -24,6 +24,7 @@ describe("getSkillDisplayName — nome visual de skill, nunca Aegis nem id", () 
       id: 9,
       aegisName: "MG_SRECOVERY",
       name: "Increase SP Recovery",
+      hitType: "normal",
       target: "self",
       areaRadius: 0,
       maxLevel: 10,
@@ -32,6 +33,8 @@ describe("getSkillDisplayName — nome visual de skill, nunca Aegis nem id", () 
       spCost: 0,
       range: 0,
       cooldownMs: 0,
+      durationMs: 0,
+      duration2Ms: 0,
     };
     expect(getSkillDisplayName(info)).toBe("Increase SP Recovery");
   });

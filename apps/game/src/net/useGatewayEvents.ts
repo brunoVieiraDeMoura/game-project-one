@@ -3,6 +3,7 @@ import { gateway, type CharSummary, type FriendPayload, type GuildMemberPayload 
 import { useSessionStore } from "./sessionStore";
 import { usePlayerStore } from "./playerStore";
 import { useCastStore } from "./castStore";
+import { useEntityCastStore } from "./entityCastStore";
 import { useCooldownStore } from "./cooldownStore";
 import { useFriendStore } from "./friendStore";
 import { useWorldStore } from "./worldStore";
@@ -15,6 +16,7 @@ import {
   bindToCharacter as bindCombatVisualsToCharacter,
   unbindCharacter as unbindCombatVisuals,
 } from "../hud/combatVisualsStore";
+import { pararTodosOsAudiosDeGameplay } from "../audio/audioLifecycle";
 
 /**
  * Liga os eventos de conta/personagem/mundo no sessionStore.
@@ -111,6 +113,7 @@ export function useGatewayEvents(): void {
       useSessionStore.getState().reset();
       usePlayerStore.getState().reset();
       useCastStore.getState().parar();
+      useEntityCastStore.getState().reset();
       useCooldownStore.getState().clear();
       useFriendStore.getState().reset();
       // Desvincula a barra de habilidades do personagem — sem isso ela
@@ -118,6 +121,11 @@ export function useGatewayEvents(): void {
       // neste mesmo navegador.
       unbindCharacter();
       unbindCombatVisuals();
+      // Áudio de gameplay para aqui, no MESMO cleanup que já mata
+      // cronômetro/HUD/binding — sem isto um passo em loop, uma voz de
+      // combate ou o `hit` atrasado de uma skill continuavam tocando por
+      // cima da música de `/login` (ver `audio/audioLifecycle`).
+      pararTodosOsAudiosDeGameplay();
       useSessionStore.getState().setError(motivo);
     };
     const onClosed = (p: { reason: string }) => encerrar(p.reason);

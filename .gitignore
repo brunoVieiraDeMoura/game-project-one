@@ -27,6 +27,7 @@ tools/legacy-migration/output/
 apps/api/data/
 rathena-db-import/
 .playwright-mcp/
+apps/game/vfx-bench-results/
 
 # --- capturas de tela e prints de referência (raiz) ---
 /*.png

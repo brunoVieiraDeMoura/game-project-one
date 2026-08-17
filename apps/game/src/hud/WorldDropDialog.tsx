@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
-import { useItemCatalog } from "../net/itemCatalog";
+import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
+import { LoadingRing } from "../ui/rpg";
 import { useWorldDropStore } from "../net/worldDropStore";
 import { gateway } from "../net/gateway";
 import { CurvedBox } from "../ui/CurvedBox";
@@ -88,7 +89,9 @@ export function WorldDropDialog() {
 
   if (!item) return null;
 
-  const nome = nomes[item.itemId]?.name ?? `#${item.itemId}`;
+  // NUNCA id como nome provisório (regra absoluta, auditoria 2026-08-14) —
+  // `undefined` enquanto o catálogo não respondeu, mostrado como loading.
+  const nome = getItemDisplayName(nomes[item.itemId]);
 
   return (
     <div
@@ -134,17 +137,21 @@ export function WorldDropDialog() {
             marginBottom: px(12),
           }}
         >
-          <span
-            style={{
-              fontFamily: FRAME_FONT,
-              fontSize: px(TYPE.label),
-              color: BOOK.gold,
-              textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-              textAlign: "center",
-            }}
-          >
-            {nome}
-          </span>
+          {nome ? (
+            <span
+              style={{
+                fontFamily: FRAME_FONT,
+                fontSize: px(TYPE.label),
+                color: BOOK.gold,
+                textShadow: "0 1px 2px rgba(0,0,0,0.8)",
+                textAlign: "center",
+              }}
+            >
+              {nome}
+            </span>
+          ) : (
+            <LoadingRing size={px(TYPE.label) * 1.4} />
+          )}
         </div>
 
         {item.amount > 1 && (

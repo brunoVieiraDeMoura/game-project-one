@@ -88,8 +88,12 @@ export function surfaceAt(map: GameMap, idx: number): SurfaceType {
   return map.collision[idx] === "cliff" ? "dirt" : "grass";
 }
 
-/** para o loop tocando, se houver — usado tanto ao parar quanto ao trocar de som */
-function pararFootstep(): void {
+/** para o loop tocando, se houver — usado tanto ao parar quanto ao trocar de
+ * som, e do cleanup de fim de sessão (`audio/audioLifecycle`): sem isto, um
+ * passo em andamento NO INSTANTE do disconnect ficava em loop pra sempre —
+ * `NetPlayer` some (route troca pra `/login`) e o `useFrame` que chamaria
+ * `footstepFrame(false, ...)` de novo nunca mais roda. */
+export function pararFootstep(): void {
   if (tocando === null) return;
   const el = pool.get(tocando);
   if (el) {

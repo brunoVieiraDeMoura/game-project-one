@@ -108,7 +108,7 @@ describe("classModelFor — armas por família", () => {
 
   it("mage (Mage) empunha cajado na mão direita", () => {
     const m = classModelFor(2);
-    expect(m.weapons).toEqual([{ weapon: "staff", slot: "handslotr" }]);
+    expect(m.weapons).toEqual([{ weapon: "staff_test", slot: "handslotr" }]);
   });
 
   it("thief (Rogue_Hooded) empunha adaga dupla, uma por mão — dual wield real", () => {

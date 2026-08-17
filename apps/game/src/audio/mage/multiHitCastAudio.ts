@@ -1,35 +1,45 @@
 import { useSkillCatalog } from "../../net/skillCatalog";
 import { playOneShot } from "../oneShotPool";
 import { getSfxVolume, useAudioSettings } from "../audioSettingsStore";
+import { hitsToLevelTierLabel } from "../../vfx/mage/multiHitShared";
 
 /**
- * SFX de conjuração das skills "N hits com VFX próprio, dano em cascata"
- * (Cold Bolt, Fire Lance/`MG_FIREBOLT`, Thunder Storm) — mesmo grupo que
- * `vfx/mage/multiHitRegistry` já generaliza pro lado visual, mesma razão:
- * existia só pra Cold Bolt (`audio/coldBoltCast`, um `isColdBolt` cravado),
- * generalizado aqui pra virar um LOOKUP por nome Aegis em vez de um módulo
- * quase-idêntico por skill nova.
+ * SFX das skills "N hits com VFX próprio, dano em cascata" (Cold Bolt, Fire
+ * Bolt, Thunder Storm, Light Bolt, Soul Strike) — mesmo grupo que
+ * `vfx/mage/multiHitRegistry` já generaliza pro lado visual.
  *
- * DUAS cadências diferentes, escolhidas pelo TIPO de alvo da skill (skill_db
- * `TargetType`), não por um boolean por skill:
+ * DOIS estágios, com fontes DIFERENTES de propósito:
  *
- *  • Alvo (`Attack` — Cold Bolt, Fire Bolt): SEMPRE há um alvo real, o
- *    servidor SEMPRE confirma via `skill:cast`. `cast` toca em LOOP desde o
- *    início até a liberação (`aoComecarCastMultiHit`/`aoLiberarCastMultiHit`)
- *    — loop PARA, `cast-complete` toca, e 500ms depois `hit` toca. Sempre os
- *    3 estágios, incondicional.
+ *  1. CAST/LIBERAÇÃO — vem do PACOTE (`skill:casting`/`skill:cast`, rede):
+ *     loop de "carregando" enquanto conjura, PARA na liberação (pedido
+ *     2026-08-17: cast → hit direto, sem som de "cast-complete" no meio —
+ *     `cast-complete.mp3` de Cold Bolt/Fire Bolt/Light Bolt saiu do fluxo,
+ *     arquivo continua no disco mas nada mais chama `playOneShot` nele;
+ *     Thunder Storm é chão, sem confirmação de liberação própria, ver
+ *     `aoConcluirCastDeChao`; Soul Strike não tem arquivo de cast nenhum no
+ *     SFX — sem inventar som que não existe).
  *
- *  • Chão (`Ground` — Thunder Storm): pode ser lançada em célula VAZIA, sem
- *    acertar ninguém — não há "sempre um alvo" pra garantir confirmação por
- *    dano. `skill:ground-cast` (ZC.NOTIFY_GROUNDSKILL, 0x117) é o único sinal
- *    garantido de "terminou de conjurar", mas NÃO diz se acertou. Por pedido
- *    explícito (leia1.txt), esse grupo não tem `cast-complete`: o loop PARA
- *    (`aoConcluirCastDeChao`) e só toca `hit` SE `skill:ground-hit`
- *    (ZC.NOTIFY_SKILL_POSITION, 0x115 — chega DEPOIS do 0x117, nunca antes,
- *    ver `net/session.ts`) chegar dentro de uma janela curta
- *    (`aoRegistrarAcertoDeChao`). Sem acerto, sem som — silêncio honesto é
- *    melhor que um "hit" que não aconteceu (mesmo espírito de
- *    `audio/itemSfx.aoAparecerItemNoChao`).
+ *  2. IMPACTO — vem do VFX (`aoImpactoMultiHit`, chamado do PRIMEIRO `onHit`
+ *     de `ColdBoltImpact`/`FireLanceImpact`/`ThunderStormImpact`/
+ *     `LightBoltImpact`/`SoulStrikeImpact`, ligado em `vfx/SkillVfx.tsx`),
+ *     NUNCA de um timer que assume que o hit aconteceu. As "N estalactites/
+ *     lanças/pulsos/descargas/almas" SEMPRE foram uma cascata client-side
+ *     dividindo um dano total que o servidor já mandou pronto (mesmo
+ *     documentado desde a Cold Bolt) — o `onHit` é o evento mais real que
+ *     existe pra "a sequência de impacto começou AGORA", pra QUALQUER uma
+ *     das cinco (inclusive Thunder Storm: sua AoE também é UM dano total
+ *     repartido em pulsos visuais, não N pacotes de rede separados). Por
+ *     isso um único `aoImpactoMultiHit` serve as cinco sem distinguir
+ *     alvo×chão — a diferença categoria só importa pro estágio 1.
+ *
+ * O arquivo de IMPACTO em si vem da FAIXA de nível (`hitsToLevelTierLabel`,
+ * mesma tabela de `getSkillProjectileCount` — nunca duplicada aqui), mas
+ * `hits` só ESCOLHE o arquivo — cada `*_hit_lvl_*.mp3` já É a sequência
+ * sonora INTEIRA daquela faixa, tocada UMA VEZ só (nível 5-6 → 3 hits reais
+ * no VFX → `hit-lvl-5-6.mp3` toca 1 vez, nunca 3). O VFX ainda dispara
+ * `onHit` uma vez por estalactite/lança/pulso/descarga/alma — é só o
+ * ÁUDIO que não repete por hit; a dedupe (só o 1º `onHit` conta) mora em
+ * `vfx/SkillVfx.tsx: VfxNode`, ver comentário lá.
  *
  * Nunca por id — o id de uma constante MG_* já divergiu de projeto pra
  * projeto no rAthena; o nome Aegis é o que não muda (mesma razão que cada
@@ -37,40 +47,40 @@ import { getSfxVolume, useAudioSettings } from "../audioSettingsStore";
  * `vfx/mage/multiHitRegistry.ts` já documenta).
  */
 interface CastAudio {
-  cast: string;
-  /** ausente = skill sem estágio de "liberação com som próprio" — hoje só as
-   * de ALVO (Cold Bolt/Fire Bolt) têm; Thunder Storm (chão) vai direto pro
-   * silêncio-ou-hit, sem inventar um som que o pedido tirou. */
-  castComplete?: string;
-  hit: string;
+  /** ausente = skill sem loop de conjuração no SFX (hoje só Soul Strike —
+   * `SFX/classes/mage/combat_skills_cast/soul/` só tem `hit_lvl_*`) */
+  cast?: string;
+  /** som de impacto pra a FAIXA de `hits` reais (1-5) — nunca um arquivo
+   * fixo, sempre resolvido pela tabela compartilhada */
+  hit: (hits: number) => string;
 }
 
-/** ms entre o fim do cast (liberação) e o som de impacto — só pras skills de
- * ALVO (sempre confirmadas por dano); Thunder Storm (chão) não usa isto —
- * o `hit` dela é disparado pela CONFIRMAÇÃO real do servidor, não por tempo. */
-const HIT_DELAY_MS = 500;
-
-/** ms de espera, depois do `skill:ground-cast` (0x117), por um possível
- * `skill:ground-hit` (0x115) antes de desistir e ficar em silêncio — os dois
- * saem do MESMO tick do servidor (`skill_castend_pos2`), então isto é folga
- * contra jitter de rede, não um atraso estético como o `HIT_DELAY_MS` acima. */
-const GROUND_HIT_WINDOW_MS = 300;
+function hitPath(skillFolder: string, hits: number): string {
+  return `/assets/audio/combat/mage/skills/${skillFolder}/hit-lvl-${hitsToLevelTierLabel(hits)}.mp3`;
+}
 
 const CAST_AUDIO: Record<string, CastAudio> = {
   MG_COLDBOLT: {
     cast: "/assets/audio/combat/mage/skills/cold-bolt/cast.mp3",
-    castComplete: "/assets/audio/combat/mage/skills/cold-bolt/cast-complete.mp3",
-    hit: "/assets/audio/combat/mage/skills/cold-bolt/hit.mp3",
+    hit: (hits) => hitPath("cold-bolt", hits),
   },
   MG_FIREBOLT: {
     cast: "/assets/audio/combat/mage/skills/fire-bolt/cast.mp3",
-    castComplete: "/assets/audio/combat/mage/skills/fire-bolt/cast-complete.mp3",
-    hit: "/assets/audio/combat/mage/skills/fire-bolt/hit.mp3",
+    hit: (hits) => hitPath("fire-bolt", hits),
   },
-  // sem `castComplete` de propósito — ver comentário do topo do arquivo.
   MG_THUNDERSTORM: {
     cast: "/assets/audio/combat/mage/skills/thunder-storm/cast.mp3",
-    hit: "/assets/audio/combat/mage/skills/thunder-storm/hit.mp3",
+    hit: (hits) => hitPath("thunder-storm", hits),
+  },
+  MG_LIGHTNINGBOLT: {
+    cast: "/assets/audio/combat/mage/skills/light-bolt/cast.mp3",
+    hit: (hits) => hitPath("light-bolt", hits),
+  },
+  // sem `cast`: o SFX real não tem arquivo de conjuração pra esta skill (só
+  // `hit_lvl_*` em `combat_skills_cast/soul/`) — nunca inventar um loop que
+  // não existe.
+  MG_SOULSTRIKE: {
+    hit: (hits) => hitPath("soul-strike", hits),
   },
 };
 
@@ -124,39 +134,18 @@ function pararLoopDeCast(): void {
 }
 
 /**
- * Liberação de skill de CHÃO ainda esperando um `skill:ground-hit` — só uma
- * por vez (o cliente só pode estar conjurando uma coisa). `consumido` trava
- * em UM `hit` por conjuração mesmo que Thunder Storm mande vários
- * `skill:ground-hit` (até 10, um por hit/alvo no `HitCount` do skill_db).
- */
-interface LiberacaoDeChaoPendente {
-  aegis: string;
-  consumido: boolean;
-  expiraEm: number;
-}
-let liberacaoDeChaoPendente: LiberacaoDeChaoPendente | null = null;
-
-function limparLiberacaoExpirada(): void {
-  if (liberacaoDeChaoPendente && performance.now() > liberacaoDeChaoPendente.expiraEm) {
-    liberacaoDeChaoPendente = null;
-  }
-}
-
-/**
  * chamar do `skill:casting`, com `p.sourceGid === selfGid` — só a PRÓPRIA
  * conjuração, nunca a de outro caster por perto (mesmo portão que
- * `useCastStore.comecar` já usa). Skill fora do lookup: não toca nada, mas
- * ainda assim PARA um loop anterior pendurado (conjuração interrompida sem
- * `skill:cast`/`skill:ground-cast` — ver comentário de `net/castStore:
- * estaCastando` — nunca dois `cast` tocando ao mesmo tempo, mesma regra do
- * `footsteps.ts`) e descarta qualquer liberação de chão ainda pendente da
- * conjuração anterior.
+ * `useCastStore.comecar` já usa). Sempre para um loop anterior pendurado
+ * primeiro (conjuração interrompida sem `skill:cast`/`skill:ground-cast` —
+ * nunca dois `cast` tocando ao mesmo tempo, mesma regra do `footsteps.ts`).
+ * Skill sem `cast` no SFX (Soul Strike) ou fora do lookup: só o "parar
+ * anterior" acontece, nenhum som novo.
  */
 export function aoComecarCastMultiHit(skillId: number): void {
   pararLoopDeCast();
-  liberacaoDeChaoPendente = null;
   const audio = audioFor(skillId);
-  if (!audio) return;
+  if (!audio?.cast) return;
   const el = loopElementFor(audio.cast);
   el.currentTime = 0;
   el.volume = getSfxVolume();
@@ -169,61 +158,70 @@ export function aoComecarCastMultiHit(skillId: number): void {
 
 /**
  * chamar do `skill:cast`, com `p.sourceGid === selfGid` — SÓ pras skills de
- * ALVO (`TargetType: Attack`, sempre confirmadas por dano: Cold Bolt/Fire
- * Bolt). A magia SAIU: o loop de `cast` PARA primeiro (nunca sobrepõe com
- * `cast-complete`), depois `cast-complete` toca uma vez, e o impacto vem
- * sozinho 500ms depois, sem esperar confirmação de dano nenhuma (o pedido é
- * sobre TEMPO de conjuração, não sobre acerto).
+ * ALVO que têm `cast` (Cold Bolt/Fire Bolt/Light Bolt): a magia SAIU, loop
+ * PARA. Nenhum som toca aqui (pedido 2026-08-17: cast → hit direto, sem
+ * "cast-complete" no meio — `pararLoopDeCast` já cobre o "parar", só
+ * faltava não tocar mais nada em cima). Chamado uma vez por cast (o
+ * `skill:cast` do servidor já é um pulso único de liberação pra essas).
  *
- * Chamado UMA VEZ por cast (o evento `skill:cast` do servidor já é um pulso
- * único de liberação).
+ * Skills de CHÃO (Thunder Storm) não usam mais nada aqui — o loop delas já
+ * parou em `aoConcluirCastDeChao` (a confirmação de liberação PRÓPRIA de
+ * skill de chão, `skill:ground-cast`). Soul Strike não tem `cast` nenhum,
+ * então também não tem loop pra parar aqui. O IMPACTO das cinco skills não
+ * mora mais nesta função — ver `aoImpactoMultiHit`.
  */
-export function aoLiberarCastMultiHit(skillId: number): void {
-  pararLoopDeCast();
+export function aoLiberarCastMultiHit(skillId: number, souEu: boolean): void {
+  if (!souEu) return;
   const audio = audioFor(skillId);
-  if (!audio) return;
-  if (audio.castComplete) playOneShot(audio.castComplete);
-  setTimeout(() => playOneShot(audio.hit), HIT_DELAY_MS);
+  if (!audio?.cast) return;
+  pararLoopDeCast();
 }
 
 /**
  * chamar do `skill:ground-cast`, com `p.sourceGid === selfGid` — SÓ pras
  * skills de CHÃO (`TargetType: Ground`: Thunder Storm). Este evento SEMPRE
- * dispara (mesmo sem acertar ninguém), então só para o loop e abre uma
- * janela curta esperando um `skill:ground-hit` real — NUNCA toca `hit` aqui
- * direto (seria inventar um acerto que talvez não tenha acontecido).
+ * dispara (mesmo sem acertar ninguém) e é a única confirmação garantida de
+ * "terminou de conjurar" que uma AoE tem — só para o loop, nunca toca som
+ * de impacto nenhum aqui (isso é `aoImpactoMultiHit`, no `onHit` real do VFX).
  */
-export function aoConcluirCastDeChao(skillId: number): void {
+export function aoConcluirCastDeChao(_skillId: number): void {
   pararLoopDeCast();
-  const aegis = aegisFor(skillId);
-  if (!aegis || !CAST_AUDIO[aegis]) {
-    liberacaoDeChaoPendente = null;
-    return;
-  }
-  liberacaoDeChaoPendente = { aegis, consumido: false, expiraEm: performance.now() + GROUND_HIT_WINDOW_MS };
 }
 
 /**
- * chamar do `skill:ground-hit`, com `p.sourceGid === selfGid` — toca `hit`
- * UMA vez por conjuração, mesmo que o servidor mande vários (Thunder Storm
- * acertando vários hits/alvos): só o PRIMEIRO dentro da janela conta, os
- * seguintes caem no `consumido` e são ignorados.
+ * O som da sequência de impacto — chamar UMA VEZ por execução da skill, no
+ * PRIMEIRO `onHit` real de `ColdBoltImpact`/`FireLanceImpact`/
+ * `ThunderStormImpact`/`LightBoltImpact`/`SoulStrikeImpact` (o gate "só o
+ * primeiro conta" mora em `vfx/SkillVfx.tsx: VfxNode.impactAudioTocado`,
+ * uma ref por `effect.id` — cada instância de VFX É uma execução).
+ *
+ * `hits` escolhe QUAL ARQUIVO (a faixa 1-2/3-4/5-6/7-8/9-10 via
+ * `hitsToLevelTierLabel`), nunca quantas vezes tocar: cada
+ * `*_hit_lvl_*.mp3` já É a sequência sonora INTEIRA daquela faixa (nível
+ * 5-6 → 3 hits reais no VFX → UM arquivo `hit-lvl-5-6.mp3`, tocado UMA vez
+ * — não o mesmo som 3 vezes seguidas). Esta função em si é só "toca este
+ * arquivo" — não tem estado, não deduplica sozinha; é essencial que quem
+ * CHAMA (`SkillVfx.tsx`) só chame uma vez por conjuração. Skill fora do
+ * lookup: silêncio, sem inventar som.
  */
-export function aoRegistrarAcertoDeChao(skillId: number): void {
-  limparLiberacaoExpirada();
-  const aegis = aegisFor(skillId);
-  if (!aegis || !liberacaoDeChaoPendente || liberacaoDeChaoPendente.aegis !== aegis || liberacaoDeChaoPendente.consumido) {
-    return;
-  }
-  const audio = CAST_AUDIO[aegis];
+export function aoImpactoMultiHit(skillId: number, hits: number): void {
+  const audio = audioFor(skillId);
   if (!audio) return;
-  liberacaoDeChaoPendente.consumido = true;
-  playOneShot(audio.hit);
+  playOneShot(audio.hit(hits));
+}
+
+/**
+ * Cleanup de fim de sessão (`audio/audioLifecycle`): para o loop de `cast`
+ * tocando — o único jeito que sobrou deste módulo de deixar som pendurado
+ * depois que o `NetPlayer` já sumiu (route trocou pra `/login`), agora que
+ * o impacto não usa mais timer nem estado pendente.
+ */
+export function pararAoDesconectar(): void {
+  pararLoopDeCast();
 }
 
 /** SÓ PARA TESTE — o app de verdade nunca chama isto. */
 export function __resetForTests(): void {
-  pararLoopDeCast();
+  pararAoDesconectar();
   loopPool.clear();
-  liberacaoDeChaoPendente = null;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
-import { useItemCatalog } from "../net/itemCatalog";
+import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
 import { equipPending, precheckEquip, requestEquip, requestUnequip } from "../net/equipmentStore";
 import { useHudStore } from "./hudStore";
 import { IconSquare } from "../ui/rpg";
@@ -12,7 +12,7 @@ import { useCardStore } from "../net/cardStore";
 import { CHAT_ART } from "../ui/chatFrame";
 import { CurvedBox } from "../ui/CurvedBox";
 import { useNineSlice } from "../ui/nineSlice";
-import { SLOT_FRAME } from "../ui/skillBar";
+import { SKILL_SLOT_SIZE, SLOT_FRAME } from "../ui/skillBar";
 import { CHROME, TYPE } from "../ui/windowChrome";
 import { ChatScrollbar } from "./ChatScrollbar";
 import { ScrollbarHider } from "../ui/ScrollbarHider";
@@ -26,6 +26,7 @@ import {
   BAG_PLATE,
   BAG_TABS,
   BAG_WIDTH,
+  INVENTORY_SLOT_SCALE,
   type BagTab,
 } from "../ui/bag";
 
@@ -126,12 +127,24 @@ export function InventoryWindow() {
 
   const gap = px(BAG_GRID.gap);
   const barraW = px(BAG_GRID.barra);
-  /** largura útil da grade: o vão da arte menos a coluna da barra de rolagem */
+  /** largura útil da grade: o vão da arte menos a coluna da barra de rolagem
+   * — a GRADE ocupa isto inteiro (3 colunas de `1fr`), só o SLOT dentro de
+   * cada coluna tem teto (ver `ladoSlot` abaixo) */
   const gradeW = px(BAG_LAYOUT.grid.w) - barraW - px(BAG_GRID.barraGap);
-  // O lado do slot SAI da grade, não de um número da arte: o ícone e a
-  // quantidade se medem por ele. Com tamanho fixo, o ícone ficava maior que o
-  // miolo do slot e vazava por cima da moldura.
-  const slotPx = (gradeW - gap * (BAG_GRID.cols - 1)) / BAG_GRID.cols;
+  /** largura de UMA coluna se ela preenchesse a grade inteira — é o teto de
+   * espaço que cada slot TERIA, antes do teto da SkillBar entrar */
+  const colunaW = (gradeW - gap * (BAG_GRID.cols - 1)) / BAG_GRID.cols;
+  /**
+   * Lado de verdade do slot: a coluna inteira, OU o teto do inventário — o
+   * que for MENOR. A grade continua distribuída pela largura toda (`colunaW`
+   * não muda); é só o SLOT desenhado dentro da coluna que para de crescer ao
+   * bater no teto. Teto = `SKILL_SLOT_SIZE × INVENTORY_SLOT_SCALE`
+   * (`ui/bag.ts`) — o inventário pode ser 1,5× o slot da SkillBar, a SkillBar
+   * em si não muda. Sobra de coluna vira margem vazia ao redor do slot
+   * (centralizado pela própria grade, ver `justifyItems`/`alignItems`
+   * abaixo) — nunca estica o slot.
+   */
+  const ladoSlot = Math.min(colunaW, SKILL_SLOT_SIZE * INVENTORY_SLOT_SCALE);
   /**
    * Quantos slots DESENHAR.
    *
@@ -192,33 +205,49 @@ export function InventoryWindow() {
           ref={rolavel}
           className="chat-scroll"
           style={{
+            // a GRADE ocupa todo o espaço disponível — quem tem teto é o
+            // SLOT (`ladoSlot`), não o container
             flex: "1 1 auto",
             minWidth: 0,
             overflowY: "auto",
             display: "grid",
+            // `1fr`: as 3 colunas se distribuem pela largura TODA da grade,
+            // sempre — encolher/crescer o teto do slot não muda quantas
+            // colunas cabem nem a largura delas, só o quanto do meio de cada
+            // uma o slot de fato ocupa
             gridTemplateColumns: `repeat(${BAG_GRID.cols}, 1fr)`,
-            // `auto` e não `1fr`: com fileira fracionária a grade tentaria
-            // caber TODAS na altura visível, e os slots encolheriam conforme o
-            // inventário enchesse. A fileira tem a altura do slot, e o que
-            // passar da moldura rola.
-            gridAutoRows: slotPx,
+            // a fileira tem a largura da COLUNA inteira (`colunaW`), não a do
+            // slot capado — é essa folga (coluna maior que o slot dentro
+            // dela) que sobra como margem vertical ao redor do slot quando
+            // ele bate no teto da SkillBar
+            gridAutoRows: colunaW,
             gap,
             alignContent: "start",
+            // centraliza o slot (menor que a célula, quando capado) dentro
+            // da coluna/fileira — é isto que transforma "célula maior que o
+            // slot" em margem simétrica ao redor dele, não num slot colado
+            // no canto
+            justifyItems: "center",
+            alignItems: "center",
           }}
         >
         {Array.from({ length: total }).map((_, i) => {
           const it = items[i];
+          // nome de verdade, do catálogo (`net/itemCatalog`) — NUNCA id/aegis
+          // como substituto (regra absoluta, auditoria 2026-08-14).
+          // `undefined` com `it` presente = catálogo ainda não respondeu
+          // pra este item (`Slot` desenha o anel de loading, não texto).
+          const nome = it ? getItemDisplayName(nomes[it.itemId]) : undefined;
           return (
             <Slot
               key={it ? it.index : `vazio-${i}`}
-              // o nome de verdade, do catálogo (`net/itemCatalog`). Enquanto ele
-              // não volta da API, o `#id` — a lacuna honesta.
-              rotulo={it ? encurtarNome(nomes[it.itemId]?.name ?? `#${it.itemId}`) : undefined}
+              temItem={Boolean(it)}
+              rotulo={nome ? encurtarNome(nome) : undefined}
               quantidade={it && it.amount > 1 ? it.amount : undefined}
               equipado={it?.equipped}
               titulo={
                 it
-                  ? `${nomes[it.itemId]?.name ?? `#${it.itemId}`}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — ${
+                  ? `${nome ?? "…"}${it.refine ? ` +${it.refine}` : ""}${it.equipped ? " (equipado)" : ""} — ${
                       EQUIPABLE_TYPES.has(it.type)
                         ? "duplo clique equipa"
                         : it.type === CARD_TYPE
@@ -239,7 +268,7 @@ export function InventoryWindow() {
               }
               onInfo={it ? () => useItemInfoStore.getState().abrir(it.index) : undefined}
               indice={it?.index}
-              lado={slotPx}
+              lado={ladoSlot}
             />
           );
         })}
@@ -345,6 +374,7 @@ function Aba({
  * (`square-skill`), montada pelo 9-slice genérico.
  */
 function Slot({
+  temItem,
   rotulo,
   quantidade,
   equipado,
@@ -355,6 +385,11 @@ function Slot({
   indice,
   lado,
 }: {
+  /** true = célula ocupa um item de verdade do inventário — distingue
+   * "slot vazio" (sem ícone, sem anel) de "item presente, nome ainda não
+   * chegou do catálogo" (anel de loading), os dois casos com `rotulo`
+   * undefined */
+  temItem?: boolean;
   rotulo?: string;
   quantidade?: number;
   equipado?: boolean;
@@ -450,7 +485,7 @@ function Slot({
           }}
         />
       )}
-      {rotulo && (
+      {temItem && (
         <div
           style={{
             position: "absolute",
@@ -463,8 +498,10 @@ function Slot({
         >
           {/* sem `label`: o nome saiu de DENTRO do quadrado e foi para a faixa
               abaixo dele (ver `Slot`) — cabia uma palavra e meia aqui, e nome de
-              item do RO passa longe disso */}
-          <IconSquare seed={`item-${rotulo}`} size={lado * 0.56} />
+              item do RO passa longe disso. `loading` (nome ainda não veio do
+              catálogo) desenha o anel em vez do quadrado colorido — nunca id,
+              nunca aegis, regra absoluta da auditoria 2026-08-14. */}
+          <IconSquare seed={rotulo ? `item-${rotulo}` : undefined} loading={!rotulo} size={lado * 0.56} />
         </div>
       )}
       {equipado && (

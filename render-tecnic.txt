@@ -1,0 +1,1861 @@
+================================================================================
+RENDERIZAÇÃO DO TERRENO — DOCUMENTAÇÃO TÉCNICA
+================================================================================
+
+Escopo: o pipeline de renderização do mapa quadrado derivado do rAthena real
+(`terrainMode: "square"`), usado em `apps/game` (cliente 3D, R3F/Three.js).
+Cobre chão, água, vegetação, árvores/impostores, horizonte, névoa, céu e o
+material/shader do chão. NÃO cobre o mundo hexagonal legado (`hex/HexTerrain`,
+ainda usado só pelo editor/`/spectator`) nem VFX de skill.
+
+Fonte: código-fonte de `apps/game/src` (principalmente `grid/`, `props/`,
+`scene/`, `play/viewRadius.ts`, `views/PlayView.tsx`) e
+`docs/claude-context/02-terrain-rendering.md`. Todos os números e limites
+citados vêm de constantes/testes existentes no código, não de estimativa.
+
+Convenção de rótulo usada abaixo:
+  [IMPLEMENTADO]      — existe e roda hoje, como descrito.
+  [PARCIAL]           — existe, mas com escopo restrito ao que está descrito.
+  [NÃO IMPLEMENTADO]  — não existe no projeto; citado só para deixar claro
+                         que a pergunta foi considerada e respondida "não".
+
+
+================================================================================
+1. VISÃO GERAL DO PIPELINE
+================================================================================
+
+O mapa vem do rAthena real (`map_cache.dat`, ou já editado/salvo como
+`GameMap` JSON) com três arrays paralelos de N células (N = width × height):
+`collision` (tipo de célula: walkable/wall/cliff/water…), `surface`
+(superfície autorada opcional: grass/dirt/stone/sand/snow/water/river) e
+`heightmap` (altura por célula, pode vir toda zero em mapa recém-importado).
+
+Nada disso vira 160.000 objetos 3D. O mapa é fatiado em CHUNKS quadrados de
+32×32 células (seção 2), e cada chunk é UMA malha (`THREE.BufferGeometry`)
+com um quad por célula. A cor de cada vértice vem da superfície/colisão da
+célula (seção 8); a textura entra como um padrão multiplicativo por cima
+dessa cor, não como fonte de cor (seção 9).
+
+Camadas desenhadas, de perto para longe, cada uma com um mecanismo diferente
+de decidir "o que mostrar":
+
+  1. Chão detalhado + água (`grid/SquareTerrain.tsx`) — só dentro do raio
+     `detalhe` (= `renderDistance` do admin). Geometria por vértice, textura
+     triplanar, água com shader próprio. É a camada cara.
+  2. Vegetação instanciada (`props/VegetationInstancer.tsx`) — grama, flor,
+     planta, arbusto, árvore, árvore seca — via `InstancedMesh` por
+     espécie/sub-malha, dentro de um raio próprio (igual ou menor que
+     `detalhe`, seção 11).
+  3. Props não repetitivos (`props/PropInstance.tsx`) — pedra, construção,
+     objeto único — um `Mesh` por prop, clone do glTF.
+  4. Impostores de árvore/arbusto (`grid/TreeImpostors.tsx`) — billboard
+     texturizado, só FORA do raio de detalhe (onde a árvore 3D real já não
+     está desenhada).
+  5. Horizonte (`grid/HorizonMesh.tsx`) — uma malha ÚNICA, decimada, que
+     cobre o MAPA INTEIRO o tempo todo, por baixo do chão detalhado.
+  6. Névoa (`scene/skyFog.ts`) — desbota tudo para a cor do céu naquele
+     ângulo, fechando antes do fim do horizonte.
+  7. Céu (`scene/GradientSky.tsx`) — cúpula colorida por elevação, sempre
+     centrada na câmera.
+
+Three.js/R3F participam como a camada de cena: cada peça acima é um
+`<mesh>`/`<instancedMesh>` React (via R3F), mas a geometria é construída à
+mão em JavaScript puro (não `PlaneGeometry`/`BoxGeometry` genéricos, exceto o
+esqueleto do horizonte) e a maior parte dos materiais usa
+`Material.onBeforeCompile` para injetar GLSL customizado em cima de um
+`MeshStandardMaterial`/`MeshLambertMaterial`/`MeshBasicMaterial` de fábrica —
+isso preserva de graça a integração com luz, sombra, névoa e tone mapping
+padrão do three, sem escrever um `ShaderMaterial` do zero para cada caso
+(a água e o céu SÃO `ShaderMaterial` puro, por não precisarem de luz/PBR).
+
+Câmera, distância e visibilidade: a cena não tem frustum culling manual
+algum — três dos mecanismos de recorte que existem são raio-de-distância
+(chão detalhado, entidades, vegetação rasteira) e um é ausência de culling
+proposital (horizonte e impostores de árvore, ver seção 3). O `renderDistance`
+configurado pelo admin é o único número que o operador ajusta; todo o resto
+(raio do horizonte, distância da névoa) deriva dele por fórmula fixa
+(`play/viewRadius.ts`, seção 4).
+
+
+================================================================================
+2. CHUNKS
+================================================================================
+
+[IMPLEMENTADO] `grid/squareChunks.ts` (geometria) + `grid/SquareTerrain.tsx`
+(gerenciamento/streaming).
+
+- **Tamanho**: `CHUNK_CELLS = 32` células por lado.
+- **Tamanho físico**: célula = `SQUARE_SIZE = 2.0` unidades de mundo, então
+  cada chunk mede 64×64 unidades.
+- **Quantidade por mapa**: `chunkCounts()` = `ceil(largura/32) × ceil(altura/32)`.
+  Para o mapa de referência `prt_fild08` (400×400 células): 13×13 = 169
+  chunks no total, dos quais uma dúzia fica visível por vez.
+- **Distribuição**: grade regular alinhada aos eixos, chave `"cx,cz"`.
+
+**Construção da geometria** (`buildChunkGeometry`): um quad por célula (não
+uma grade de vértices compartilhados — ver seção 8 sobre por quê), mais até
+4 quads laterais ("saia") por célula nas fronteiras chão↔bloqueio. Antes de
+gerar os quads, o algoritmo pré-computa, UMA vez por chunk, uma grade de
+cantos (altura + normal) com uma folga de 1 célula em cada borda — cada
+canto é usado por até 4 células e a normal lê mais 4 cantos, então calcular
+sob demanda repetiria a mesma média até 16 vezes. Medido: 433 ms para montar
+os 177 chunks visíveis de `prt_fild08` sem essa grade pré-computada, contra
+293 ms com ela pronta.
+
+**Chunks próximos da câmera**: `SquareTerrain` recebe `center`/`radius`
+(vindos do `useViewCenter`, que só muda a cada 16 unidades andadas — não a
+cada quadro). A cada passada, o raio de chunks a considerar é
+`ceil(radius / 64) + 1` em cada direção a partir do chunk do `center`. A
+distância testada é até a CAIXA do chunk, não até o centro dele — testando
+pelo centro seria preciso somar meia diagonal (45 unidades) de folga para o
+chunk onde o jogador está não sumir na beirada, e essa folga valeria também
+para chunks inteiros atrás da névoa.
+
+**Construção incremental**: SIM. Um chunk que ainda não está em cache entra
+numa fila (`porConstruir`), ordenada do mais perto para o mais longe, e é
+drenada por um `useFrame` — nunca tudo de uma vez no mesmo quadro.
+
+**Orçamento de tempo por quadro**: SIM, `ORCAMENTO_MS = 6` ms (12 ms
+enquanto a tela de carregamento está no ar, ver seção 2 "pré-carga" e seção
+17). Cada chunk custa ~2,5 ms medidos (549 construções); sem o orçamento,
+uma fileira nova de ~10 chunks ao cruzar uma fronteira de visão custava 25 ms
+num quadro de 16,6 ms (60 FPS) — o engasgo ao andar que motivou o mecanismo.
+Um anel extra além do alcance visível (`adiantar`) é construído por último,
+nos quadros ociosos, para que cruzar a fronteira de culling não precise
+construir nada na hora.
+
+**Cache**: SIM. `cache: Map<string, BufferGeometry>` (chão) e
+`aguaCache: Map<string, BufferGeometry|null>` (água) num `useRef`, vivos
+enquanto o mapa não trocar. Um chunk fora do alcance simplesmente não é
+desenhado (`out`) mas continua no cache — sair do campo de visão NÃO libera
+memória.
+
+**Remoção/descarte**: dois casos.
+  1. Mapa encolhe (`resizeMap`): chunks que ficaram fora da grade nova são
+     descartados do cache (`geo.dispose()`), idempotente.
+  2. Componente desmonta (troca de mapa/saída de cena): todo o cache é
+     esvaziado num `useEffect` de cleanup.
+  Sair do raio de visão NÃO é um caso de descarte — é só ausência do array
+  `visible` desenhado naquele quadro.
+
+**Evita reconstrução constante**: edição do mapa (editor) recria os três
+arrays (`collision`/`surface`/`heightmap`) inteiros por imutabilidade — a
+troca de IDENTIDADE do array é o gatilho de invalidação, mas a varredura
+`chunksSujos()` compara célula a célula por REFERÊNCIA (~1 ms para 160.000
+posições) e marca só os chunks (1 ou 2, tipicamente) cujo conteúdo mudou de
+verdade. O chunk sujo continua sendo desenhado com a geometria VELHA até a
+nova estar pronta — nunca existe um buraco entre descartar e reconstruir
+("quadrado cinza" era o defeito antes desta ordem).
+
+**Pré-carga do mapa inteiro** (só `/play`, `precarregar={true}`): enche uma
+fila separada (`filaPrecarga`) com todos os chunks do mapa e a drena com o
+mesmo orçamento por quadro, atrás de uma tela de carregamento (seção 17).
+Sujeita a um teto de memória projetada (seção 15/17): mede o tamanho real do
+primeiro chunk construído (`bytesDaGeometria`, soma real dos atributos, não
+uma constante por vértice) e projeta para o mapa inteiro; acima de 64 MB
+(`PRECARGA_MAX_BYTES`) a pré-carga se desliga e o streaming normal assume.
+
+**Impacto em CPU/GPU/draw calls/memória**:
+- CPU: construção de geometria é o item mais caro do "caminho quente" de
+  terreno (ver seção 15), mitigado pelo orçamento por quadro.
+- GPU: ~25 malhas de chão visíveis por vez (não 160.000 tiles), 2 draw calls
+  por chunk visível (chão + água, se houver água naquele chunk).
+- Memória: mapa plano de 400×400 ≈ 35 MB para os 169 chunks; mapa com muito
+  relevo pode passar de 170 MB (o orçamento por chunk admite até 20.000
+  vértices).
+
+**Por que chunks importam em mapa grande**: um mapa do rAthena tem até
+160.000 células. Uma peça por célula (o que o mundo hexagonal legado faz)
+significa 160 mil objetos para um terreno que, na prática, é majoritariamente
+plano — inviável em draw calls e em CPU de cena (transform por nó). Fatiar em
+169 malhas reduz a contagem de objetos em 3 ordens de grandeza sem perder
+resolução (o quad continua sendo por célula DENTRO do chunk).
+
+
+================================================================================
+3. CULLING E VISIBILIDADE
+================================================================================
+
+[PARCIAL] — não há frustum culling automático do three usado em lugar
+nenhum do terreno; todo recorte é por DISTÂNCIA (raio a partir de um centro),
+decidido em JavaScript antes de montar a lista de objetos a desenhar.
+
+- **Chão detalhado + água**: culling por distância até a caixa do chunk,
+  raio = `detalhe` (ver seção 4). [IMPLEMENTADO]
+- **Frustum culling automático do three**: DESLIGADO de propósito
+  (`frustumCulled={false}`) no horizonte, nos impostores de árvore e nas
+  camadas de vegetação instanciada — cada um é UM objeto (`InstancedMesh`/
+  `Mesh`) cobrindo instâncias espalhadas pelo mapa inteiro; o culling
+  automático do three cortaria a CAIXA do objeto inteiro (que sempre
+  intersecta o frustum, já que cobre o mapa todo), não por instância — não
+  ganha nada e ainda paga o custo de manter a bounding box em dia a cada
+  reescrita de instâncias. [DECISÃO EXPLÍCITA, não ausência por esquecimento]
+- **Entidades** (monstro/player/npc): raio próprio `entidades`, sempre igual
+  a `detalhe`, nunca ao raio do horizonte — ver seção 4 (foi uma regressão
+  de custo corrigida: código antigo lia o raio da névoa como alcance de
+  desenho/mira). [IMPLEMENTADO]
+- **Vegetação rasteira** (grama/flor/planta): raio PRÓPRIO, 60% do raio de
+  detalhe (`RAIO_RASTEIRA_FRAC = 0.6`) — soma cedo demais para valer a pena
+  desenhar de longe. [IMPLEMENTADO]
+- **Vegetação sólida** (arbusto/árvore/árvore seca, via
+  `VegetationInstancer`): raio de detalhe cheio; fora dele passam a ser
+  representadas só pelo impostor (seção 6), nunca as duas ao mesmo tempo —
+  o `TreeImpostors` explicitamente pula instâncias dentro do raio de
+  detalhe. [IMPLEMENTADO]
+- **Props não instanciados** (`PropInstance`): sem culling por distância
+  próprio — a lista de props desenhados já vem filtrada por quem monta a
+  cena (`PlayView.visibleProps`) usando o mesmo raio de detalhe.
+  [IMPLEMENTADO, delegado ao chamador]
+- **Chunk fora do raio de visão**: sai da lista `visible` (não desenhado),
+  mas continua no cache (não é descarregamento — ver seção 2).
+
+Não implementado: culling hierárquico por octree/BVH, oclusão por
+geometria (occlusion culling), portal culling. O único mecanismo além de
+raio-de-distância é a ausência proposital de culling nas malhas globais
+(horizonte/impostores), que são baratas o bastante (1 draw call cada) para
+não precisarem dele.
+
+
+================================================================================
+4. FOG (NÉVOA)
+================================================================================
+
+[IMPLEMENTADO] — dois módulos que trabalham juntos: `THREE.Fog` padrão
+(linear, near/far) com a COR trocada por uma função de céu
+(`scene/skyFog.ts`), mais um raio pequeno de reforço na borda física do mapa
+(`grid/HorizonMesh.tsx`).
+
+**Tipo**: névoa linear (`smoothstep(fogNear, fogFar, distância)`), não
+exponencial (`FOG_EXP2` existe no chunk trocado, mas o projeto usa o `Fog`
+linear do three).
+
+**Cor**: NÃO é uma cor constante. O chunk `fog_fragment` do three foi
+substituído (`THREE.ShaderChunk.fog_fragment`, aplicado globalmente uma vez,
+`aplicarNevoaDoCeu()`) para misturar com `corDoCeu(elevação)` — a MESMA
+função que pinta a cúpula do céu (seção 7), calculada a partir do ângulo de
+elevação real do fragmento em relação à câmera. Isso é o que impede uma
+silhueta escura contra o céu claro: geometria 100% enevoada fica idêntica ao
+que está atrás dela em qualquer altura de tela. Medido (mesma cena com/sem
+montanha, pixel a pixel): 74/255 de diferença com névoa de cor fixa, 1/255
+(arredondamento) com névoa cor-do-céu.
+
+**Distância inicial/final**: `fogNear`/`fogFar`, calculados como fração do
+raio `horizonte` (não mais de `renderDistance`/`detalhe` diretamente — ver
+abaixo), via `fogDistances()` (pacote `@ragnarok/game-data`) usando
+`fogNearFrac`/`fogFarFrac` do `GameplayConfig`.
+
+**Relação com a distância de render — os QUATRO raios** (`play/viewRadius.ts`,
+`raiosDeVisao()`):
+  - `detalhe` = `cfg.renderDistance` cru (o número que o admin ajusta). Chão
+    detalhado e props usam este raio.
+  - `entidades` = sempre igual a `detalhe`, nunca ao raio do horizonte —
+    corrige uma regressão em que mob/player/npc liam `fogFar` como alcance
+    de desenho e mira, tornando-os visíveis/alvejáveis a centenas de
+    unidades.
+  - `horizonte` = `detalhe + 260` unidades (`ADICIONAL_DE_HORIZONTE`),
+    limitado ao maior lado do mapa quando esse dado está disponível (evita
+    névoa que nunca fecha em mapa pequeno autorado). É até onde a malha
+    decimada do horizonte serve de âncora — ela cobre o mapa inteiro sempre,
+    então este número não limita o que ela desenha, só onde a névoa deve
+    fechar.
+  - `fogNear`/`fogFar` = fração do `horizonte` (não de `detalhe`).
+  Config padrão: `detalhe ≈ 130`, `horizonte ≈ 390`, `fogFar < 390`.
+
+**Por que fração do raio de render, e não constante fixa**: medido ao vivo
+antes da correção, 81% dos triângulos de chão desenhados estavam atrás de
+névoa OPACA (84.552 triângulos invisíveis contra 19.912 visíveis) — a névoa
+fechava bem antes do fim da malha, e a borda do terreno aparecia recortada
+contra o céu em vez de dissolver. A regra de teste (`perf/desempenho.test.ts`)
+garante, para qualquer `renderDistance` que o admin escolha (testado de 10 a
+1000): `fogFar < horizonte`, `entidades === detalhe` (nunca o raio da névoa).
+
+**Reforço na borda física do mapa** (`HorizonMesh`, "fog da borda"): função
+SEPARADA e adicional, não substitui a névoa normal. Ativa só nos fragmentos
+FORA do retângulo `[0,largura]×[0,altura]` do mapa, com intensidade função da
+distância do PERSONAGEM (não da câmera — a `FollowCamera` fica atrás do
+personagem e usar a posição dela dava um efeito só nas bordas laterais) até
+a margem mais próxima, dentro de 4,5 unidades (2,25 células). Cobre o caso em
+que o jogador está perto do limite do mapa mas a névoa normal (calculada por
+distância câmera→fragmento) ainda não desbotou aquele pedaço.
+
+**Como a névoa ajuda a esconder o limite de render**: a malha do horizonte
+(seção 5/6) cobre o mapa inteiro sem custo relevante, mas ela é grosseira; a
+névoa garante que ninguém veja ONDE a resolução cai — o degradê some antes
+do olho notar a decimação. Sem névoa, o horizonte decimado seria visível como
+um relevo "borrado" contra um chão detalhado nítido.
+
+**Impacto de performance**: o custo é 1 chunk de GLSL a mais em todo
+material que já usa `#ifdef USE_FOG` — nenhuma geometria ou draw call extra.
+O ganho de performance real vem indiretamente: é a névoa (fechando cedo) que
+permite manter o raio de detalhe (`renderDistance`) relativamente curto sem
+que o jogador veja o "fim do mundo".
+
+**Fog ≠ culling/render distance — a diferença**: `renderDistance`/`detalhe`
+decide o que é CONSTRUÍDO E DESENHADO EM DETALHE (custa CPU/GPU real); a
+névoa só decide a COR final de algo que já foi desenhado (chão detalhado
+dentro do raio, ou a malha do horizonte fora dele) — ela não corta geometria,
+só disfarça a transição entre a malha detalhada e a decimada, e disfarça a
+borda do mundo simplificado. Aumentar `fogFar` sozinho não economiza nada;
+reduzir `renderDistance` sim.
+
+
+================================================================================
+5. LOD (LEVEL OF DETAIL)
+================================================================================
+
+LOD clássico (troca de MALHA/geometria por distância, múltiplos níveis de
+detalhe do MESMO objeto, ex. `THREE.LOD`) NÃO está implementado no terreno.
+
+O que existe em vez disso, e que cumpre parte do mesmo papel:
+
+- [IMPLEMENTADO] **Dois níveis de resolução geométrica do RELEVO**: o chão
+  detalhado (1 vértice por célula, `SQUARE_SIZE=2` unidades) dentro do raio
+  `detalhe`, e a malha do horizonte (1 vértice a cada `PASSO_HORIZONTE=4`
+  células, ou seja 8 unidades) cobrindo o mapa inteiro por baixo dele. Não
+  há transição suave/blend entre os dois — o chão detalhado simplesmente
+  ganha no teste de profundidade onde os dois se sobrepõem (a malha do
+  horizonte fica levemente abaixo, `OFFSET_Y = -0.3`, mais uma correção de
+  "nível mínimo na vizinhança" para nunca furar acima do relevo real — ver
+  `grid/HorizonMesh.tsx`). Isto é DOIS NÍVEIS FIXOS, não um `THREE.LOD` com
+  N estágios chaveados por distância de câmera a cada quadro — a "troca" é
+  estrutural (duas malhas coexistindo sempre), não dinâmica por quadro.
+- [IMPLEMENTADO] **Binário perto/longe para árvore/arbusto**: dentro do raio
+  de detalhe, a árvore 3D real (via `VegetationInstancer`); fora dele, o
+  billboard do impostor (seção 6). Só dois estados, sem estágio
+  intermediário, recalculado apenas quando o centro de visão muda (não por
+  quadro).
+- [IMPLEMENTADO] **Raio de corte mais curto para vegetação rasteira**: grama/
+  flor/planta desaparecem (não viram impostor, apenas somem) a 60% do raio
+  de detalhe — é redução de QUANTIDADE, não de qualidade de malha.
+
+LOD não está implementado para: geometria de props sólidos (pedra,
+construção — sempre a malha completa do glTF, em qualquer distância dentro
+do raio de detalhe), texturas do chão (sem mipbias/redução por distância além
+do que o mipmap padrão do three já faz), sombra (mesmo shadow map em
+qualquer distância).
+
+
+================================================================================
+6. BILLBOARDS / IMPOSTORES
+================================================================================
+
+[IMPLEMENTADO] — `grid/TreeImpostors.tsx`, para árvore, árvore seca e
+arbusto (`CATEGORIAS_IMPOSTOR = {tree, tree_bare, bush}`).
+
+- **O que é**: um billboard TEXTURIZADO (não geometria genérica) — a árvore
+  3D real de cada espécie é fotografada de frente, ortograficamente, com o
+  MESMO glTF/textura que o prop real usa (`treeImpostorBake.ts`, câmera
+  ortográfica dedicada, fundo transparente, 128×128 px por espécie), e essa
+  foto é colada num quad billboard.
+- **Atlas único**: todas as espécies que o MAPA de fato usa (não o catálogo
+  inteiro) entram num único `CanvasTexture` (`buildTreeAtlas`), 1 textura
+  para o mapa inteiro.
+- **Orientação**: sempre virado para a câmera, via truque em ESPAÇO DE VISTA
+  no vertex shader (soma o deslocamento do canto do quad direto em X/Y de
+  view-space) — não reorienta a `instanceMatrix` por instância a cada
+  quadro, o que custaria CPU por instância todo frame.
+- **Corte**: `alphaTest` (MASK), não blending transparente — evita halo/
+  escurecimento de névoa por trás de um pixel semitransparente.
+- **Draw calls**: 1 `InstancedMesh` (1 geometria de quad unitário + atributos
+  por instância `aSize`/`aAtlasRect`), independente de quantas árvores o
+  mapa tem — 1 draw call para toda a camada de impostores.
+- **Quando aparece**: só para instâncias FORA do raio de detalhe (dentro
+  dele, a árvore 3D real já cobre o mesmo ponto — nunca desenha as duas).
+- **Variedade**: espelhamento em X determinístico por hash do id do prop
+  (`hashFlip`), sem segundo ângulo de bake.
+
+Billboards/impostores NÃO existem para: grama/flor/planta (julgado
+desnecessário — a lâmina de grama já é imperceptível bem antes do raio de
+detalhe acabar, e inventar um segundo atlas para economia marginal foi
+descartado de propósito), pedra/construção/prop não-vegetal, personagem/
+monstro. Não há impostor "genérico" reaproveitável fora do pipeline de
+árvore.
+
+
+================================================================================
+7. INSTANCING
+================================================================================
+
+[IMPLEMENTADO] — `THREE.InstancedMesh` é o mecanismo central de três
+subsistemas:
+
+1. **Vegetação repetitiva** (`props/VegetationInstancer.tsx`): categorias
+   grass/flower/plant/bush/tree/tree_bare. Um `InstancedMesh` POR SUB-MALHA
+   POR ESPÉCIE (um glTF de árvore comum tem casca e folha como malhas/
+   materiais separados — um `InstancedMesh` só aceita 1 geometria + 1
+   material), nascido UMA vez no carregamento do mapa com capacidade = quantas
+   vezes aquela espécie aparece no mapa inteiro. Cruzar uma fronteira de
+   chunk/raio de detalhe não monta/desmonta nada — só reescreve quais slots
+   `0..count` estão ativos (`setMatrixAt` + `mesh.count`), reescrito apenas
+   quando o `center` de visão muda, nunca por quadro.
+2. **Impostores de árvore** (seção 6): mesmo mecanismo, 1 `InstancedMesh` de
+   quad para todas as árvores/arbustos fora do raio de detalhe.
+3. **Pré-compilação de shader instanciado** (dentro de `VegetationInstancer`):
+   `USE_INSTANCING` entra na chave de cache do programa GPU do three, então
+   o mesmo material compilado para uso NÃO instanciado (`PreCompilarProps`)
+   é um PROGRAMA DIFERENTE do que o `InstancedMesh` precisa. Um dummy
+   descartável de 1 instância por espécie, fora do frustum de qualquer
+   câmera, é compilado incrementalmente (1 espécie por `requestAnimationFrame`)
+   para evitar pagar o link do shader em pleno gameplay quando o jogador
+   entra numa área nova.
+
+**Por que reduz draw calls**: N instâncias da mesma espécie/sub-malha = 1
+draw call (`drawElementsInstanced`), independente de N. O caso medido que
+motivou o módulo: ~1815 props visíveis sustentavam ~1831 `Mesh` separados
+(quase 1:1) e 848-1157 draw calls antes do instancing — o gargalo real não
+era triângulo nem textura, era CPU montando/desmontando centenas de
+componentes React (cada um clonando um glTF) ao cruzar fronteira de chunk.
+
+**CPU vs. GPU**: CPU escreve as matrizes de instância (`setMatrixAt`) só
+quando o centro de visão muda — não por quadro; GPU desenha todas as
+instâncias ativas (`mesh.count`) num único draw call, lendo `instanceMatrix`
+e os atributos extra (`aSize`, `aAtlasRect` no caso do impostor) por
+instância no vertex shader.
+
+**O que NÃO usa instancing**: props não repetitivos (`PropInstance.tsx` —
+pedra, construção, objeto único: 1 `Mesh` por prop, clone do glTF), chão
+(cada chunk é 1 geometria única, não instâncias de um quad), água (idem),
+horizonte (1 geometria única).
+
+
+================================================================================
+8. GEOMETRIA DO TERRENO
+================================================================================
+
+**Organização das células**: grade regular, `width × height` células,
+indexadas linha-a-linha. Célula = 2,0 unidades de mundo (`SQUARE_SIZE`).
+
+**Cada célula vira UM QUAD independente** (não uma grade de vértices
+compartilhados) — decisão deliberada: mantém a borda entre dois terrenos
+NÍTIDA (grama ao lado de água não vira degradê), que é a estética RO/KayKit
+pretendida. Vértices compartilhados interpolariam cor entre células vizinhas.
+
+**Elevação**: mora nos CANTOS, não na célula. Cada vértice de canto usa a
+MÉDIA das até 4 células que se encontram nele (`grid/heightField.ts:
+cornerLevel`) — isso faz a superfície ficar contínua (encosta lê como
+encosta, não como escada de degraus de 90°) mesmo com heightmap por célula.
+A normal de cada canto vem do gradiente dessa mesma grade (diferença
+central), pré-computada por chunk.
+
+A média SEPARA por grupo de passagem (`land`/`water`/`blocked` —
+`CellGroup`): chão só mistura com chão, bloqueio só com bloqueio, água rasa
+só com água. Sem essa separação, o pé de uma parede viraria rampa suave para
+dentro do campo e o jogador veria ladeira onde o servidor não deixa subir —
+a saia vertical (abaixo) sobrevive exatamente na fronteira entre grupos.
+
+**Altura sem dado autorado**: `map_cache.dat` não guarda altura real (só
+existe no `.gat` do cliente original, fora do repo) — mapas recém-importados
+vêm com `heightmap` zerado. Nesse caso o relevo é INFERIDO do tipo de
+colisão (`visualLevel`): parede sobe 1 nível, `cliff` ("gap" do rAthena)
+afunda 1, água afunda 0,35. Altura AUTORADA (heightmap ≠ 0 numa célula)
+sempre vence esse palpite — é o que permite o editor decidir se um "gap" do
+rAthena vira encosta (pincel Elevar) ou ravina (pincel Afundar).
+
+**Montanhas/rampas**: sem pincel dedicado de "rampa geométrica" separado —
+o relevo suave nasce da própria média por canto: uma sequência de células com
+alturas autoradas crescentes já produz uma inclinação contínua, sem degrau,
+porque cada canto entre elas faz a média.
+
+**Desnível/parede ("saia")**: quad vertical emitido SÓ na fronteira real
+entre grupos de passagem (chão↔bloqueio) e só descendo, e só quando há VÃO
+de verdade nos CANTOS (não apenas no nível bruto da célula — um relevo
+autorado que atravessa a fronteira de passagem pode ter os cantos batendo,
+e aí nenhuma saia é emitida, evitando uma "prateleira" vertical falsa no
+meio de uma encosta contínua). A cor da saia é terra exposta (marrom) para
+grama/neve — simula solo por baixo da vegetação cortada — e a própria cor
+do topo para rocha/areia (cortar pedra mostra pedra).
+
+**Lagos/água**: malha separada do chão (`buildWaterGeometry`, seção 12), com
+leito afundado por baixo da lâmina.
+
+**Bordas do mapa**: sem padding na malha do chão detalhado (o chunk
+simplesmente não existe além do `width`/`height`); a malha do HORIZONTE, por
+outro lado, tem uma franja de 160 unidades além da borda física (seção 5/13)
+para a câmera nunca flagrar um corte reto contra o céu no zoom máximo.
+
+**Textura de UV**: o chão detalhado NÃO usa coordenadas UV — a textura é
+amostrada em coordenada de MUNDO (seção 9), então não há "problema de UV"
+por célula a resolver (sem costura, sem esticamento por triangulação).
+
+
+================================================================================
+9. MATERIAIS E SHADERS
+================================================================================
+
+**Chão detalhado** (`makeSquareGroundMaterial`, `SquareTerrain.tsx`): base
+`THREE.MeshStandardMaterial` (`vertexColors: true`, `roughness: 0.95`,
+`metalness: 0`, `flatShading: false` — a normal suave por canto é o que
+evita o look "pilha de caixas"), estendido via `onBeforeCompile` com três
+camadas, nesta ordem:
+
+  1. **Textura como PADRÃO, não como cor**: `sampler2DArray` (`DataArrayTexture`,
+     1 camada por tipo de superfície — grass/dirt/stone/sand/snow), amostrado
+     em coordenada de MUNDO (não UV — célula não carrega UV própria, e um
+     atlas quebraria a derivada da UV a cada repetição, causando salto de
+     mip/linha visível a cada tile). O shader calcula
+     `texel / corBase[camada]` — o resultado é um FATOR (≈1,0 = neutro) que
+     multiplica a cor do vértice (item 2), não a substitui. Isso é o que
+     permite a mesma textura de grama servir tanto para campo verde quanto
+     para mata verde-escura: quem decide a cor final é a tinta do vértice.
+  2. **Tinta por vértice** (`attribute color`, de `cellColor` em
+     `squareChunks.ts`): cor pura no centro de cada quad; nos CANTOS, a
+     média das células que se tocam ali (mesma lógica de `cornerLevel`) —
+     dissolve a fronteira "degrau" de cor entre dois terrenos sem borrar o
+     quadriculado do mapa.
+  3. **Ruído fbm de macro-escala** (`scene/groundNoise.glsl.ts`,
+     compartilhado com o chão hexagonal legado): quebra a repetição visual
+     num mapa de 400×400 células, onde a mesma textura apareceria ~100 vezes
+     na tela sem ele.
+
+**Triplanar mapping**: SIM, versão simplificada (2 projeções, não 3): topo
+pelo plano XZ, lateral (saia) pelo plano da própria parede — escolhido por
+`abs(nW.x) > abs(nW.z)` para decidir XY vs. ZY. A mistura entre as duas é
+por AMOSTRA (duas leituras de textura, `mix` pelo peso derivado da normal),
+não por coordenada — misturar UV é mais barato mas, numa encosta onde a
+normal muda de canto a canto do MESMO quad, os dois sistemas de coordenada
+"disputam" dentro do triângulo e a textura escorre em riscos verticais na
+ladeira (defeito visto e descartado).
+
+**Transição entre duas superfícies** (ex. grama/terra): cada quad carrega
+DUAS camadas de textura constantes (a própria + a mais comum entre os 8
+vizinhos que for diferente) e um PESO por vértice = fração das células
+daquele canto que pertencem à segunda camada. A camada precisa ser constante
+no quad inteiro (índice interpolado seria um índice fracionário sem
+sentido); só o peso varia entre os 4 cantos — produz uma dissolução contínua
+sem costura visível na fronteira entre chunks ou dentro do mesmo chunk.
+
+**`sampler2DArray` exige GLSL ES 3.00** — e é o que o three já usa
+incondicionalmente para todo material embutido fora de `RawShaderMaterial`
+(a conversão para `#version 300 es` acontece de qualquer forma). Por isso o
+projeto NUNCA seta `material.glslVersion = GLSL3` manualmente: isso faria o
+three parar de declarar `gl_FragColor`, que os chunks embutidos ainda
+escrevem, e o shader pararia de compilar.
+
+**Água** (`makeWaterMaterial`): `THREE.MeshStandardMaterial` translúcido
+(`transparent: true`, `opacity: 0.78`, `depthWrite: false`), estendido via
+`onBeforeCompile` com: onda geométrica no vértice (desloca Y e inclina a
+normal, não só a cor — sem isso a "animação" era só a pintura balançando, e
+de longe lia como água parada), profundidade/margem lidas de atributos por
+vértice (`aProfundidade`/`aMargem`, calculados no build da geometria, seção
+12), e uma "aquarela" (textura pintada à mão, ver seção 10) aplicada como
+RAZÃO (`texel/0.5`), não como cor — preserva a leitura de profundidade
+(turquesa raso, azul escuro fundo).
+
+**Horizonte** (`HorizonMesh`): `THREE.MeshLambertMaterial` (mais barato que
+Standard — a malha é grosseira e distante, não vale PBR completo),
+`onBeforeCompile` injeta o MESMO `groundFbm` do chão real (só a parte que
+modula cor, não a versão triplanar com sampler2DArray — pagaria o dobro do
+orçamento que essa malha existe para evitar) e a lógica de "fog da borda"
+(seção 4).
+
+**Impostor de árvore**: `THREE.MeshBasicMaterial` (sem luz — a cor já vem
+"assada" na textura do bake), `onBeforeCompile` injeta só o truque de
+billboard em view-space e a leitura do retângulo do atlas (seção 6).
+
+**Céu**: `THREE.ShaderMaterial` puro (não baseado em material de fábrica —
+não precisa de luz/PBR/fog), vertex+fragment escritos à mão, `depthTest:
+false`/`depthWrite: false`, `fog: false` (o céu já É a cor para onde a névoa
+desbota, aplicar névoa nele seria circular).
+
+**Impacto na GPU**: o shader do chão é o mais caro (2 amostras de
+`sampler2DArray` por camada de textura × até 2 camadas quando há mistura +
+1 amostra de ruído fbm), mas roda só dentro do raio `detalhe`. Água soma 2
+amostras da aquarela + 2 chamadas de `groundFbm`. Horizonte e impostor são
+deliberadamente mais baratos (Lambert/Basic) porque cobrem muito mais área
+de tela potencial (horizonte) ou muitas instâncias (impostor).
+
+
+================================================================================
+10. TEXTURAS E IMAGENS
+================================================================================
+
+**Texturas do chão**: geradas OFFLINE por `scripts/make-terrain-textures.mjs`
+(`pnpm --filter @ragnarok/game terrain:textures`), não em runtime. Saída:
+`public/assets/terrain/{grass,dirt,stone,sand,snow}.png`, 512×512
+(`TEX_SIZE`), mais miniaturas 128×128 para a paleta do editor. Cada slot vem
+de uma foto CC0 (Poly Haven/ambientCG) OU de uma receita procedural
+(caminho de origem da grama), com três regras obrigatórias para as duas
+fontes: seamless (amostragem por coordenada de mundo, sem costura para
+esconder emenda), contraste baixo-e-normalizado (evita granulado virar cor
+sólida a distância), e média de cor = a paleta base do projeto (o shader
+depende disso — `texel/corBase`).
+
+**Atlas**: SIM, mas só para o impostor de árvore (`TreeAtlas`, canvas 2D
+montado em runtime a partir do bake de cada espécie — seção 6). O chão NÃO
+usa atlas — usa `DataArrayTexture` (uma imagem por camada, sem empacotar
+lado a lado), justamente para evitar o problema de UV que um atlas causaria
+num padrão que se repete infinitas vezes por coordenada de mundo.
+
+**Escala de repetição**: por SUPERFÍCIE, não uma constante global —
+`ESCALA_PADRAO` vai de 18 unidades (areia, quase uniforme, aguenta repetir
+miúdo) a 28 (rocha, estrutura grande), configurável por mapa em
+`GameMap.terrainStyle`.
+
+**Água**: 4 PNGs pintados à mão ("aquarela", `agua/Water_0*.png`, pack CC0),
+carregados como textura compartilhada de MÓDULO (não recriada por mapa —
+correção de vazamento). Marcados `THREE.NoColorSpace` (não sRGB) de
+propósito: a imagem representa uma RAZÃO em torno de 128=cinza médio, não
+cor absoluta — decodificar como sRGB descolore o resultado em ~43%.
+
+**Texturas de vegetação/props**: vêm dos próprios pacotes glTF (Quaternius/
+Forest, KayKit). Deduplicadas por FONTE (`gltfTexturas.ts:
+compartilharTexturas`) — medido que `forest_texture.png` (48 KB em disco,
+1024²) era referenciado por 101 dos 105 glTFs do pacote Forest, e o
+`GLTFLoader` cria uma `THREE.Texture` nova por ARQUIVO carregado, não por
+imagem: 225 MB de textura na cena para 5,33 MB de conteúdo real (~42 cópias).
+A identidade de deduplicação vem do `parser.associations` do glTF (índice →
+URI da imagem), não de `image.src` (que não existe em `ImageBitmap`, usado
+pelo Chrome).
+
+**Carregamento e cache**: `useGLTF` do drei (cache por URL), pré-carregado
+no boot do mapa (`preloadPropsDoMapa`) para as três populações que precisam
+de glTF (props não-instanciados, vegetação instanciada, espécies do
+impostor de árvore) — na prática o `<Suspense>` runtime raramente é
+acionado depois do boot. Texturas de terreno (PNG do chão/água) são
+carregadas via `THREE.TextureLoader` direto, cacheadas por módulo.
+
+**Técnicas de redução de custo de textura**: dedup por fonte (acima), array
+texture em vez de 5 materiais separados (1 upload, 1 bind), sem mipmap no
+atlas de impostor (área pequena na tela a essa distância, o padding entre
+células do atlas não existe então mipmap vazaria cor entre espécies vizinhas
+no mip menor).
+
+**Diferenciação geometria 3D → textura → billboard/sprite → imagem 2D**:
+- Geometria 3D + textura: chão, água, props não-repetitivos, vegetação
+  instanciada, personagem/monstro (fora do escopo deste doc).
+- Billboard/sprite (imagem 2D colada em quad sempre virado para câmera):
+  SÓ o impostor de árvore/arbusto (seção 6). Nenhuma outra parte do terreno
+  usa essa técnica.
+- Imagem 2D "crua" (sem geometria 3D nenhuma, ex. skybox esférico com
+  textura): NÃO É o caso do céu deste projeto — o céu é geometria (esfera)
+  + shader procedural, não uma imagem equirretangular.
+
+
+================================================================================
+11. VEGETAÇÃO
+================================================================================
+
+Ver também seções 6 (impostor) e 7 (instancing) para o mecanismo; aqui, a
+visão consolidada por categoria.
+
+| Categoria      | Real (perto)         | Impostor (longe) | Raio de corte          |
+|----------------|-----------------------|-------------------|-------------------------|
+| grass          | InstancedMesh          | não existe        | 60% de `detalhe`        |
+| flower         | InstancedMesh          | não existe        | 60% de `detalhe`        |
+| plant          | InstancedMesh          | não existe        | 60% de `detalhe`        |
+| bush           | InstancedMesh          | Billboard (atlas) | `detalhe` (100%)        |
+| tree           | InstancedMesh          | Billboard (atlas) | `detalhe` (100%)        |
+| tree_bare      | InstancedMesh          | Billboard (atlas) | `detalhe` (100%)        |
+
+**Distribuição**: vem de `map.props` (autorado no editor/scatter procedural,
+fora do escopo deste doc) — não é gerada em runtime pelo renderer.
+
+**Instancing**: SIM para todas as categorias acima (seção 7); props
+"sólidos" não-vegetais (pedra, construção) NÃO são instanciados.
+
+**Quantidade**: sem teto fixo no código — a capacidade de cada
+`InstancedMesh` é dimensionada pela contagem real daquela espécie no mapa
+(`agruparPorEspecie`). O caso medido que motivou o sistema tinha ~1815 props
+visíveis.
+
+**Distância/culling**: por raio a partir do centro de visão, recalculado só
+quando o centro muda (nunca por quadro) — ver tabela acima.
+
+**LOD**: binário (real↔impostor) só para bush/tree/tree_bare; ausente para
+grass/flower/plant (somem, não trocam de representação).
+
+**Billboard/impostor**: SIM para bush/tree/tree_bare (seção 6); NÃO para
+grass/flower/plant.
+
+**Sombra**: grass/flower/plant NÃO projetam sombra (`SEM_SOMBRA_PROPRIA`) —
+a lâmina é fina demais para um shadow map de 1024px/55 unidades mostrar
+diferença perceptível, e cortar o passe de profundidade por instância
+economiza sem custo visual. bush/tree/tree_bare projetam sombra normalmente.
+
+**Vento**: materiais de grass/flower/plant/bush/tree/tree_bare passam por
+`windMaterialFor` (cacheado por MATERIAL BASE, uma vez por espécie) — deforma
+o vértice no shader por uma fase de balanço (fora do escopo detalhado deste
+documento, que é sobre terreno; ver `props/wind.ts`).
+
+**Impacto em draw calls/CPU/GPU**: 1 draw call por sub-malha por espécie
+(tipicamente 1-2 por espécie de árvore, 1 por espécie de grama), não por
+instância — é exatamente o que o instancing existe para evitar (seção 7). O
+custo de CPU concentra-se na reescrita de `instanceMatrix` ao cruzar
+fronteira de raio de visão, não em montagem/desmontagem de componente React.
+
+
+================================================================================
+12. ÁGUA
+================================================================================
+
+[IMPLEMENTADO] `buildWaterGeometry` (`grid/squareChunks.ts`) + material em
+`SquareTerrain.tsx` (seção 9).
+
+**Representação**: malha SEPARADA do chão, não cor no terreno — um quad por
+célula de água DENTRO de cada chunk (mesma fatia 32×32 do chão), só onde há
+LÂMINA de verdade (leito abaixo da superfície do corpo — uma célula de água
+erguida acima da lâmina vira ILHA, sem desenhar água ali).
+
+**Quantidade de meshes**: 1 geometria de água por chunk que tiver pelo menos
+uma célula de água (`null` quando não há — não cria malha vazia); mesma
+contagem de chunks visíveis do chão, então tipicamente uma dúzia por vez.
+
+**Material/shader**: descrito na seção 9. Translúcido, sem escrita de
+profundidade, com onda GEOMÉTRICA animada (desloca Y + inclina normal),
+textura "aquarela" como razão multiplicativa, cor por profundidade
+(interpolada nos CANTOS, não por célula — evita blocos "mancha azul
+chapada").
+
+**Posicionamento — nível por CORPO d'água, não constante global**: um flood
+fill de 4 vizinhos (`nivelDosCorpos`) agrupa células de água conectadas.
+Água PARADA (`surface: "water"`, lago) recebe um nível ÚNICO por corpo,
+derivado do percentil 90 dos leitos daquele corpo (não o máximo — evitaria
+uma única célula erguida boiar a lâmina inteira; não a média — secaria a
+margem). Água CORRENTE (`surface: "river"`) segue o leito CÉLULA A CÉLULA
+(a lâmina desce com o terreno) — dar nível plano a um rio em declive faria a
+lâmina cortar a encosta (enterrada em cima, boiando embaixo). A altura da
+lâmina em cada CANTO é a média das células de água que o tocam — não por
+quad, para não escadar num rio em declive; na junção rio/lago a média
+costura os dois regimes sem degrau.
+
+**Interação visual com o terreno**: leito afundado sob a lâmina
+(`visualLevel` com ajuste de água/`LAMINA_ACIMA_DO_RASO`), barranco/rampa
+de 2 células entre o nível do campo e o leito (`escavarBarranco`, evita
+degrau seco de 1,25 nível na margem), margem/espuma via isolinha borrada de
+um campo de "quanto isto é água" por canto (não a borda reta do quad — seria
+uma escada de 90°).
+
+**Culling**: mesmo raio/mesma passada de chunk do chão (seção 2/3) — água
+fora do alcance simplesmente não é construída/desenhada, sem mecanismo
+próprio.
+
+**Impacto de performance**: soma ao orçamento de construção de chunk (medido
+~0,56× o custo de calibração por chunk, contra ~1,45× do chão — ver seção
+20); entra na projeção de memória da pré-carga somada ao chão (medir só o
+chão subestimaria mapas com muito rio/lago).
+
+
+================================================================================
+13. MONTANHAS E RELEVO DISTANTE
+================================================================================
+
+**Geometria**: além do raio `detalhe`, o relevo passa a ser representado
+só pela malha do horizonte (seção 5) — 1 vértice a cada 4 células (8
+unidades), com o valor de altura sendo o MÍNIMO da vizinhança ao redor do
+ponto amostrado (`nivelMinimoNaVizinhanca`, janela de 8 células para cada
+lado), não o valor exato — evita que a interpolação linear do GPU entre dois
+pontos decimados fure ACIMA de um degrau real do relevo (o rAthena tem
+degraus instantâneos, não rampas; medido ao vivo: sem essa correção, 35% dos
+pontos amostrados a até 60 unidades do jogador tinham a malha decimada até
+5,73 unidades ACIMA do chão real).
+
+**Render distance**: a malha do horizonte cobre o MAPA INTEIRO sempre — não
+há um "raio de relevo distante" que corte montanhas longe demais; o que
+limita é a névoa (abaixo), não a geometria.
+
+**Fog**: fecha antes do fim do horizonte (`fogFar < horizonte`, seção 4) —
+é o mecanismo que impede o jogador de perceber a baixa resolução do relevo
+longínquo.
+
+**Culling**: nenhum — 1 malha, sempre inteira, sempre desenhada (barata o
+bastante: ~9.800 triângulos para um mapa de 400×400 com padding).
+
+**Vegetação no horizonte**: os impostores de árvore/arbusto (seção 6) são a
+única vegetação visível além do raio de detalhe — não há vegetação "no
+horizonte" desenhada como parte da malha do terreno decimado (a cor de água
+distante É tratada especialmente na malha do horizonte, ver abaixo, mas não
+é vegetação).
+
+**Técnica para reduzir custo do horizonte**: decimação geométrica (passo 4
+células) + reaproveitamento do mesmo material barato (Lambert) + ausência
+de culling compensada pelo baixo custo absoluto da malha. Água distante é
+tratada como cor especial na própria malha do horizonte (detectada por
+`ehCelulaDeAgua`, pintada de azul) em vez de ganhar uma segunda lâmina —
+sem malha nova, sem draw call extra.
+
+Não implementado: impostor/billboard para relevo distante (a malha
+decimada JÁ é a "versão barata" do relevo, não há uma segunda camada de
+impostor por cima dela); atmospheric scattering real (a névoa e o céu usam
+uma função de gradiente por elevação, não um modelo físico de espalhamento
+atmosférico).
+
+
+================================================================================
+14. DRAW CALLS
+================================================================================
+
+**Contribuição por sistema** (chunks visíveis dentro do raio `detalhe`,
+tipicamente ~12-25 no default):
+
+  - Chão: 1 draw call por chunk visível.
+  - Água: 1 draw call por chunk visível QUE TEM água (subconjunto do chão).
+  - Vegetação instanciada: 1 draw call por SUB-MALHA por ESPÉCIE presente no
+    mapa (não por instância) — tipicamente dezenas, fixo por mapa,
+    independente de quantas plantas existem.
+  - Impostor de árvore/arbusto: 1 draw call total (1 `InstancedMesh` cobre
+    todas as espécies via atlas).
+  - Horizonte: 1 draw call (1 malha única, sempre).
+  - Céu: 1 draw call (1 esfera).
+  - Props não-instanciados: 1 draw call por prop visível (cada `Mesh` é
+    separado) — este é o item que MAIS cresce linearmente com a densidade de
+    props "sólidos" do mapa, já que não passou pelo instancing.
+  - VFX de skill (fora do escopo deste doc, mas compartilha a cena): usa
+    renderers GPU próprios (Sprite/Particle/Beam/Ring/Trail, ver
+    `docs/claude-context/09-vfx-gpu-migration.md`) — batching por efeito,
+    não relevante ao pipeline de terreno em si.
+
+**Números medidos historicamente** (referência histórica, não um valor
+travado em teste): antes da correção de raio de névoa (seção 4), 88 draw
+calls de chão para 49 malhas majoritariamente atrás de névoa opaca; depois
+da correção, 23 draw calls para 4 malhas inteiramente atrás de névoa — a
+correção de raio de render reduziu draw calls de chão como efeito colateral
+de reduzir quanto é CONSTRUÍDO, não por batching adicional.
+
+**Por que reduzir draw calls importa, mas não é o único indicador**: cada
+draw call tem overhead fixo de CPU (state changes, validação de driver) além
+do custo de rasterizar os triângulos — por isso instancing/chunking existem.
+Mas um mapa com poucos draw calls e muito overdraw (água translúcida
+sobrepondo água translúcida, por exemplo) ou muito triângulo por chunk pode
+ainda ser mais lento que um com mais draw calls e geometria simples — os
+orçamentos de performance do projeto (seção 20) medem TEMPO de construção e
+razão pior/mediana entre chunks, não contam draw call como métrica isolada.
+
+
+================================================================================
+15. CPU / MAIN THREAD
+================================================================================
+
+**Mais pesado, em ordem decrescente medida**:
+
+1. **Construção de geometria de chunk** (`buildChunkGeometry`): ~2,5 ms por
+   chunk medido (549 construções). É o item que motivou o orçamento por
+   quadro (seção 2) — sem ele, uma fileira de ~10 chunks novos ao cruzar uma
+   fronteira de visão custava 25 ms num quadro de 16,6 ms.
+2. **Construção de água por chunk** (`buildWaterGeometry`): mais barato que
+   o chão (medido ~0,56× o custo de calibração contra ~1,45× do chão em
+   `perf/desempenho.test.ts`), mas soma ao mesmo orçamento.
+3. **Bake do atlas de impostor de árvore** (`treeImpostorBake.ts`): síncrono,
+   ~1-2 ms por espécie quando o glTF já está em cache (correção de uma
+   versão anterior que levava 41 SEGUNDOS por recarregar cada espécie da
+   rede em vez de reusar o cache do `useGLTF`).
+4. **Varredura de chunk sujo** (`chunksSujos`, a cada edição de mapa no
+   editor): ~1 ms para 160.000 comparações por referência (3 arrays) — troca
+   um "descartar as 169 geometrias" (198 ms medidos) por marcar só 1-2
+   chunks realmente afetados.
+5. **Reescrita de matrizes de instância** (vegetação/impostor): só quando o
+   centro de visão muda (a cada 16 unidades andadas), não por quadro.
+6. **`updateMatrixWorld` de props não-instanciados**: mitigado desligando
+   `matrixAutoUpdate` em todo nó de um prop estático depois do primeiro
+   `updateMatrix()` — medido 1,11 ms/quadro (186,9 ms em ~168 quadros) antes
+   da otimização, cortado pela metade (a raiz do prop continua recompondo
+   porque o R3F escreve `position`/`rotation`/`scale` nela via props React).
+
+**Estratégias existentes para evitar picos**:
+- Orçamento de tempo por quadro para construção de chunk (chão + água),
+  drenado por fila ordenada por distância.
+- Pré-compilação incremental de shader instanciado (1 espécie/RAF, não tudo
+  de uma vez) — evitou uma rajada medida de 502 ms/quadro compilando 33
+  espécies/60 programas de uma vez.
+- Invalidação seletiva (varredura de referência) em vez de descarte total do
+  cache de chunk a cada edição.
+- Bake de atlas síncrono e cacheado por `WeakMap<cena>`, evitando refazer a
+  cada re-render do React (o `useGLTF(urls)` do drei devolve array novo a
+  cada chamada mesmo com conteúdo igual).
+- Cache/deduplicação de textura calculado uma vez por glTF (`WeakSet`), não
+  por instância clonada.
+
+
+================================================================================
+16. GPU
+================================================================================
+
+**Geometria/triângulos**: chão detalhado é o maior consumidor de vértices —
+até 20.000 vértices por chunk (teto do orçamento de memória), tipicamente
+4.096-8.000+ (32×32 quads de topo + saias nas fronteiras de bloqueio,
+medido: teto testado entre 4.000 e 20.000 vértices por chunk em
+`perf/desempenho.test.ts`). Horizonte é fixo e pequeno (~9.800 triângulos
+para 400×400 com padding). Impostor é 2 triângulos × N instâncias (barato,
+mesma geometria reaproveitada).
+
+**Materiais**: cada material único (chão, água, horizonte, impostor, céu)
+compila 1 programa de shader; a variante instanciada (`USE_INSTANCING`)
+conta como programa separado (ver seção 7/15).
+
+**Texturas**: 1 `DataArrayTexture` (5 camadas × 512²) para o chão, 1
+`CanvasTexture` (atlas) para impostor, 4 texturas de aquarela para água
+(compartilhadas entre mapas), texturas de glTF deduplicadas por fonte (seção
+10).
+
+**Shaders**: descritos na seção 9 — a maior parte usa `onBeforeCompile`
+sobre material de fábrica (herda otimizações internas do three), não
+`ShaderMaterial` do zero, exceto água... não, água também é
+`onBeforeCompile` sobre `MeshStandardMaterial`; só o CÉU é `ShaderMaterial`
+puro.
+
+**Vegetação/água**: cobertos nas seções 11/12; o custo de GPU de água é
+elevado por chunk que a tem (translúcida, sem depth write, 2 amostras de
+textura + fbm), mas a CONTAGEM de chunks com água é tipicamente menor que o
+total de chunks visíveis.
+
+**Overdraw**: [NÃO MEDIDO/NÃO INSTRUMENTADO no código] — não há teste ou
+instrumento específico de overdraw no projeto; a água translúcida sobre o
+chão é a fonte mais óbvia de overdraw (2 camadas desenhadas na mesma
+coluna de pixel), mitigada por `depthWrite: false` mas não eliminada.
+
+**Fog**: custo de GPU desprezível (poucas instruções extra por fragmento em
+todo material com `USE_FOG`, seção 4/9).
+
+**Sombras**: SIM — `THREE.PCFSoftShadowMap` (via `shadows="percentage"` no
+`<Canvas>`), 1 luz direcional (`SunRig`) com shadow map ORTOGRÁFICO de
+1024×1024 px (`SHADOW_MAP`), raio de 55 unidades (`SHADOW_RADIUS`) — troca
+deliberada de "raio maior, mapa menor" (55u/1024px = 9,3 texels/unidade, 14%
+menos nítido que uma alternativa testada) por "raio menor, mapa maior"
+descartada por custar 4× mais rasterização por quadro. O alvo da sombra é
+grudado numa grade do tamanho de 1 texel (`SHADOW_TEXEL`) para eliminar
+"shadow swimming" ao andar. Chão detalhado recebe sombra (`receiveShadow`);
+horizonte e impostor de árvore NÃO recebem nem projetam sombra
+(`receiveShadow={false}`/`castShadow={false}`) — deliberado, custo não
+justificado a essa distância. Vegetação rasteira (grass/flower/plant) não
+projeta sombra (seção 11); demais props/vegetação sólida projetam e
+recebem.
+
+
+================================================================================
+17. CACHE
+================================================================================
+
+- **Cache de chunk (chão + água)**: `Map<string, BufferGeometry>` por
+  instância de `SquareTerrain`, vivo enquanto o mapa não trocar; chave
+  `"cx,cz"`. Descrito em detalhe na seção 2.
+- **Cache de geometria de horizonte**: 1 única geometria por mapa
+  (`useMemo` chaveado por `map`), descartada quando o mapa troca.
+- **Cache de atlas de impostor**: 1 `CanvasTexture` por conjunto de espécies
+  do mapa (`useMemo`), descartado quando a lista de espécies muda de
+  identidade.
+- **Cache de bake por espécie** (`treeImpostorBake.ts`): `WeakMap<cena
+  glTF, imagem bakeada>` — sobrevive entre re-renders do React mesmo com
+  `useGLTF(urls)` devolvendo array novo a cada chamada, porque a chave é a
+  identidade da CENA, não da URL/array.
+- **Cache de sub-malhas de vegetação** (`cacheDePartes` em
+  `VegetationInstancer.tsx`): `Map<url, ParteEspecie[]>` de módulo — um
+  glTF nunca é rebakeado mesmo que o mapa troque e volte.
+- **Cache de textura do chão**: `DataArrayTexture` de módulo (1 para toda a
+  sessão), camadas recarregadas individualmente quando o `terrainStyle` do
+  mapa muda — nunca reconstrói geometria nem recompila material por causa de
+  uma troca de variante de textura.
+- **Cache de textura de água**: `Map<variante, Texture>` de módulo — as 4
+  aquarelas são estado fixo do acervo, nunca descartadas.
+- **Cache de deduplicação de textura de glTF** (`gltfTexturas.ts`):
+  `Map<chave-de-fonte, Texture>` de módulo, mais `WeakSet<cena>` para não
+  reprocessar a mesma cena duas vezes.
+- **Cache do three/`useGLTF`**: cache padrão do drei por URL — é a camada
+  sobre a qual todos os caches acima operam (eles assumem que o glTF já está
+  resolvido e só evitam trabalho REPETIDO em cima dele).
+- **Cache de nível de corpo d'água** (`cacheNivel` em `squareChunks.ts`):
+  `WeakMap` chaveada pelos 3 arrays do mapa — evita repetir o flood fill de
+  160.000 células uma vez por chunk (169 vezes).
+- **O que permanece em memória**: todo cache acima, até o mapa trocar ou o
+  componente desmontar — nenhum tem expiração por tempo/LRU.
+- **O que é reconstruído**: só o que foi marcado sujo por identidade de
+  array (chunk específico) ou o que nunca esteve em cache (chunk novo
+  entrando no raio).
+- **O que é descartado**: chunk fora da grade (mapa encolhido), todos os
+  caches de `SquareTerrain` no desmonte, textura de atlas/material antigo
+  quando a dependência do `useMemo` muda (par `useEffect` de cleanup
+  dedicado, nunca herdado do descarte de geometria).
+
+
+================================================================================
+18. PIPELINE COMPLETO DE RENDERIZAÇÃO
+================================================================================
+
+    GameMap (collision/surface/heightmap/props, do rAthena ou editado)
+        │
+        ▼
+    divisão em CHUNKS de 32×32 células (grid/squareChunks.ts)
+        │
+        ▼
+    seleção dos chunks relevantes — raio `detalhe` a partir do centro de
+    visão (`useViewCenter`), teste por caixa do chunk, ordenado por distância
+        │
+        ├─► já em cache? ──► desenha a geometria existente
+        │
+        └─► não em cache / desatualizado ──► entra na fila, drenada com
+            orçamento de 6 ms/quadro (12 ms sob tela de carregamento)
+        │
+        ▼
+    construção da geometria do chunk (buildChunkGeometry): grade de cantos
+    pré-computada → quad por célula com cor/normal/layer por vértice → saia
+    nas fronteiras de bloqueio; construção da lâmina d'água em paralelo
+    (buildWaterGeometry), lendo o nível por corpo (flood fill cacheado)
+        │
+        ▼
+    materiais/texturas: DataArrayTexture do chão (triplanar simplificado,
+    textura como padrão × tinta de vértice × ruído fbm); água (aquarela como
+    razão + onda geométrica); ambos via onBeforeCompile sobre material padrão
+        │
+        ▼
+    vegetação/objetos: vegetação repetitiva via InstancedMesh (por espécie/
+    sub-malha, raio próprio, reescrita só quando o centro muda); props
+    sólidos via Mesh clonado (PropInstance); fora do raio de detalhe, árvore/
+    arbusto trocam para impostor billboard (atlas único, InstancedMesh)
+        │
+        ▼
+    camada global sempre presente: malha do horizonte (decimada, mapa
+    inteiro, sem culling) por baixo do chão detalhado; céu (cúpula
+    procedural, sempre centrada na câmera)
+        │
+        ▼
+    culling: só por distância/raio (nenhum frustum culling manual na
+    maioria das camadas globais, que são baratas o bastante para dispensá-lo)
+        │
+        ▼
+    renderização Three.js/R3F: WebGLRenderer, PCFSoftShadowMap, 1 luz
+    direcional com shadow map ortográfico 1024², dpr limitado a [1, 1.5],
+    ACESFilmicToneMapping (exposure 1.25)
+        │
+        ▼
+    fog: THREE.Fog linear com cor-do-céu por elevação (chunk fog_fragment
+    trocado globalmente), fechando antes do fim do horizonte; reforço de fog
+    na borda física do mapa via distância personagem→limite
+        │
+        ▼
+    imagem final na tela
+
+
+================================================================================
+19. TÉCNICAS EXISTENTES vs. NÃO IMPLEMENTADAS
+================================================================================
+
+| Técnica                    | Status atual            | Onde é utilizada                                   | Objetivo                                          |
+|-----------------------------|--------------------------|-----------------------------------------------------|----------------------------------------------------|
+| Chunks                      | Implementado             | Chão + água (32×32 células, `grid/squareChunks.ts`) | Reduzir de 160k objetos/mapa para ~169 malhas       |
+| Render distance              | Implementado             | 4 raios (`play/viewRadius.ts`): detalhe/entidades/horizonte/fog | Limitar geometria cara ao entorno do jogador |
+| Frustum culling              | Não implementado (proposital) | — (desligado nas malhas globais/instanciadas)  | N/A — malhas globais são baratas o bastante sem ele |
+| Fog                          | Implementado             | Global (`THREE.ShaderChunk.fog_fragment` trocado)   | Disfarçar a transição chão detalhado→horizonte e o fim do mundo |
+| LOD                          | Parcial                  | 2 níveis fixos de malha de relevo (chão↔horizonte); binário real↔impostor em árvore/arbusto | Reduzir custo de geometria distante |
+| Instancing                   | Implementado             | Vegetação repetitiva + impostor de árvore (`InstancedMesh`) | Reduzir draw calls de N props para 1 por espécie |
+| Billboard                    | Implementado             | Só árvore/árvore seca/arbusto fora do raio de detalhe (`grid/TreeImpostors.tsx`) | Substituir malha 3D cara por imagem 2D virada pra câmera |
+| Impostor                     | Implementado             | Mesmo sistema de billboard acima (fotografia real da espécie, não forma genérica) | Silhueta fiel ao asset real, sem custo de malha completa |
+| Texture atlas                | Parcial                  | Só no impostor de árvore (`TreeAtlas`, CanvasTexture) | 1 textura para N espécies em 1 draw call |
+| Triplanar mapping            | Implementado (2 projeções) | Chão detalhado (`makeSquareGroundMaterial`)        | Evitar esticamento de textura em superfície vertical (saia/parede) |
+| Cache                        | Implementado (múltiplas camadas) | Geometria de chunk, textura, atlas, bake de espécie, nível de água, deduplicação de textura glTF | Evitar retrabalho entre quadros/mapas |
+| Incremental construction      | Implementado             | Fila de chunk com orçamento de tempo por quadro (`SquareTerrain.tsx`) | Evitar picos de frame ao cruzar fronteira de visão |
+| GPU rendering                 | Implementado             | Todo o pipeline (WebGL via Three.js/R3F); nenhuma etapa de terreno roda em software/CPU-only | Desenho em tempo real |
+
+
+================================================================================
+20. MÉTRICAS ATUAIS
+================================================================================
+
+Todas as métricas abaixo são valores MEDIDOS registrados em comentário/teste
+no código-fonte, não estimativas — a fonte de cada uma está indicada.
+
+**Chunks / draw calls (observação ao vivo, `prt_fild08` 400×400)**:
+- 169 chunks no mapa; ~12-25 tipicamente visíveis por vez.
+- Carga fria completa: 112 chunks / 301 ms espalhados por 38 quadros, pior
+  quadro 19 ms, nenhum acima de 33 ms (antes da fila incremental: rajada
+  única de 479 ms). [comentário em `SquareTerrain.tsx`]
+- Pré-carga do mapa inteiro (169 chunks): ~450 ms medidos (169 × ~2,7 ms).
+  [`SquareTerrain.tsx`]
+- Draw calls de chão, antes/depois da correção de raio de névoa: 88→23 draw
+  calls, 49→4 malhas inteiramente atrás de névoa opaca. [comentário em
+  `02-terrain-rendering.md`]
+- Triângulos de chão desenhados atrás de névoa opaca (antes da correção):
+  84.552 invisíveis contra 19.912 visíveis (81%). [idem]
+
+**Custo por chunk (benchmark, `perf/desempenho.test.ts` — valores em
+"razão da calibração", não ms absolutos, para serem portáveis entre
+máquinas)**:
+- Montar geometria de UM chunk de chão: 1,45× a calibração (teto de
+  segurança do teste: 4,5×).
+- Montar lâmina d'água de um chunk: 0,56× (teto: 1,8×).
+- Varredura de chunk sujo (uma pincelada): 0,073× (teto: 0,3×).
+- A* de ponta a ponta do mapa: 0,10× (teto: 0,6×).
+- Pior chunk ÷ mediana dos chunks do mesmo mapa: ~4× (teto: 8×).
+- Vértices por chunk: entre 4.000 e 20.000 (invariante testada, não
+  dependente de máquina).
+- ~2,5 ms medidos por chunk em produção (549 construções amostradas), base
+  do orçamento de 6 ms/quadro.
+
+**Raios de visão (config padrão, `perf/desempenho.test.ts` +
+`play/viewRadius.ts`)**:
+- `detalhe` (= `renderDistance`) padrão: ~130 unidades.
+- `horizonte` padrão: ~390 unidades (`detalhe + 260`).
+- Válido testado para `renderDistance` de 10 a 1000 unidades.
+
+**Horizonte** (`prt_fild08` 400×400, `grid/HorizonMesh.tsx`):
+- Sem padding: 51×51 vértices / 5.000 triângulos.
+- Com padding de 160 unidades: 71×71 vértices / 9.800 triângulos (~2× o
+  custo, escolhido em vez de cobrir o raio de névoa inteiro, que teria dado
+  ~5×).
+- Correção de poke-through: 59 de 169 pontos amostrados (35%) tinham a
+  malha decimada até 5,73 unidades ACIMA do chão real antes da correção de
+  "nível mínimo na vizinhança".
+
+**Textura/memória (censo de asset, `gltfTexturas.ts`, `02-terrain-
+rendering.md`)**:
+- `forest_texture.png`: 48 KB em disco → 225,12 MB medidos na cena antes da
+  deduplicação (~42 cópias, fator ~4.700×).
+- Vazamento de esqueleto/textura por entidade (corrigido, fora do escopo de
+  terreno mas do mesmo censo): 4.042 texturas vivas contra 5 referenciadas
+  pela cena antes da correção.
+
+**Bake de impostor de árvore** (`treeImpostorBake.ts`):
+- Antes (rede por espécie, sem cache): 41 segundos para 22 espécies.
+- Depois (glTF já em cache): síncrono, ordem de 1-2 ms por espécie.
+
+**Precompile de shader instanciado** (`VegetationInstancer.tsx`):
+- Antes (tudo de uma vez): 502 ms num único quadro, 33 espécies/60
+  programas.
+- Depois (incremental, 1 espécie/RAF): custo espalhado por vários quadros,
+  sem pico único.
+
+**CPU de transform estático** (`PropInstance.tsx`, perfil de produção):
+- `updateMatrixWorld`: 1,11 ms/quadro médio (186,9 ms em ~168 quadros) antes
+  de desligar `matrixAutoUpdate` nos filhos; a otimização corta
+  aproximadamente metade desse custo (a raiz continua recompondo via R3F).
+
+**Sombra**:
+- Shadow map 1024×1024, raio 55 unidades → 9,3 texels por unidade de mundo
+  (comparação testada contra mapa maior/raio menor: 14% menos nítido pelo
+  caminho escolhido, por ¼ do custo de rasterização por quadro).
+
+Classificação das métricas acima: todas são MEDIÇÕES ao vivo ou de
+benchmark registradas no próprio código/testes (não projeções nem
+estimativas), exceto onde indicado "estimado"/"projetado" explicitamente
+(ex.: projeção de memória de pré-carga de mapas com muito relevo, seção 2,
+que É uma extrapolação declarada a partir do tamanho real do primeiro
+chunk construído).
+
+================================================================================
+21. TÉCNICAS DE ENGINES COMERCIAIS — O QUE SE APLICA AQUI
+================================================================================
+
+Referência conceitual, não cópia — cada item abaixo foi julgado pelo mesmo
+critério: a técnica que entrega mais redução de frame time pelo MENOR custo
+de implementação em WebGL, não a mais "correta" academicamente.
+
+**Unity Terrain** (`detail distance`, `detail density`, `tree distance`,
+`billboard start`, `fade length`, `max full-LOD trees`): APLICÁVEL, e já
+substancialmente adotado. O projeto já separa distância de detalhe de árvore
+(`detalhe`) da distância de detalhe de vegetação rasteira (`vegetacaoRasteira`,
+seção 23) e tem um "billboard start" (a troca 3D→impostor, seção 6) — a peça
+que faltava era exatamente o "fade length" (a Unity chama de
+`billboardFadeLength`) e um teto pro impostor, ambos endereçados nesta rodada
+(seção 25). Não adotado: `detail density` como parâmetro contínuo — a
+densidade hoje é autorada no editor, não um multiplicador de runtime.
+
+**Unreal HLOD** (combinar N objetos distantes numa proxy mesh + atlas):
+APLICÁVEL COM ADAPTAÇÃO, NÃO IMPLEMENTADO. `HorizonMesh` já cumpre o papel de
+HLOD do RELEVO (uma malha única substituindo o terreno distante). Não existe
+HLOD de PROPS ainda porque não há necessidade medida: todo mapa migrado do
+rAthena real tem `props: []` (confirmado nesta rodada — ver seção 25), então
+hoje não existe mapa de produção com props densos o bastante pra HLOD valer a
+pena. Fica na matriz de prioridade (seção 24) como RECOMENDADO, não FUTURO
+descartável — o dia que o editor/scatter procedural começar a povoar mapas
+reais de vegetação, a pergunta muda de "vale a pena" para "quando".
+
+**Unreal Foliage** (hardware instancing para agrupar muitas instâncias em
+poucas draw calls): APLICADO. `props/VegetationInstancer.tsx` e
+`grid/TreeImpostors.tsx` já são exatamente isso — 1 `InstancedMesh` por
+espécie/sub-malha, capacidade dimensionada pela contagem real do mapa. Nada a
+mudar aqui; é a técnica mais madura do renderer atual.
+
+**Nanite** (geometria virtualizada, clusters, LOD automático por pixel):
+INAPLICÁVEL — Nanite depende de infraestrutura (meshlets, rasterizador de
+software, streaming de cluster) que não existe em WebGL/Three.js, e tentar
+replicar isso sem essa infraestrutura custaria mais CPU/GPU do que economiza.
+Só o PRINCÍPIO é adotado: "perto = mais geometria, longe = representação
+progressivamente mais barata" — só que aqui é EXPLÍCITO (chunk → LOD →
+impostor → proxy → fog), decidido em JavaScript por distância, não implícito
+numa pipeline de clusterização por pixel.
+
+
+================================================================================
+22. ARQUITETURA RECOMENDADA PARA MMORPG WEB 3D
+================================================================================
+
+Princípio central: perguntar não "renderizar ou não", mas "qual é a
+representação mais barata que ainda mantém a qualidade visual necessária
+nesta distância" — REPRESENTAÇÃO POR DISTÂNCIA, não culling binário.
+
+    CAMERA
+      |
+      v
+    SPATIAL VISIBILITY (play/worldVisibility.ts, seção 23)
+      |
+      +---------------+---------------+
+      |               |               |
+     NEAR             MID             FAR
+      |               |               |
+      v               v               v
+    HIGH DETAIL     LOW DETAIL      PROXY
+      |               |               |
+  +---+---+           |           +---+---+
+  |       |           |           |       |
+Terrain  Props       LOD        HLOD   Impostor
+ 3D       3D                    Mesh    Tree
+  |       |           |           |       |
+  +-------+-----------+-----------+-------+
+                       |
+                       v
+                      FOG
+                       |
+                       v
+                      SKY
+
+Cada subseção abaixo segue o mesmo formato:
+IMPLEMENTAÇÃO ATUAL → PROBLEMA → TÉCNICA RECOMENDADA → REFERÊNCIA REAL →
+COMO ADAPTAR PARA THREE.JS/WEBGL → CUSTO → GANHO ESPERADO → PRIORIDADE.
+"PROBLEMA: nenhum" é uma resposta válida — nem todo sistema precisa mudar.
+
+--------------------------------------------------------------------------------
+22.1 TERRENO (chão próximo)
+--------------------------------------------------------------------------------
+ATUAL: chunk 32×32 células, 1 quad por célula, construção incremental com
+orçamento de 6 ms/quadro (seção 2).
+PROBLEMA: nenhum medido — o orçamento por quadro já protege contra rajada, e
+o teto de 20.000 vértices/chunk (`perf/desempenho.test.ts`) segura o pior
+caso.
+TÉCNICA RECOMENDADA: manter como está.
+REFERÊNCIA REAL: geração de chunk em jogos voxel/terrain (Minecraft-like),
+já é o padrão que o projeto segue.
+COMO ADAPTAR: N/A — já implementado.
+CUSTO: N/A. GANHO ESPERADO: N/A. PRIORIDADE: nenhuma (manter).
+
+--------------------------------------------------------------------------------
+22.2 MORROS
+--------------------------------------------------------------------------------
+ATUAL: mesma geometria do chão — relevo suave nasce da média por canto
+(seção 8), sem pincel geométrico dedicado. Fora do raio de detalhe, só a
+malha do horizonte (1 vértice a cada 4 células, seção 5).
+PROBLEMA: sem estágio intermediário entre "vértice por célula" (perto) e
+"vértice a cada 4 células" (longe) — um morro a 150 unidades (logo depois do
+raio de detalhe) já cai direto pro passo grosso do horizonte, mesmo estando
+perto o bastante pra a diferença ser perceptível em teoria (na prática, a
+névoa cobre isso — ver seção 26/prioridade).
+TÉCNICA RECOMENDADA: LOD espacial de terreno POR CHUNK (não por objeto) —
+um terceiro nível de resolução (ex. vértice a cada 2 células) para o anel de
+chunks logo além do raio de detalhe, antes de cair pro horizonte.
+REFERÊNCIA REAL: Unity Terrain `pixel error`/CDLOD (LOD contínuo por
+distância, aplicado por tile de terreno, não por triângulo).
+COMO ADAPTAR: um `passoMundo` intermediário entre `SQUARE_SIZE` (chão) e
+`PASSO_HORIZONTE×SQUARE_SIZE` (horizonte), construído com o MESMO
+`buildChunkGeometry`, só que amostrando 1 em cada 2 células — reaproveita a
+grade de cantos pré-computada, não é um sistema novo.
+CUSTO: médio — mais um nível de malha por chunk do anel intermediário
+(poucos chunks, não o mapa inteiro), mais um teste de transição sem pop
+(seção 22.16/26 — stitching ou fog cobrindo a costura).
+GANHO ESPERADO: baixo hoje (a névoa já esconde a decimação — medido, seção
+4: 81% dos triângulos antes da correção de fog estavam atrás de névoa
+opaca), mas cresce se o `renderDistance` configurável subir (testado até
+1000 em `perf/desempenho.test.ts` — nesse extremo, o anel intermediário
+passa a valer mais).
+PRIORIDADE: BAIXA — a névoa já resolve o sintoma; só vale se um admin
+configurar `renderDistance` bem acima de 130 em produção.
+
+--------------------------------------------------------------------------------
+22.3 MONTANHAS
+--------------------------------------------------------------------------------
+ATUAL: idêntico a morros — mesma malha, mesmo LOD binário chão/horizonte.
+Não existe HLOD de montanha (proxy assado offline).
+PROBLEMA: uma montanha alta e próxima do raio de detalhe consome a mesma
+densidade de vértice de um campo plano vizinho — não há "importância de
+tela" (screen-space importance) decidindo onde vale a pena gastar vértice.
+TÉCNICA RECOMENDADA: dois passos —
+  (1) o mesmo LOD espacial de 22.2, que já ajuda montanha tanto quanto morro;
+  (2) HLOD de montanha assado OFFLINE (não em runtime): uma malha simplificada
+      da silhueta da montanha, gerada no pipeline de build/editor, substituindo
+      o LOD1 nos chunks classificados como "montanha" (heightmap com variância
+      alta numa vizinhança grande).
+REFERÊNCIA REAL: HLOD do Unreal (proxy geométrico assado, não gerado em
+gameplay).
+COMO ADAPTAR: um passo em `tools/legacy-migration` ou no editor
+(`apps/game/src/editor`) que decimiza agressivamente (ex. 1 vértice a cada 8
+células, MAS preservando a silhueta com simplificação por erro de tela, não
+por passo fixo) só as regiões marcadas como "montanha" no heightmap, salva
+como asset do mapa (`GameMap.mountainProxy?`), carregado no boot — nunca
+gerado durante gameplay.
+CUSTO: alto — pipeline de build novo, critério de classificação
+("isto é montanha?"), formato de asset novo, teste de round-trip.
+GANHO ESPERADO: hoje BAIXO/NÃO MEDIDO (nenhum mapa real tem relevo extremo
+o bastante pra isso ser o gargalo — o chão detalhado já é barato, seção 15/16).
+Só compensa se um mapa de produção tiver cadeia de montanhas grande dentro
+do raio de detalhe.
+PRIORIDADE: BAIXA/FUTURA — documentar a técnica, não construir sem mapa real
+que precise dela (mesma lógica do HLOD de props, seção 21).
+
+--------------------------------------------------------------------------------
+22.4 ÁRVORES
+--------------------------------------------------------------------------------
+ATUAL (pós Fase de coerência de horizonte, seção 25): 3D → impostor (troca
+binária no raio de detalhe) → invisível além de `limiteVegetacao` (=`fogFar`)
+→ névoa. Y do impostor ancorado na superfície do horizonte, com banda de
+transição de 40 unidades.
+PROBLEMA: nenhum crítico restante — a causa raiz (impostor voando) foi
+corrigida nesta rodada. Resta o crossfade 3D→impostor (seção 22.6) e, se o
+mapa crescer, um terceiro estágio de LOD 3D reduzido antes do impostor
+(árvore de baixo-poly entre "3D completa" e "billboard").
+TÉCNICA RECOMENDADA: manter a arquitetura atual; considerar um LOD 3D
+intermediário só se um mapa de produção tiver árvore 3D cara o bastante
+(muitos triângulos) pra justificar.
+REFERÊNCIA REAL: Unity `tree distance`/`billboard start`, já adotado.
+CUSTO/GANHO/PRIORIDADE: N/A para o essencial (já implementado); o LOD 3D
+intermediário é BAIXA prioridade (nenhuma árvore do catálogo atual é cara o
+bastante pra precisar).
+
+--------------------------------------------------------------------------------
+22.5 ARBUSTOS
+--------------------------------------------------------------------------------
+ATUAL: mesmo pipeline de árvore — 3D → impostor (a mesma correção da seção
+25 se aplica, `bush` está em `CATEGORIAS_IMPOSTOR`).
+PROBLEMA: nenhum — a técnica já é a recomendada para esta categoria (entre
+grama e árvore em custo/importância visual, seção 17 do pedido original).
+TÉCNICA RECOMENDADA: manter. CUSTO/GANHO/PRIORIDADE: N/A.
+
+--------------------------------------------------------------------------------
+22.6 CROSSFADE ÁRVORE 3D → IMPOSTOR
+--------------------------------------------------------------------------------
+ATUAL: binário — dentro do raio de detalhe, só a 3D; fora, só o impostor
+(`TreeImpostors` pula explicitamente instâncias dentro do raio).
+PROBLEMA: em teoria, um pop de silhueta no instante exato da troca (3D
+desaparece, impostor aparece) — não medido como perceptível hoje porque o
+raio de detalhe (130) já é longe o bastante pra a troca ficar pequena na
+tela, mas cresce em importância se `renderDistance` cair (mapa pequeno,
+hardware fraco).
+TÉCNICA RECOMENDADA: alpha dithering/hash-based (não blending clássico) na
+banda de transição — mesmo raciocínio do pedido original (§12): evitar
+overdraw de transparência pesada.
+REFERÊNCIA REAL: "dithered LOD transition" (Unreal, Nanite usa algo
+parecido para clusters).
+COMO ADAPTAR: um `discard` estocástico no fragment shader da árvore 3D
+E do impostor na banda de sobreposição (ambos desenhados por um curto
+intervalo de distância, cada um com probabilidade de descarte por pixel
+proporcional à distância) — mais barato que alpha blend real porque não
+precisa de sort nem de `transparent: true`.
+CUSTO: baixo-médio — um uniform de distância + uma linha de shader em dois
+materiais já existentes.
+GANHO ESPERADO: cosmético, não performance (na verdade adiciona um
+overlap de desenho pequeno). Só vale se o pop for reportado como visível
+depois desta rodada.
+PRIORIDADE: BAIXA — implementar só se o pop for confirmado incômodo ao
+vivo; a banda de altura já suaviza o Y, que era o defeito visível medido.
+
+--------------------------------------------------------------------------------
+22.7 GRAMA [IMPLEMENTADO — rodada seguinte à do overdraw de água]
+--------------------------------------------------------------------------------
+ANTES: `InstancedMesh`, corte por raio (`vegetacaoRasteira` = 60% do raio de
+detalhe, seção 23), sem billboard, densidade fixa — grama a 10 unidades e a
+75 unidades (perto do corte) tinham a MESMA contagem de instância por área.
+
+CORREÇÃO: `props/VegetationInstancer.tsx` — densidade adaptativa por anel
+de distância, só pra categorias RASTEIRAS (grass/flower/plant; árvore/
+arbusto/pedra continuam com densidade cheia até o próprio raio de corte, o
+binário 3D↔sumiço/impostor já é a técnica certa pra elas, seção 22.4).
+
+  - `ANEIS_DENSIDADE_RASTEIRA`: 3 anéis, em FRAÇÃO do próprio raio
+    (`raioEfetivo`), não metro absoluto — até 40% do raio mantém 100%, até
+    70% mantém 60%, até 100% mantém 30%. Fração, não metro fixo, de
+    propósito: o pedido original (§14) dava exemplos em metros, mas isso
+    faria a FORMA dos anéis mudar sozinha quando o admin ajusta
+    `renderDistance` — fração mantém a forma, só escala junto (mesmo
+    raciocínio que já vale pra `vegetacaoRasteira`/`limiteVegetacao` em
+    `worldVisibility.ts`, seção 23).
+  - `densidadeMantida(fracaoDaDistancia)`: pura, testável, aceita anéis
+    customizados (não travada no array default).
+  - `hashUnit01(id)`: decimação DETERMINÍSTICA por hash do `prop.id` — nunca
+    `Math.random()` (faria a grama "piscar" a cada reescrita de `center`,
+    sem o jogador se mexer). **Achado durante a implementação**: a técnica
+    de hash mais simples do projeto (`h = h*31 + charCode`, a mesma de
+    `hashFlip` em `TreeImpostors.tsx`) tem espalhamento PÉSSIMO pra ids
+    curtos/numéricos — medido: 500 ids sintéticos ("g0".."g499") davam
+    fração mantida 0,004 em vez dos 0,30 esperados, porque a soma nunca
+    "dava a volta" no inteiro de 32 bits pra essas strings curtas.
+    `hashFlip` não sofre disso porque só lê 1 bit (`h & 1`); decimação por
+    densidade precisa do valor de ponto flutuante inteiro, então precisa de
+    avalanche de verdade — trocado por FNV-1a + finalizador estilo murmur3
+    (medido: mesmos 500 ids, fração 0,312 — dentro da margem esperada).
+  - `instanciasVisiveisNaCamada`: função pura que substitui o laço de corte
+    inline por raio + a densidade acima — mesmo padrão de
+    `TreeImpostors.resolverInstanciasVisiveis` (Fase de coerência de
+    horizonte): a DECISÃO fica numa função testável sem `<Canvas>`, o
+    `useEffect` do componente só escreve o resultado nos buffers de GPU.
+
+TESTES: `VegetationInstancer.test.ts` — `densidadeMantida` (100% perto,
+reduz nos anéis seguintes, monotônica, aceita anéis customizados, nunca
+NaN/0 fora do último anel); `instanciasVisiveisNaCamada` (categoria não
+rasteira ignora densidade; rasteira no anel externo decima pra ~30%
+medido, nunca some com o mapa; determinismo entre chamadas repetidas; nunca
+decima instância já fora do raio; `raioEfetivo=0` não trava). Suíte
+completa (126 arquivos/1387 testes) e `test:perf` verdes.
+
+VALIDAÇÃO AO VIVO: `/play?map=hexdemo` carregado sem erro novo no console;
+categorias não-rasteiras (`rock`/`bush`/`tree`, da Fase anterior) continuam
+instanciando corretamente (`count=1` cada, mapa de 7 props). **Achado
+honesto**: o mapa de demo não tem NENHUM prop de categoria `grass`/`flower`/
+`plant` — mesma limitação estrutural das duas rodadas anteriores (nenhum
+conteúdo acessível hoje exercita o caminho visualmente). A prova de
+correção é o teste de unidade puro (a mesma função, o mesmo hash, rodando
+idêntico dentro e fora do navegador) — diferente da sonda de overdraw de
+água (seção 22.11), que dependia de comportamento REAL de blend/GPU e por
+isso precisou de validação ao vivo; decimação por hash é matemática pura,
+já coberta.
+CUSTO: baixo — confirmado (um `if` a mais no laço que já existia, zero
+estrutura de dados nova, zero mudança de comportamento pra categoria não-
+rasteira).
+GANHO ESPERADO: ainda NÃO MEDIDO contra conteúdo real (mesma limitação).
+Os três anéis (0,4/0,7/1,0 → 100%/60%/30%) são um PALPITE razoável baseado
+no pedido original, não um número medido — reajustar sem hesitar assim que
+houver mapa de produção com grama densa pra comparar antes/depois.
+PRIORIDADE: implementado; falta só medir ganho real quando houver conteúdo.
+
+--------------------------------------------------------------------------------
+22.8 FLORES E PLANTAS [IMPLEMENTADO — mesma mudança da seção 22.7]
+--------------------------------------------------------------------------------
+ATUAL/CORREÇÃO/TESTES/CUSTO/GANHO/PRIORIDADE: idêntico à seção 22.7 — mesma
+categoria (`CATEGORIAS_RASTEIRAS`), mesmo código, mesma decisão, sem
+tratamento separado.
+
+--------------------------------------------------------------------------------
+22.9 PEDRAS [IMPLEMENTADO — rodada seguinte à Fase de coerência de horizonte]
+--------------------------------------------------------------------------------
+ANTES: `rock`/`stone` NÃO passavam por `VegetationInstancer` — iam por
+`PropInstance` (1 `Mesh` por prop), a MESMA categoria que cresce linearmente
+em draw call (seção 7/14/18). Catálogo tinha 9 espécies de `rock` (sólido,
+hull) + 21 de `stone` (decorativo, pebble/rockpath, sem colisão) — ambas
+repetitivas, sem identidade individual, candidatas óbvias.
+CORREÇÃO: `props/VegetationInstancer.tsx` — `CATEGORIAS_INSTANCIAVEIS`
+cresceu de `{grass,flower,plant,bush,tree,tree_bare}` para incluir `rock` e
+`stone`. Nenhuma outra mudança de código: a infraestrutura (bake de
+sub-malha por espécie, capacidade dimensionada por contagem real,
+reescrita só quando `center` muda) já servia sem alteração — mesmo
+mecanismo que árvore usa. `hill`/`mountain`/`building` ficam de FORA de
+propósito: são landmark (identidade única importa), não decoração repetida.
+CONFIRMADO ANTES DE MUDAR (não assumido):
+  - Colisão: `propCells.ts`/`propBlockers.ts` derivam bloqueio de
+    `prop.colliderType`/`isSolidProp(assetId)`, nunca da representação
+    visual (`InstancedMesh` vs `Mesh`) — `tree` (que já tem `hull`) prova
+    isso há tempo; `rock` (também `hull`) segue o mesmo caminho sem mudança.
+  - Vento: `props/wind.ts` já excluía `rock`/`stone` de propósito
+    ("pedra não balança com vento") — nenhuma categoria nova pra mapear.
+  - Sombra: `SEM_SOMBRA_PROPRIA` não inclui `rock`/`stone` — continuam
+    projetando/recebendo sombra, mesmo comportamento de quando eram
+    `PropInstance`.
+  - Clique: `pickGround.ts`/`instancedPropRegistry.ts` já eram
+    category-agnósticos (resolvem por `instanceId` via `WeakMap`, não por
+    tipo de asset) — funcionam pra pedra sem código novo.
+TESTES: `VegetationInstancer.test.ts` atualizado — as 3 asserções que
+provavam "rocha fica de fora" viraram "rocha/pedra entram, construção
+continua de fora" (a exclusão de `hill`/`mountain`/`building` continua
+coberta). Suíte completa (123 arquivos/1361 testes) e `test:perf` verdes
+depois da mudança, sem alteração de teto nenhum — a mudança não toca
+caminho quente novo, só estende uma categorização já testada.
+GANHO ESPERADO: ainda NÃO MEDIDO ao vivo — mesma limitação da seção 25
+(nenhum mapa migrado do rAthena tem `props` hoje; só passa a valer quando o
+editor/scatter procedural povoar um mapa real com pedra repetida). O
+princípio (N objetos idênticos = 1 draw call por espécie em vez de N)
+já está provado pra árvore/arbusto (seção 7: caso medido histórico,
+~1815 props → 848-1157 draw calls antes do instancing).
+PRIORIDADE: concluída — próximo da fila (seção 26) passa a ser
+instrumentar overdraw de água.
+
+--------------------------------------------------------------------------------
+22.10 PROPS (não-repetidos: construção, objeto único, interativo)
+--------------------------------------------------------------------------------
+ATUAL: `PropInstance.tsx`, 1 `Mesh` por prop, `matrixAutoUpdate=false` nos
+filhos depois do primeiro `updateMatrix()` (otimização já aplicada, seção 15).
+PROBLEMA: nenhuma mudança recomendada — objeto único/interativo/importante
+não deve ser forçado a instancing (perderia identidade individual,
+complicaria clique/interação). Isto é o comportamento CORRETO pra esta
+categoria, não uma lacuna.
+TÉCNICA RECOMENDADA: manter. Se o mapa crescer com MUITAS construções
+repetidas (ex. 50 casas idênticas), reavaliar como `STATIC_REPEATED`.
+CUSTO/GANHO/PRIORIDADE: N/A (correto como está).
+
+--------------------------------------------------------------------------------
+22.11 ÁGUA [INSTRUMENTADO — rodada seguinte à de pedra instanciada]
+--------------------------------------------------------------------------------
+ATUAL: malha por chunk, translúcida, `depthWrite:false`, onda geométrica +
+2 amostras de aquarela + 2 de `groundFbm` (seção 9/12). Overdraw ERA
+`[NÃO MEDIDO/NÃO INSTRUMENTADO]` (seção 16) — agora existe ferramenta.
+
+FERRAMENTA CONSTRUÍDA: `core/diagnostics/waterOverdrawProbe.ts`
+(`medirOverdrawDeAgua`), exposta como `__overdrawAgua()` no console (DEV
+apenas, mesmo padrão de `__censo()` em `scene/PerfHud.tsx`). Mede só
+água-sobre-ÁGUA (quantas malhas de água diferentes cobrem o MESMO pixel de
+tela) — água-sobre-CHÃO (1 camada opaca + 1 translúcida) é overdraw ESPERADO
+de qualquer superfície translúcida, não é o alvo (não é o que a regra 44
+chama de problema a investigar).
+
+COMO FUNCIONA: coleta toda malha de água viva (`<group name="agua">`, mesmo
+rótulo que o flight recorder já usa), monta uma cena-sombra TEMPORÁRIA com
+meshes rasos (mesma geometria por referência, mesma `matrixWorld` copiada —
+a cena real nunca é tocada), material aditivo (`AdditiveBlending`,
+`depthTest:false` — cada fragmento de água conta, independente do que
+estaria "na frente"), renderiza num alvo offscreen de PONTO FLUTUANTE
+(`FloatType` — um alvo de 8 bits satura em 1,0 no primeiro fragmento e nunca
+distingue 1 camada de 3) em resolução baixa (256×256 — é estatística, não
+imagem), lê os pixels de volta e soma um histograma.
+
+VALIDAÇÃO (ao vivo, Chrome real — não teste unitário, que não tem WebGL):
+3 planos de teste injetados temporariamente na cena real (`?map=hexdemo`,
+removidos logo depois, nunca persistidos) — 1 plano isolado (1 camada
+esperada) + 2 planos EXATAMENTE sobrepostos (2 camadas esperadas).
+Resultado medido: `overdrawMaximo: 2` (exato), `fracaoComOverdraw: 0.5`
+(exato — metade dos pixels de água eram os 2 planos sobrepostos),
+`overdrawMedioNosPixelsComAgua: 1.5` (= 0,5×1 + 0,5×2, exato). A matemática
+do alvo de ponto flutuante + blend aditivo está provada correta, sem
+saturação, sem viés.
+
+MEDIÇÃO EM ÁGUA REAL: PENDENTE — nenhum conteúdo acessível hoje tem lâmina
+de água translúcida (`buildWaterGeometry` não-nula) sem uma sessão de login
+completa contra o rAthena real: o mapa de demo (`squareDemoMap.ts`) marca
+células como `collision:"water"` mas nunca `surface:"water"`, e a lâmina
+visível em `/play?map=hexdemo` acaba sendo só a COR da célula no chão (o
+fallback de `cellLayer`), não a malha translúcida separada — confirmado ao
+vivo (`aguaGroups: 0` na cena real, mesma limitação estrutural de "nenhum
+mapa acessível hoje exercita o caminho" já documentada na seção 25 pro
+impostor de árvore). A ferramenta está pronta e provada; falta só um mapa
+com corpo d'água real (`prt_fild08` via sessão logada, ou uma correção
+futura em `squareDemoMap.ts` pra também autorar `surface`) pra rodar
+`__overdrawAgua()` contra o caso de produção.
+TESTES: `core/diagnostics/waterOverdrawProbe.test.ts` — coleta de malhas
+por nome de grupo (inclusive várias por mapa, um por chunk), e o caminho
+sem água nunca toca o renderer (provado com um `Proxy` que lança em
+qualquer acesso). Suíte completa (125 arquivos/1369 testes) e `test:perf`
+verdes.
+CUSTO: baixo — só ferramenta de diagnóstico, nenhuma mudança de shader/
+comportamento de água em produção (custo zero fora do `if (DEV)`).
+GANHO ESPERADO: ainda desconhecido — a ferramenta existe, mas não há dado
+de produção pra dizer se overdraw de água É um problema real neste projeto.
+Pode muito bem ser que não seja (rios/lagos do rAthena raramente se
+sobrepõem em tela na prática) — medir primeiro continua valendo mesmo
+depois de construir a ferramenta.
+PRIORIDADE: instrumentação concluída; a DECISÃO (vale otimizar ou não) fica
+pendente até medir contra água real — não reabrir isto até então.
+
+--------------------------------------------------------------------------------
+22.12 CHUNKS
+--------------------------------------------------------------------------------
+ATUAL: 32×32 células, streaming incremental, cache por `Map`, orçamento de
+6 ms/quadro (seção 2). PROBLEMA: nenhum medido.
+TÉCNICA RECOMENDADA: manter — os 6 "estados" conceituais do pedido original
+(UNLOADED/QUEUED/BUILDING/READY/VISIBLE/DISTANT) já existem, só que
+IMPLÍCITOS: `não está no cache` = UNLOADED, `está em porConstruir` = QUEUED/
+BUILDING, `está no cache mas fora de out` = READY-mas-não-VISIBLE, `está em
+out` = VISIBLE, e "DISTANT" é o papel que `HorizonMesh` cumpre pro mapa
+inteiro (não por chunk individual). Nomear os estados explicitamente
+(um enum) só ajudaria depuração, não mudaria comportamento — BAIXO valor.
+CUSTO/GANHO/PRIORIDADE: nomear estados = baixo custo, baixo ganho (cosmético
+de código). Resto: N/A, já implementado.
+
+--------------------------------------------------------------------------------
+22.13 LOD (geral)
+--------------------------------------------------------------------------------
+Coberto por elemento acima (22.2/22.3 terreno, 22.4/22.6 árvore). Resumo:
+`THREE.LOD` tradicional (troca de objeto por distância, checada por quadro)
+CONTINUA NÃO RECOMENDADO — o projeto já usa o padrão melhor pra este caso
+(troca por REGIÃO/CENTRO DE VISÃO, recalculada só quando o centro muda, não
+por objeto por quadro) em todo lugar que precisa de LOD. Não introduzir
+`THREE.LOD` mesmo nos itens futuros (22.2/22.3) — usar o mesmo padrão de
+raio+centro que já existe.
+
+--------------------------------------------------------------------------------
+22.14 IMPOSTORES
+--------------------------------------------------------------------------------
+ATUAL (pós Fase 25): árvore/arbusto, atlas por mapa, billboard view-space,
+teto de distância, Y ancorado no horizonte. PROBLEMA: nenhum crítico
+restante. TÉCNICA RECOMENDADA: manter; considerar impostor de montanha só
+junto com HLOD de montanha (22.3), não isoladamente. CUSTO/GANHO/PRIORIDADE:
+ver 22.3.
+
+--------------------------------------------------------------------------------
+22.15 HLOD/PROXIES
+--------------------------------------------------------------------------------
+Coberto em 22.3 (montanha) e 22.9-parcial (pedra via instancing, que já
+resolve o caso comum sem precisar de proxy assado). HLOD de GRUPO DE PROPS
+(§20 do pedido original — combinar 100 árvores + 20 pedras + 10 arbustos
+numa única proxy mesh): NÃO RECOMENDADO agora — o instancing por espécie já
+reduz draw call de N objetos pra 1 por espécie (seção 7), que é a MESMA
+redução que HLOD de grupo daria, sem o custo de um pipeline de bake novo.
+HLOD de grupo só ganharia sobre instancing puro se o mapa tivesse uma
+MISTURA muito densa de espécies DIFERENTES numa área pequena — não é o caso
+de nenhum mapa real hoje (que tem `props: []`).
+
+--------------------------------------------------------------------------------
+22.16 FOG
+--------------------------------------------------------------------------------
+ATUAL: linear, cor-do-céu por elevação, ancorada no raio do horizonte
+(seção 4). PROBLEMA: nenhum — é a peça mais madura do renderer, e a
+correção desta rodada (seção 25) reforça exatamente a regra que a fog
+já seguia (nunca revelar onde a resolução cai).
+TÉCNICA RECOMENDADA: manter. CUSTO/GANHO/PRIORIDADE: N/A.
+
+--------------------------------------------------------------------------------
+22.17 TEXTURAS
+--------------------------------------------------------------------------------
+ATUAL: `DataArrayTexture` (chão), atlas por mapa (impostor), mipmaps padrão
+do three (seção 9/10). PROBLEMA: nenhum medido — mipmapping da GPU já cobre
+"textura menor de longe" sem custo extra (regra do pedido original §23: só
+adicionar bias custom se benchmark provar ganho — nenhum benchmark pediu
+isso ainda). TÉCNICA RECOMENDADA: manter. CUSTO/GANHO/PRIORIDADE: N/A.
+
+--------------------------------------------------------------------------------
+22.18 IMAGENS
+--------------------------------------------------------------------------------
+ATUAL: tudo que pertence ao mundo 3D já está no pipeline GPU (atlas de
+impostor, texturas de terreno/água) — sem DOM/CSS/`<img>` pra elemento de
+mundo (seção 10). PROBLEMA: nenhum. TÉCNICA/CUSTO/GANHO/PRIORIDADE: N/A.
+
+--------------------------------------------------------------------------------
+22.19 SOMBRAS
+--------------------------------------------------------------------------------
+ATUAL: 1024×1024, raio 55, sem sombra em horizonte/impostor/vegetação
+rasteira (seção 16/27). PROBLEMA: nenhum medido. TÉCNICA RECOMENDADA:
+manter — a escolha "raio menor, mapa maior" já foi comparada contra a
+alternativa (14% menos nítida, ¼ do custo) e decidida. CUSTO/GANHO/
+PRIORIDADE: N/A.
+
+--------------------------------------------------------------------------------
+22.20 MEMÓRIA / CPU / GPU (controle geral)
+--------------------------------------------------------------------------------
+ATUAL: cache multi-camada sem expiração por tempo (seção 17), orçamento de
+6 ms/quadro pra construção, dedup de textura por fonte (seção 10), CPU
+nunca anima vegetação individualmente (shader faz isso, seção 15/34).
+PROBLEMA: nenhum medido no caminho quente atual — os itens abertos (22.9
+instancing de pedra, 22.7 densidade de grama) são sobre CONTEÚDO que ainda
+não existe em mapa real, não sobre o mecanismo em si.
+TÉCNICA RECOMENDADA: manter a regra existente (`perf/desempenho.test.ts`
+depois de qualquer mudança em caminho quente) — é suficiente, não precisa
+de mecanismo novo.
+CUSTO/GANHO/PRIORIDADE: N/A.
+
+
+================================================================================
+23. WORLD VISIBILITY BUDGET
+================================================================================
+
+[IMPLEMENTADO nesta rodada] `play/worldVisibility.ts`.
+
+Antes desta Fase, cada sistema decidia sua própria distância isoladamente:
+`viewRadius.ts` resolvia 4 raios (`detalhe`/`entidades`/`horizonte`/`fogNear`/
+`fogFar`), mas a fração de vegetação rasteira (`RAIO_RASTEIRA_FRAC = 0,6`)
+morava DENTRO de `VegetationInstancer.tsx`, e o impostor de árvore
+(`TreeImpostors.tsx`) não tinha limite superior NENHUM. Nada garantia a
+ordem entre eles — foi exatamente essa ausência de hierarquia que permitiu a
+causa B do bug de coerência (seção 25): o impostor podia, por construção,
+desenhar além de onde a névoa já tinha fechado.
+
+`visibilidadeDoMundo()` ENVOLVE `raiosDeVisao()` (não troca — os 4 raios
+originais continuam idênticos, testado em `worldVisibility.test.ts`) e
+acrescenta:
+
+  - `vegetacaoDetalhe` — igual a `detalhe` (onde a árvore 3D vira impostor).
+  - `vegetacaoRasteira` — 60% de `detalhe`, migrado de `VegetationInstancer`
+    pra cá (é decisão de VISIBILIDADE, não de INSTANCING).
+  - `limiteVegetacao` — igual a `fogFar`: teto ABSOLUTO de qualquer
+    representação de vegetação. Antes não existia; agora `TreeImpostors`
+    recebe e respeita.
+
+Invariante travada por teste (`worldVisibility.test.ts`,
+`perf/desempenho.test.ts`), para todo `renderDistance` de 10 a 1000:
+
+    vegetacaoRasteira ≤ vegetacaoDetalhe ≤ limiteVegetacao ≤ fogFar < horizonte
+
+Esta é a hierarquia central pedida (§49/§50 da auditoria original) — qualquer
+sistema NOVO que precise de uma distância de visibilidade (uma futura pedra
+instanciada, um NPC estático, uma decoração) deve derivar o próprio raio
+DESTA função, nunca inventar uma fração isolada como o código antigo fazia.
+
+
+================================================================================
+24. MATRIZ DE PRIORIDADE
+================================================================================
+
+Status: IMPLEMENTADO (já no código antes desta rodada) / ESTA RODADA (feito
+agora) / RECOMENDADO (próxima rodada, documentado acima) / FUTURO (só com
+conteúdo real que justifique).
+
+| Sistema    | Atual                          | Melhor técnica                    | Ganho esperado          | Custo   | Prioridade | Status         |
+|------------|----------------------------------|------------------------------------|--------------------------|---------|------------|----------------|
+| Chunks     | 32×32, streaming incremental    | manter                             | —                        | —       | —          | IMPLEMENTADO   |
+| Terreno    | 1 quad/célula, orçamento 6ms    | manter                             | —                        | —       | —          | IMPLEMENTADO   |
+| Morros     | LOD binário (chão/horizonte)    | LOD espacial de 1 anel intermediário | baixo (fog já esconde) | médio   | BAIXA      | RECOMENDADO    |
+| Montanhas  | idêntico a morros               | HLOD assado offline                | não medido (sem mapa real) | alto | BAIXA      | FUTURO         |
+| Árvores    | 3D→impostor, Y ancorado, teto   | manter                             | —                        | —       | —          | ESTA RODADA    |
+| Arbustos   | idêntico a árvore               | manter                             | —                        | —       | —          | ESTA RODADA    |
+| Grama      | densidade adaptativa por anel (3 anéis, hash determinístico) | manter | ganho não medido (sem mapa real) | — | — | ESTA RODADA (4ª) |
+| Flores     | idêntico a grama                | idêntico a grama                   | idêntico                | —       | —          | ESTA RODADA (4ª) |
+| Pedras     | InstancedMesh por espécie (rock+stone) | manter                       | -N draw calls quando mapa real tiver pedra densa | — | — | ESTA RODADA (2ª) |
+| Props      | 1 Mesh/prop (objeto único)      | manter                             | —                        | —       | —          | IMPLEMENTADO   |
+| Água       | malha/chunk, translúcida        | `__overdrawAgua()` construído/provado | decisão pendente (falta água real p/ medir) | — | — | ESTA RODADA (3ª) |
+| Fog        | linear, cor-do-céu, ancorada no horizonte | manter                   | —                        | —       | —          | IMPLEMENTADO   |
+| Horizonte  | 1 malha decimada, mapa inteiro  | manter                             | —                        | —       | —          | IMPLEMENTADO   |
+| Sombras    | 1024², raio 55, seletivo por camada | manter                        | —                        | —       | —          | IMPLEMENTADO   |
+| Texturas   | DataArrayTexture + mipmap padrão | manter                            | —                        | —       | —          | IMPLEMENTADO   |
+| Imagens    | tudo no pipeline GPU (sem DOM)  | manter                             | —                        | —       | —          | IMPLEMENTADO   |
+| LOD        | binário por região/centro       | manter (nunca THREE.LOD por objeto)| —                        | —       | —          | IMPLEMENTADO   |
+| Impostores | árvore/arbusto, atlas por mapa  | teto + ancoragem em Y (corrigido)  | gap 4,3u → 0; -5/58 instâncias desperdiçadas | baixo | ALTA | ESTA RODADA |
+| HLOD/proxy | não existe (props densos)       | proxy assado offline, se necessário| não medido (sem mapa real) | alto | BAIXA/FUTURA | FUTURO       |
+| Coerência de horizonte | vegetação podia flutuar/desperdiçar | WorldVisibilityBudget + Y ancorado | ver seção 25 | baixo | ALTA | ESTA RODADA |
+
+
+================================================================================
+25. O BUG DE COERÊNCIA DE HORIZONTE — CAUSA RAIZ, CORREÇÃO, BENCHMARK
+================================================================================
+
+**Sintoma relatado**: árvore/arbusto impostor aparecendo "voando" — vegetação
+distante desconectada da superfície que deveria sustentá-la, mais visível em
+terreno montanhoso.
+
+**Hipótese descartada, com prova**: `treeDistance > terrainDistance`
+(vegetação com alcance maior que o terreno). FALSA — `HorizonMesh` é UMA
+malha, sempre desenhada, cobrindo o mapa inteiro + 160 unidades de franja
+(seção 5/13). Todo prop tem terreno desenhado sob ele em X/Z, sempre. A causa
+real é OUTRA coisa, em duas partes:
+
+**Causa A (principal, vertical)** — o impostor usava o Y AUTORADO do prop
+(a altura do CHÃO DETALHADO) mesmo além do raio de detalhe, onde o chão
+detalhado NÃO EXISTE — quem está desenhado ali é `HorizonMesh`, cujo Y é
+DELIBERADAMENTE mais baixo (o MÍNIMO de uma vizinhança de ±4 células, contra
+o poke-through medido de até 5,73 unidades — seção 5/13). Numa borda de
+platô/penhasco/morro estreito, essa diferença passa de 1 unidade inteira e a
+árvore fica boiando.
+
+**Causa B (secundária, desperdício)** — `TreeImpostors` não tinha teto de
+distância: desenhava toda instância fora do raio de detalhe, mesmo bem além
+de `fogFar`, 100% atrás de névoa opaca — trabalho de vértice/fill jogado
+fora, e risco de silhueta pálida contra o céu fotográfico (que não é o
+gradiente procedural que a névoa usa).
+
+**Medição (gate obrigatório antes de qualquer edição)** — nenhum mapa real
+serve pra medir isto ao vivo: todo mapa migrado do rAthena tem `props: []`
+(confirmado antes de tocar em código, `tools/legacy-migration/output/maps/*`),
+e o único mapa de demo com árvores (`play/squareDemoMap.ts`, 40×40 células) é
+menor que o próprio raio de detalhe — nada nele fica fora do raio pra
+exercitar o impostor. A medição usou um mapa sintético (platô de 6 células —
+mais estreito que a janela de 9 células do nível mínimo — e um penhasco largo
+de 30 células, replicando exatamente as condições em que a hipótese
+identifica o defeito):
+
+  ANTES (Y autorado, sem ancoragem):
+    gap (unidades de mundo) — min 0,30 / p50 3,30 / p95 4,30 / max 4,30
+    instâncias além de fogFar: 5 de 58 (100% delas desenhadas mesmo assim)
+
+  DEPOIS (Y ancorado em `alturaDoHorizonte` + teto `limiteVegetacao`):
+    gap fora da banda de transição — min/p50/p95/max = 0,0000
+    instâncias além do limite: 5 de 58 — NENHUMA desenhada; 58→53 desenhadas
+
+**Correção aplicada** (mínima — sem novo sistema de LOD, sem tocar em
+nenhuma constante de `HorizonMesh` que já corrige o poke-through):
+
+  1. `play/worldVisibility.ts` (novo) — `visibilidadeDoMundo()`, envolve
+     `raiosDeVisao()` sem alterar nenhum dos 4 raios originais, acrescenta
+     `limiteVegetacao`/`vegetacaoDetalhe`/`vegetacaoRasteira` (seção 23).
+  2. `grid/HorizonMesh.tsx` — nova função `alturaDoHorizonte(map,x,z)`: a
+     altura da superfície REALMENTE desenhada em qualquer ponto, calculada
+     por interpolação bilinear dos MESMOS 4 vértices decimados que a
+     geometria usa (`gradeHorizonte`/`alturaNaGrade`, fatorados de
+     `buildHorizonGeometry` — uma fonte só, provada por round-trip contra o
+     atributo `position` real da malha).
+  3. `grid/TreeImpostors.tsx` — nova função pura `resolverInstanciasVisiveis`
+     (testável sem `<Canvas>`): (a) pula instância além de `limite`
+     (causa B); (b) ancora Y em `alturaDoHorizonte` além de uma banda de
+     transição de 40 unidades — no instante da troca 3D→impostor o Y ainda é
+     o autorado (sem pop; é o MESMO Y que a árvore 3D real tinha ali), e
+     100% ancorado passada a banda.
+  4. `props/VegetationInstancer.tsx` — `RAIO_RASTEIRA_FRAC` migrado para
+     `worldVisibility.ts` (`vegetacaoRasteira`), recebido como prop em vez
+     de calculado internamente por categoria.
+  5. `views/PlayView.tsx` — troca `raiosDeVisao` por `visibilidadeDoMundo`,
+     passa `limiteVegetacao`/`vegetacaoRasteira` aos consumidores.
+
+**Testes automáticos** (todos verdes, suíte completa 124→123 arquivos/1361→
+1360 testes após remover a sonda de medição temporária, zero regressão):
+  - `play/worldVisibility.test.ts` — a cadeia de invariantes isolada.
+  - `perf/desempenho.test.ts` — a mesma cadeia varrida em `renderDistance`
+    de 10 a 1000 (reaproveitando a varredura que já existia pros 4 raios
+    originais).
+  - `grid/coerenciaHorizonte.test.ts` (novo) — round-trip `alturaDoHorizonte`
+    vs. geometria real; nenhuma instância desenhada além do teto; Y sempre
+    coerente em platô estreito/penhasco/plano; ponta a ponta com
+    `buildTreeImpostorInstances`.
+  - Suítes existentes (`grid/*`, `props/VegetationInstancer.test.ts`,
+    `perf/*`) — inalteradas, todas passando.
+
+**Testes visuais** — o cliente real (rAthena WSL + `/play?map=hexdemo`) foi
+carregado ao vivo nesta rodada via Chrome headed: cena renderiza sem erro
+novo no console (só um aviso de shader pré-existente, não relacionado —
+`f_terrenoTriplanar` potencialmente não-inicializado, fora do escopo desta
+correção), árvores/água/terreno aparecem corretos, draw calls (19) e
+triângulos (23k) em linha com o esperado pra um mapa pequeno. **Limitação
+honesta**: o mapa de demo é pequeno demais pra ter qualquer prop além do raio
+de detalhe — não é possível reproduzir visualmente ao vivo o artefato
+específico (árvore voando) porque nenhum conteúdo hoje o exercita fora do
+mapa sintético de teste. A prova de correção é o round-trip matemático (gap
+4,30 → 0,0000) mais os testes automatizados, não uma captura de tela do
+"antes" — não existe um "antes" visual capturável com o conteúdo atual.
+Também não foi possível obter fps/frame-time absolutos ao vivo nesta sessão
+(`__perf()` reportou 0 quadros amostrados apesar da cena renderizar
+normalmente — abertura possível: frameloop sob controle de automação de
+navegador não acumula amostras do mesmo jeito que uma sessão de usuário
+real; não investigado a fundo por estar fora do escopo do bug em si).
+Draw calls/triângulos/geometrias vieram de `gl.info`, que É real (não
+depende de amostragem por quadro).
+
+**Critério de aceitação (§60 do pedido original)** — conferido:
+  [x] terreno nunca desaparece antes da representação distante necessária
+      (não mudou — `HorizonMesh` sempre cobriu o mapa inteiro).
+  [x] nenhum impostor aparece sobre vazio, matematicamente (gap→0, provado).
+  [x] árvore/arbusto nunca ultrapassa o limite visual (`limiteVegetacao`,
+      testado).
+  [x] transição terrain→horizon→fog contínua (inalterada).
+  [x] 3D→impostor continua funcionando (raio de troca inalterado).
+  [x] sem aumento de draw calls — na verdade REDUÇÃO (causa B elimina
+      instâncias desperdiçadas: 58→53 no cenário medido).
+  [x] sem aumento de CPU/GPU — o cálculo de `alturaDoHorizonte` roda uma vez
+      por prop no `useMemo` (não por quadro, não por troca de `center`).
+  [x] `renderDistance` não foi tocado (continua 130 no padrão).
+  [x] `perf/desempenho.test.ts` e `test:perf` inteiro, verdes.
+
+
+================================================================================
+26. PRÓXIMAS OTIMIZAÇÕES, EM ORDEM DE PRIORIDADE
+================================================================================
+
+1. ~~Instancing de pedra/cristal/tocha repetidos~~ — [FEITO] (seção 22.9):
+   `rock`/`stone` entraram em `CATEGORIAS_INSTANCIAVEIS`, colisão/vento/
+   sombra/clique confirmados sem mudança necessária, suíte completa e
+   `test:perf` verdes.
+2. ~~Instrumentar overdraw de água~~ — [FEITO] (seção 22.11):
+   `__overdrawAgua()` construído e provado matematicamente correto (3 planos
+   de teste ao vivo, resultado exato). DECISÃO de otimizar ou não continua
+   PENDENTE — nenhum mapa acessível hoje tem água real pra rodar a medição
+   de verdade (mesma limitação estrutural do impostor de árvore, seção 25).
+3. ~~Densidade adaptativa de grama/flor/planta por anel de distância~~ —
+   [FEITO] (seção 22.7/22.8): 3 anéis por fração do raio, decimação
+   determinística por hash (FNV-1a + finalizador murmur3 — o hash simples
+   do projeto tinha espalhamento péssimo pra ids curtos, achado e corrigido
+   nesta rodada). Ganho ainda NÃO MEDIDO contra conteúdo real (mesma
+   limitação estrutural das rodadas anteriores).
+4. **LOD espacial de terreno (1 anel intermediário morro/montanha)**
+   (seção 22.2) — custo médio, ganho baixo hoje (fog já esconde), sobe de
+   prioridade se `renderDistance` de produção for configurado bem acima
+   de 130.
+5. **HLOD de montanha assado offline** (seção 22.3) — custo alto, sem
+   mapa real que precise ainda. Documentado, não construído.
+6. **Crossfade dithering 3D→impostor** (seção 22.6) — custo baixo-médio,
+   só implementar se o pop de silhueta for reportado como visível
+   depois desta correção (a banda de Y já resolveu o defeito medido).
+
+Nenhum destes bloqueia o outro — todos são independentes e podem ser feitos
+em qualquer ordem; a ordem acima é só custo/ganho, não dependência técnica.
+Todos, sem exceção, precisam do mesmo gate desta rodada antes de qualquer
+edição: medir com número real (ou mapa sintético, quando não existir
+conteúdo de produção), nunca assumir.
+
+
+================================================================================
+FIM
+================================================================================

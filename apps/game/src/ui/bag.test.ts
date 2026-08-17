@@ -33,9 +33,10 @@ describe("encurtarNome", () => {
 });
 
 describe("a grade", () => {
-  it("são QUATRO colunas", () => {
-    // com cinco o slot ficava estreito demais para a faixa do nome caber
-    expect(BAG_GRID.cols).toBe(4);
+  it("são TRÊS colunas", () => {
+    // quatro espremiam o slot além do que a arte desenha pro campo — o
+    // "Alt+E estourando o container" do relato
+    expect(BAG_GRID.cols).toBe(3);
   });
 
   it("a barra de rolagem tem vão reservado", () => {

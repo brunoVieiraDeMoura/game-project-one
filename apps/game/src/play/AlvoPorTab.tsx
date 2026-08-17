@@ -5,7 +5,7 @@ import type { GameMap } from "@ragnarok/map-format";
 import { cellToWorld, type LegacyMapping } from "../net/legacyCells";
 import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { gateway } from "../net/gateway";
-import { proximoAlvo, type AlvoCandidato } from "./cicloDeAlvo";
+import { proximoAlvo, RAIO_TAB_CELULAS, type AlvoCandidato } from "./cicloDeAlvo";
 
 /**
  * TAB seleciona o inimigo; TAB de novo, o próximo.
@@ -22,12 +22,9 @@ import { proximoAlvo, type AlvoCandidato } from "./cicloDeAlvo";
 export function AlvoPorTab({
   map,
   mapping,
-  raioEntidade,
 }: {
   map: GameMap;
   mapping: LegacyMapping;
-  /** raio de DETALHE (`play/viewRadius`), não o da névoa — Fase G da auditoria de render */
-  raioEntidade: number;
 }) {
   const camera = useThree((s) => s.camera);
 
@@ -72,14 +69,19 @@ export function AlvoPorTab({
         const dx = w.x - meuMundo.x;
         const dz = w.z - meuMundo.z;
         const dist = Math.hypot(dx, dz);
+        // em CÉLULAS, que é a unidade em que `PESO_CAMERA`/`RAIO_TAB_CELULAS`
+        // foram calibrados
+        const distanciaCelulas = dist / 2;
         candidatos.push({
           gid,
-          // em CÉLULAS, que é a unidade em que `PESO_CAMERA` foi calibrado
-          distancia: dist / 2,
+          distancia: distanciaCelulas,
           // colado no personagem não há direção que signifique alguma coisa:
           // conta como "à frente" para não virar ruído
           alinhamento: dist < 1e-3 ? 1 : (dx * olhar.x + dz * olhar.z) / dist,
-          visivel: dist <= raioEntidade,
+          // filtro de CANDIDATOS, não de UI — um alvo além disto nunca chega a
+          // disputar a ordenação, então o Tab nunca pula pra ele mesmo que
+          // esteja "na mesma direção" de um alvo próximo (ver `cicloDeAlvo.ts`)
+          visivel: distanciaCelulas <= RAIO_TAB_CELULAS,
         });
       }
 
@@ -94,7 +96,7 @@ export function AlvoPorTab({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [camera, map, mapping, raioEntidade]);
+  }, [camera, map, mapping]);
 
   return null;
 }

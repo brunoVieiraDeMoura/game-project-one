@@ -40,7 +40,7 @@ import { cliqueVaiParaOChao, useAimStore } from "../net/aimStore";
 import { FollowCamera } from "../play/FollowCamera";
 import { useViewCenter } from "../play/useViewCenter";
 import { AQUECIMENTO_INICIAL, passoDeAquecimento } from "../play/aquecimento";
-import { raiosDeVisao } from "../play/viewRadius";
+import { visibilidadeDoMundo } from "../play/worldVisibility";
 import { GradientSky } from "../scene/GradientSky";
 import { TexturedSky } from "../scene/TexturedSky";
 import { AmbientParticles, isParticleKind, type ParticleKind } from "../vfx/AmbientParticles";
@@ -72,6 +72,7 @@ import { NetPlayer } from "../net/NetPlayer";
 import { NetEntities } from "../net/NetEntity";
 import { NetDamageNumbers } from "../net/NetDamageNumbers";
 import { SkillVfx } from "../vfx/SkillVfx";
+import { VfxRoot } from "../vfx/core/VfxRoot";
 import { Projectile } from "../vfx/Projectile";
 import { GroundItems, useGroundItems } from "../net/GroundItems";
 import { MapAmbience } from "../audio/mapAmbience";
@@ -807,10 +808,13 @@ function Scene({
   // culling por distância (só em mapas hex/blocks): render o pedaço ao redor do
   // player. Recalcula por chunk (useViewCenter), não por frame. Fog esconde a borda.
   const center = useViewCenter(playerPos, CHUNK * gameplay.hexScale);
-  // raios e névoa saem do MESMO lugar (play/viewRadius), que é onde mora a regra
-  // "não desenhe o que a névoa já escondeu" — e onde o teste a confere
+  // raios e névoa saem do MESMO lugar (play/worldVisibility, que ENVOLVE
+  // play/viewRadius), que é onde mora a regra "não desenhe o que a névoa já
+  // escondeu" — e onde o teste a confere. `visibilidadeDoMundo` acrescenta os
+  // raios de VEGETAÇÃO (Fase de coerência de horizonte) sem trocar nenhum dos
+  // 4 raios que já existiam.
   const mapaMaiorLado = Math.max(grid.extent(map).width, grid.extent(map).depth);
-  const visao = raiosDeVisao(gameplay, mapaMaiorLado);
+  const visao = visibilidadeDoMundo(gameplay, mapaMaiorLado);
   const PROP_RADIUS = visao.detalhe;
   const TERRAIN_RADIUS = visao.detalhe;
   /**
@@ -1104,9 +1108,12 @@ function Scene({
         {/* Impostores de árvore (grid/TreeImpostors): mesma extensão do
             HorizonMesh, mas para as árvores do mapa em vez do chão — troca
             binária com o PropInstance real no MESMO raio de detalhe
-            (PROP_RADIUS), sem duplicar draw call por árvore. */}
+            (PROP_RADIUS), sem duplicar draw call por árvore. `limite`
+            (`visao.limiteVegetacao`, Fase de coerência de horizonte): teto
+            absoluto de distância — sem ele o impostor desenhava instâncias
+            bem além da névoa, 100% desperdiçadas. */}
         {map.terrainMode === "square" && !isolado("semProps") && (
-          <TreeImpostors map={map} center={center} radius={PROP_RADIUS} />
+          <TreeImpostors map={map} center={center} radius={PROP_RADIUS} limite={visao.limiteVegetacao} />
         )}
         {/* props do mapa (culled); o "smooth" legado usa o scatter de demo.
             O nome do grupo é contrato com o GroundInteract: é nele que o clique
@@ -1126,6 +1133,7 @@ function Scene({
                 map={map}
                 center={center}
                 radius={PROP_RADIUS}
+                radiusRasteira={visao.vegetacaoRasteira}
                 aoPrecompilar={aoPrecompilarVegetacao}
               />
             </Suspense>
@@ -1220,6 +1228,7 @@ function Scene({
               gameplay={gameplay}
               positionRef={playerPos}
               cellSize={moveCell}
+              terrain={world.terrain}
             />
           </>
         ) : (
@@ -1258,8 +1267,14 @@ function Scene({
       {net && mapping ? (
         <>
           <NetDamageNumbers map={map} mapping={mapping} />
-          {/* efeitos de skill: todos nascem de pacote do servidor */}
+          {/* efeitos de skill NÃO migrados pro VFX Core — cai aqui quando
+              `vfx/skillVfxBindings.ts` ainda não tem o aegis (todo o resto
+              até a Fase 5 terminar) */}
           <SkillVfx map={map} mapping={mapping} cellSize={moveCell} terrain={world.terrain} />
+          {/* VFX Core (leia1.txt — padronização Skills/VFX): skills
+              migradas nascem aqui, nunca em `SkillVfx` acima — as duas
+              árvores convivem até a Fase 5 esvaziar `SkillVfx` de vez. */}
+          <VfxRoot map={map} mapping={mapping} cellSize={moveCell} terrain={world.terrain} />
           {/* projétil de ataque à distância (flecha etc): nasce do próprio ZC.NOTIFY_ACT, ver net/useWorldEvents */}
           <Projectile map={map} mapping={mapping} cellSize={moveCell} />
         </>
@@ -1281,7 +1296,7 @@ function Scene({
         assistir={assistir}
       />
       {/* Tab cicla o inimigo mais próximo, com peso para onde a câmera aponta */}
-      {mapping && <AlvoPorTab map={map} mapping={mapping} raioEntidade={RAIO_ENTIDADE} />}
+      {mapping && <AlvoPorTab map={map} mapping={mapping} />}
       {/* a trava do soft lock, visível: acende o mob que o clique acertaria */}
       {mapping && (
         <AssistenciaDeMira
@@ -1367,8 +1382,9 @@ function TelaDeCarregamento({ rotulo, fracao }: { rotulo: string; fracao: number
 }
 
 /** altura do modelo KayKit em escala 1 (o char é renderizado com charScale) —
- * usada só pra câmera mirar no meio do corpo em vez de no pé */
-const CHAR_MODEL_HEIGHT = 1.8;
+ * câmera mira no meio do corpo em vez do pé; `NetPlayer` reusa pra estimar o
+ * OLHO na checagem de linha de visão (`net/visao`) */
+export const CHAR_MODEL_HEIGHT = 1.8;
 
 /** Em DEV, dá acesso à cena/câmera pelo console (`__three().scene`). */
 function ThreeDebug() {

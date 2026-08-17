@@ -534,3 +534,101 @@ Full verbatim content below.
     e material por ENTIDADE que poderiam ser de módulo (`GlowChao`, hitbox do
     `NetEntity`, `GroundItems`), e os dois materiais + textura de água do
     `SquareTerrain` que a limpeza não descarta na troca de mapa.
+
+## VFX Core — padronização Skills/VFX (leia1.txt, 2026-08-16)
+
+Escopo: `vfx/core/**` (`VFXManager`, `VfxDefinition`, `DomRenderer`/
+`SpriteRenderer`/`ParticleRenderer`/`BeamRenderer`/`RingRenderer`,
+`vfx/migratedVfxBridge.ts`, `vfx/skillVfxBindings.ts`) — substitui a
+arquitetura de "1 componente React + `<Html>` por skill" (`vfx/SkillVfx.tsx`,
+`vfx/mage/**`) por um sistema central: skill dispara `vfxManager.play(vfxId,
+opts)`, o Core decide posição/animação/lifecycle, um `VfxRenderer` desenha.
+`vfx/vfxStore.ts` continua a porta única de rede (`spawn`/`prune`/
+`removeUnit`); pra skill migrada, ele desvia pro Core em vez de empurrar pro
+array `effects` que `SkillVfx.tsx` consome. Instrumentação
+(`core/diagnostics/vfxProbe.ts`) é a MESMA — `marcarVfxStart/End/Cancel`
+agora também disparados de `vfx/core/manager.ts`, mais `marcarVfxPulse` novo
+(hit coalescido numa instância viva, não um cast novo).
+
+**Por que existe**: auditoria estática (leia1.txt) achou 85 `<Html>` em
+`apps/game/src` e ZERO `<mesh>`/`<sprite>`/`<points>` em `vfx/mage/**` — todo
+VFX de skill rodava em DOM/CSS, nunca GPU. Hotspots medidos: Oráculo
+(`OracleBuff.tsx`) — **111 `<Html>` e 69 `useFrame` PRÓPRIOS por instância**
+(3 caveiras × (1 + 14 ecos) + 66 partículas); Fire Wall — já tinha sido
+corrigida numa investigação anterior (19 `<Html>` independentes → 1 grupo à
+mão, `FireWallGroup.tsx`), mas era um caso especial só daquela skill, não uma
+arquitetura reusável.
+
+**Assets definitivos não existem** (invariante leia1.txt) — nenhum atlas,
+nenhuma textura fictícia. `renderer:"dom"` é o renderer TRANSITÓRIO: mesma
+arte CSS/JSX de sempre, agora atrás de UM React root/`DomRenderer` pro jogo
+inteiro (técnica de `FireWallGroup.tsx` generalizada) em vez de um por
+skill. Quando o atlas existir, a `VfxDefinition` troca pra
+`renderer:"sprite"` — nenhum código de skill muda.
+
+**As 5 provas da Fase 3** (Safety Wall, Fire Wall, Sight/Oracle, Fire Ball,
+Thunder Storm) foram migradas e verificadas via `/vfx-bench`
+(`window.__vfxBench`) + inspeção de DOM (`getBoundingClientRect`/
+`getComputedStyle`) e captura de tela — screenshots de efeitos CURTOS
+(Fire Ball/Thunder Storm impact, ~1-1,5s de coreografia total) não
+renderizavam de forma confiável porque a latência entre chamadas
+separadas de `evaluate`/`screenshot` da automação de navegador (vários
+segundos neste ambiente) excede a janela de vida do efeito — verificação
+substituída por amostragem de estado DENTRO de uma única chamada
+`evaluate` (várias leituras de `getComputedStyle`/`classList`/texto em
+sequência, sem round-trip entre elas), que confirmou posição/opacidade/
+sequenciamento corretos em todos os casos.
+
+  - **Bug real encontrado e corrigido durante a migração**: a primeira
+    versão do `DomRenderer` criava `wrapEl`/`centerEl` via
+    `document.createElement` e os anexava no host ANTES de qualquer
+    `root.render()`. O COMMIT INICIAL de um `createRoot` reivindica o
+    container — nós que já estavam lá, criados por fora do React, somem no
+    primeiro `render()` de verdade (às vezes só no quadro seguinte, nunca no
+    instante do `spawn`, o que tornou o bug enganoso de reproduzir). Corrigido
+    replicando a técnica já provada em `FireWallGroup.tsx`: o wrapper é JSX
+    de verdade com `ref`, nunca um nó criado por fora e enxertado.
+  - **Bug real de resiliência a remonte** (StrictMode/Fast Refresh/troca de
+    mapa): `VFXManager` é um singleton de módulo que sobrevive a qualquer
+    remonte de `VfxRoot`, mas os `VfxRenderer` nascem dentro do `useEffect`
+    dele — uma instância JÁ VIVA (ex.: Safety Wall com `expiresAt:Infinity`)
+    sobrevivia no manager mas nunca mais aparecia na tela quando o renderer
+    trocava, porque `onInstanceCreate` só é chamado no `play()`. Corrigido:
+    `manager.registerRenderer()` agora recria (chama `onInstanceCreate` de
+    novo) toda instância viva cujo `def.renderer` bate com o renderer recém
+    registrado — mesma categoria do bug "StrictMode desligando o pathfinder"
+    (`04-netcode-prediction-reconciliation.md`).
+  - **Ineficiência real medida e corrigida**: Fire Wall plantando ~19 células
+    do MESMO pacote disparava 19 `root.render()` síncronos (`onInstanceCreate`
+    chamando `renderTree()` direto), reconciliando uma lista CRESCENTE de
+    1..19 filhos a cada célula — O(n²) no total. Medido no `/vfx-bench` (19
+    células, câmera parada): **36 fps → 59 fps, quadro p50 28,1 → 17,0 ms,
+    pior(5s) 75,5 → 69,6 ms, `vfxPerformanceSpike` 3 → 1 caso**, só
+    agrupando as N chamadas síncronas num ÚNICO `root.render()` no microtask
+    seguinte (`DomRenderer.scheduleRenderTree()`).
+  - **Coalescência (item 14) confirmada em bancada**: 3 `spawn()` de Thunder
+    Storm impact pro MESMO alvo, em sequência síncrona, produziram
+    **exatamente 1 instância ativa** em `__voo.vfxAtivos()` (não 3) —
+    `manager.play()` funde no `coalesce:{by:"target"}` da `VfxDefinition` em
+    vez de abrir raio novo. A rede desta skill já entrega os hits num pacote
+    só (auditado em `net/useWorldEvents.ts` — `hits` calculado client-side
+    por nível, não N pacotes por pulso), então isto é uma trava defensiva
+    contra recast/retry, não a correção de um bug ativo observado em produção.
+  - **`avgDomNodes`/`avgHtmlNodes` do `vfxProbe` passam a refletir o
+    arquiteto certo**: skill migrada some do `<Html>` por-instância que o
+    scanner (`gl.domElement.parentElement`) contava antes — o `DomRenderer`
+    é UM filho fixo desse container, adicionado uma vez na montagem de
+    `VfxRoot`, então o delta de HTML por VFX ativo tende a ~0 pra skill
+    migrada (prova de que a arquitetura nova não soma nó de topo por
+    instância, ao contrário da anterior).
+
+  - **Pendente pra completar a Fase 4 do plano**: rodar
+    `pnpm --filter @ragnarok/game vfx:benchmark`
+    (`scripts/vfxBenchmark.ts`, CDP tracing + `performance.measureUserAgentSpecificMemory`)
+    pareado ANTES/DEPOIS por skill via `/vfx-bench` pra números formais de
+    `avgFrameMsWhileActive`/`p95`/long tasks — os números acima são medições
+    manuais feitas durante a migração (suficientes pra provar direção e pra
+    pegar os dois bugs reais listados, mas não uma rodada A/B completa e
+    arquivada). Cenário explícito do plano ainda não rodado: Thunder Storm
+    em 3 mobs simultâneos (pior caso documentado do código antigo: 3 long
+    tasks, 360 ms, quadro máximo 132 ms).

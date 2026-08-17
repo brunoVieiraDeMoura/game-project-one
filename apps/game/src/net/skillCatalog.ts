@@ -16,11 +16,21 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
  * skill se usa no chão. Antes isso era adivinhado pelo alcance (`range === 0 &&
  * spCost > 0`), que classifica errado toda skill de auto-buff.
  */
+/** `Hit:` do skill_db, migrado (`packages/game-data/src/skill.ts:
+ * SkillHitTypeSchema`) — só `"single"`/`"multi_hit"` têm representação real
+ * no rAthena; `"normal"`/`"critical"` existem no schema mas nunca são
+ * gravados de volta (`skill-db-mapper.ts:184-190`). Usado pra decidir se
+ * uma skill entra na cascata de dano multi-hit (`net/useWorldEvents.ts`,
+ * auditoria 2026-08-17) — dado REAL do servidor, não mais uma lista de
+ * nomes Aegis hardcoded. */
+export type SkillHitType = "normal" | "single" | "multi_hit" | "critical";
+
 export interface SkillInfo {
   id: number;
   /** constante do rAthena ("MG_FIREBOLT") — o prefixo dela dá a classe */
   aegisName: string;
   name: string;
+  hitType: SkillHitType;
   /** nome de arquivo em `public/assets/skills/` — ausente = placeholder por seed (IconSquare) */
   icon?: string;
   target: "self" | "enemy" | "ground";
@@ -34,6 +44,23 @@ export interface SkillInfo {
   spCost: number;
   range: number;
   cooldownMs: number;
+  /** duração do efeito/buff, já resolvida pro nível — a API já serve este
+   * campo (`packages/game-data/src/skill.ts`), só não era lido aqui ainda.
+   * 0 = sem duração própria (a maioria das skills de dano). Usado pelos VFX
+   * persistentes (Oráculo/Sight, Ghost Dome) pra saber quanto tempo ficar
+   * de pé, sem inventar um número — a MESMA duração que o rAthena aplicou. */
+  durationMs: number;
+  /** segundo campo de duração do skill_db (rAthena `Duration2`) — algumas
+   * skills guardam a duração REAL do status condicional aqui em vez de em
+   * `durationMs` (ex.: Frost Diver, congelamento por nível: `durationMs` vem
+   * zerado, `duration2Ms` tem o valor de verdade — 3000..30000). Stone Curse
+   * usa OS DOIS: `durationMs` é a espera antes de petrificar (`stonewait`),
+   * `duration2Ms` é quanto tempo fica petrificado depois. Nem o tint de
+   * material de Petrificar (`entities/petrifyMaterial.ts`) nem o VFX
+   * persistente de Congelar (`vfx/mage/frost-diver/FreezeBodyVfx`) leem este
+   * campo — os dois confiam no `opt1` real da entidade, nunca num número de
+   * duração; este campo fica só como dado do catálogo. */
+  duration2Ms: number;
 }
 
 /**
@@ -72,9 +99,22 @@ export const useSkillCatalog = create<CatalogState>((set, get) => ({
     if (missing.length === 0) return;
     for (const id of missing) pending.add(id);
 
+    // instrumentação temporária (auditoria "glitch ~30s" 2026-08-14) — só
+    // DEV, mesma ideia de `net/itemCatalog.ensure`.
+    const t0 = import.meta.env.DEV ? performance.now() : 0;
+    if (import.meta.env.DEV) {
+      console.info(`[SKILL_DATA] request iniciado ids=[${missing.join(",")}] source=API t=${Math.round(t0)}ms`);
+    }
+
     fetch(`${API_URL}/skills/by-id?ids=${missing.join(",")}`)
       .then((r) => (r.ok ? r.json() : { skills: [] }))
       .then((data: { skills: Array<Record<string, unknown>> }) => {
+        if (import.meta.env.DEV) {
+          const dt = Math.round(performance.now() - t0);
+          console.info(
+            `[SKILL_DATA] request concluído ids=[${missing.join(",")}] source=API registros=${data.skills?.length ?? 0} tempoRespostaMs=${dt}`,
+          );
+        }
         set((s) => {
           const byId = { ...s.byId };
           for (const cru of data.skills ?? []) {
@@ -84,6 +124,7 @@ export const useSkillCatalog = create<CatalogState>((set, get) => ({
               id,
               aegisName: String(cru.aegisName ?? ""),
               name: String(cru.name ?? ""),
+              hitType: (cru.hitType as SkillHitType) ?? "normal",
               icon: cru.icon ? String(cru.icon) : undefined,
               target: (cru.target as SkillInfo["target"]) ?? "enemy",
               areaRadius: noNivel(cru.areaRadius as number | number[], nivel, 0),
@@ -93,6 +134,8 @@ export const useSkillCatalog = create<CatalogState>((set, get) => ({
               spCost: noNivel(cru.spCost as number | number[], nivel, 0),
               range: noNivel(cru.range as number | number[], nivel, 0),
               cooldownMs: noNivel(cru.cooldownMs as number | number[], nivel, 0),
+              durationMs: noNivel(cru.durationMs as number | number[], nivel, 0),
+              duration2Ms: noNivel(cru.duration2Ms as number | number[], nivel, 0),
             };
           }
           return { byId };

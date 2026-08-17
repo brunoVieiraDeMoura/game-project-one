@@ -59,8 +59,12 @@ function FloatingNumber({ n, map, mapping }: { n: NetDamage; map: GameMap; mappi
   // sempre (peito), que é onde o golpe corpo-a-corpo realmente acontece.
   const height = n.skill ? 2.2 : 1.6;
 
+  // -0.15/-0.45 — sempre à ESQUERDA do alvo (pedido do usuário 2026-08-19:
+  // números favoreciam visualmente o lado direito); a alternância por
+  // paridade de `id` continua existindo só pra evitar dois números colados
+  // quando chegam quase juntos, nunca mais pro lado direito.
   return (
-    <group position={[pos.x + (n.id % 2 ? 0.3 : -0.3), pos.y + height, pos.z]}>
+    <group position={[pos.x + (n.id % 2 ? -0.15 : -0.45), pos.y + height, pos.z]}>
       <Html center zIndexRange={[3, 1]} distanceFactor={9} pointerEvents="none">
         <div className={`dmg-num ${cls}`}>{label}</div>
       </Html>

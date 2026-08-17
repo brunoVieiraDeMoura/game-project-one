@@ -4,6 +4,7 @@ import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { CSSProperties } from "react";
 import { anchorDeArma } from "../../../entities/weaponAnchors";
+import { createSeededRng } from "../../core/particleMath";
 
 /**
  * Fire Lance (MG_FIREBOLT) — cast de fogo no CASTER, CSS puro.
@@ -40,8 +41,7 @@ interface ParticleSpec {
 
 function buildParticles(seed: number, count: number, radiusBase: number, radiusJitter: number): ParticleSpec[] {
   const out: ParticleSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < count; i++) {
     out.push({
       angleDeg: (i / count) * 360 + rnd() * 40,

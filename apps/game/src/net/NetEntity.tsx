@@ -17,6 +17,9 @@ import { EntityLabel } from "./EntityLabel";
 import { useCursorStore } from "../ui/cursorStore";
 import { GlowChao } from "./GlowChao";
 import { GEO_CILINDRO, MATERIAL_INVISIVEL } from "./recursosCompartilhados";
+import { FreezeBodyVfx } from "../vfx/mage/frost-diver/FreezeBodyVfx";
+import { usePetrifyMaterial, type PetrifyPhase } from "../entities/petrifyMaterial";
+import { OPT1_STONE, OPT1_STONEWAIT } from "./entityOption";
 import { useSoftLockStore } from "../play/softLockStore";
 import { useAttackStore } from "./attackStore";
 import { atacar, castarEmAlvo } from "./acoes";
@@ -126,6 +129,15 @@ export function NetEntityView({
     aVista,
     classModel?.family ?? "mage",
   );
+  /**
+   * Petrificar direto no material do body (`entities/petrifyMaterial.ts`) —
+   * duas fases reais do `opt1` do servidor, nunca um timer local. Seletor
+   * escalar (igual `alvo`/`travado` abaixo): só repinta quando o `opt1`
+   * desta entidade realmente muda, não a cada quadro.
+   */
+  const opt1 = useWorldStore((s) => s.entities[gid]?.opt1);
+  const petrifyPhase: PetrifyPhase = opt1 === OPT1_STONE ? "stone" : opt1 === OPT1_STONEWAIT ? "wait" : "none";
+  usePetrifyMaterial(scene, petrifyPhase);
   /**
    * Montanha/prop na frente barram o CLIQUE, não só a assistência de mira.
    *
@@ -458,6 +470,14 @@ export function NetEntityView({
         <primitive object={scene} />
         {classModel && <EquippedWeapons scene={scene} weapons={classModel.weapons} gid={gid} />}
       </group>
+
+      {/* Congelar persistente — um por entidade, vida inteira do componente
+          (nunca por cast, ver docblock). Escala igual à usada pelos bursts
+          de impacto (`vfx/SkillVfx.targetVisualScale`): só a espécie, sem o
+          multiplicador global `charScale`. Petrificar NÃO tem VFX aqui —
+          ele é aplicado direto no material do body (`petrifyPhase` acima,
+          `entities/petrifyMaterial.ts`). */}
+      <FreezeBodyVfx gid={gid} targetScale={modelInfo.scale} />
 
       {entity.name && (
         <EntityLabel

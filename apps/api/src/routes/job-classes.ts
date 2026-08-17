@@ -4,6 +4,7 @@ import { JobClassSchema } from "@ragnarok/game-data";
 import type { JobClassRepository } from "../store/job-class-repository";
 import type { SecurityContext } from "../auth/security";
 import { requireAdmin } from "../auth/guard";
+import { logCreate, logUpdate, logDelete } from "../audit/log.js";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -36,15 +37,11 @@ export function jobClassRoutes(repo: JobClassRepository, security: SecurityConte
       if (!body.success) return reply.code(400).send({ error: body.error.issues });
       try {
         const created = await repo.create(body.data);
-        if (admin && security) {
-          await security.audit({
-            actor: admin,
-            action: "create",
-            targetType: "job_class",
-            targetId: String(created.id),
-            payload: created,
-          });
-        }
+        await logCreate(
+          { security, admin, targetType: "job_class", targetId: String(created.id), source: "admin/classes" },
+          created.name,
+          created,
+        );
         return reply.code(201).send(created);
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode ?? 500;
@@ -60,17 +57,15 @@ export function jobClassRoutes(repo: JobClassRepository, security: SecurityConte
       const body = JobClassSchema.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: body.error.issues });
       try {
+        const before = await repo.get(p.data.id);
         const updated = await repo.update(p.data.id, body.data);
         if (!updated) return reply.code(404).send({ error: "not found" });
-        if (admin && security) {
-          await security.audit({
-            actor: admin,
-            action: "update",
-            targetType: "job_class",
-            targetId: String(p.data.id),
-            payload: updated,
-          });
-        }
+        await logUpdate(
+          { security, admin, targetType: "job_class", targetId: String(p.data.id), source: "admin/classes" },
+          updated.name,
+          before as unknown as Record<string, unknown> | undefined,
+          updated as unknown as Record<string, unknown>,
+        );
         return updated;
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode ?? 500;
@@ -83,16 +78,14 @@ export function jobClassRoutes(repo: JobClassRepository, security: SecurityConte
       if (admin === undefined) return;
       const p = IdParamSchema.safeParse(req.params);
       if (!p.success) return reply.code(400).send({ error: p.error.issues });
+      const before = await repo.get(p.data.id);
       const removed = await repo.remove(p.data.id);
       if (!removed) return reply.code(404).send({ error: "not found" });
-      if (admin && security) {
-        await security.audit({
-          actor: admin,
-          action: "delete",
-          targetType: "job_class",
-          targetId: String(p.data.id),
-        });
-      }
+      await logDelete(
+        { security, admin, targetType: "job_class", targetId: String(p.data.id), source: "admin/classes" },
+        before?.name ?? String(p.data.id),
+        before,
+      );
       return { ok: true };
     });
   };

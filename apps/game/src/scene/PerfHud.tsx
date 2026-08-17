@@ -26,6 +26,8 @@ import {
 } from "../core/diagnostics/rendererProbe";
 import { amostrarCena, avaliarMundoVazio, instantaneoDaCena } from "../core/diagnostics/cenaProbe";
 import { censoComRenderer } from "../core/diagnostics/censo";
+import { amostrarVfx, instantaneoVfx, registrarContainerVfx } from "../core/diagnostics/vfxProbe";
+import { medirOverdrawDeAgua } from "../core/diagnostics/waterOverdrawProbe";
 
 /**
  * Medidor de quadro — DEV apenas, ligado com **F9** (a escolha fica no
@@ -44,6 +46,15 @@ export function PerfProbe() {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
+  /**
+   * O MESMO alvo que `drei <Html>` calcula pra portar (`Html.js`: `portal
+   * ?.current || events.connected || gl.domElement.parentNode`) — nenhum
+   * VFX de skill passa `portal`, então na prática é `events.connected`.
+   * Medido, não suposto: `gl.domElement.parentNode` sozinho (a primeira
+   * tentativa) SEMPRE tinha 1 filho só (o canvas) — o R3F põe um wrapper
+   * PRÓPRIO como raiz de evento, e é ALI que o `<Html>` porta de verdade.
+   */
+  const eventsConnected = useThree((s) => s.events.connected) as HTMLElement | undefined;
   useEffect(() => {
     registrarRenderer(gl);
     // `__gl()` no console: `gl.info.render` é a única fonte de draw call de
@@ -60,6 +71,13 @@ export function PerfProbe() {
     const soltar = observarRenderer(gl, { nome: "jogo", principal: true });
     registrarMetaDeGpu(gl);
     /**
+     * O container onde `drei <Html>` porta (`gl.domElement.parentNode`) —
+     * registrado UMA VEZ, mesmo padrão de `observarRenderer` acima: quem
+     * conhece `gl` é este componente, o `vfxProbe` só guarda a referência
+     * (ver docblock de `registrarContainerVfx`).
+     */
+    registrarContainerVfx(eventsConnected ?? gl.domElement.parentElement);
+    /**
      * `__censo()` — a auditoria de assets, sob demanda.
      *
      * Precisa da `scene` E do `gl`: o censo conta o GRAFO e o `gl.info` conta o
@@ -72,6 +90,13 @@ export function PerfProbe() {
     // COLETOR, não valor: registrado como valor aqui, o censo descreveria a cena
     // no instante da montagem — que é uma cena vazia
     registrarColetorDeMeta("censo", censo);
+    /**
+     * `__overdrawAgua()` — sonda de overdraw de água, sob demanda (seção
+     * 22.11/26 de `render-tecnic.txt`: instrumentar antes de otimizar).
+     * Mesmo padrão de `__censo()` — getter fechado sobre `gl`/`scene`/
+     * `camera` ATUAIS, nunca um valor congelado no instante da montagem.
+     */
+    (window as unknown as { __overdrawAgua?: () => unknown }).__overdrawAgua = () => medirOverdrawDeAgua(gl, scene, camera);
     // `scene.updateMatrixWorld` — a coluna `matrizMs`, que é o número da
     // decisão sobre instancing de props (ver o plano de auditoria)
     const soltarMatriz = observarMatrizesDaCena(scene);
@@ -80,8 +105,9 @@ export function PerfProbe() {
       soltarMatriz();
       soltar();
       registrarRenderer(null);
+      registrarContainerVfx(null);
     };
-  }, [gl, scene]);
+  }, [gl, scene, eventsConnected]);
 
   /**
    * `dt` do `useFrame` é relógio de PAREDE entre dois quadros — inclui
@@ -203,6 +229,16 @@ export function PerfProbe() {
     // jogador trocasse de janela.
     if (!veioDeAbaOculta) avaliarGatilho("frameLongo", ms);
     /**
+     * VFX de skill: ciclo de vida já foi marcado por `vfx/vfxStore.ts`/
+     * `vfx/SkillVfx.tsx` (eventos, raros); esta é a AMOSTRA POR QUADRO —
+     * mesma posição na ordem que `amostrarCena` (depois dos contadores do
+     * device, antes do `mundoVazio`, que precisa ser o ÚLTIMO). Fora do
+     * `if (!veioDeAbaOculta)` ela mentiria: o quadro de hiato não tem
+     * `quadroMs` de verdade, e amostrar ali envenenaria a baseline e a
+     * série de cada skill com o tempo em que a aba ficou oculta.
+     */
+    if (!veioDeAbaOculta) amostrarVfx();
+    /**
      * Por ÚLTIMO: o retrato do `mundoVazio` lê as colunas que acabaram de ser
      * escritas acima. Avaliado antes, ele descreveria o quadro anterior.
      */
@@ -265,6 +301,7 @@ export function PerfOverlay() {
         const p = perfSnapshot();
         const r = instantaneoDoRenderer();
         const c = instantaneoDaCena();
+        const v_ = instantaneoVfx();
         // innerHTML direto: é DEV, são ~12 linhas, e passar isso por estado do
         // React seria repintar a árvore 60×/s para medir repintura
         el.innerHTML = [
@@ -294,6 +331,15 @@ export function PerfOverlay() {
             !c.visivel || c.suspenso,
           ),
           linha("assets em voo", `${c.emVoo}`, c.emVoo > 0),
+          /**
+           * O instrumento de VFX é OPT-IN (nasce desligado — leia1.txt item
+           * 14) e precisa ser claramente identificável quando ligado. "OFF"
+           * em cinza é o normal; ligado, mostra quantos VFX estão de pé e o
+           * quanto o portal de `<Html>`/DOM cresceu contra a baseline ociosa.
+           */
+          v_.ligado
+            ? linha("vfx-perf", `ON · ${v_.ativos} ativo(s) · html+${v_.htmlCount} · dom+${v_.domNodeCount}`, v_.ativos > 0)
+            : linha("vfx-perf", "OFF (__voo.vfxLigar())"),
           /**
            * A DECOMPOSIÇÃO do custo, acumulada desde o boot: contexto WebGL,
            * descarte de renderer e clone de modelo. Um `frameLongo` que não

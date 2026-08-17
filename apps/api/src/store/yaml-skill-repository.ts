@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse as parseYamlText, stringify as stringifyYaml } from "yaml";
 import {
@@ -53,6 +53,32 @@ export class YamlSkillRepository implements SkillRepository {
     private readonly itemRepository?: ItemRepository,
   ) {}
 
+  /**
+   * Cache do parse de `skill_db.yml` em memória, por mtime.
+   *
+   * `/skills/by-id` chama `get(id)` uma vez POR id (`routes/skills.ts`), e sem
+   * isto cada chamada relia o arquivo inteiro (~200KB, 10 mil+ linhas) do zero
+   * — o `yaml.parse` é síncrono, então N ids bloqueavam o event loop N vezes
+   * em fila, e um lote de ~13 skills (a barra do personagem) media 13-21s de
+   * verdade (achado 2026-08-14, instrumentação `[SKILL_DATA]`). `stat` é
+   * barato e cobre tanto a escrita própria (`writeOverride`) quanto qualquer
+   * edição externa do arquivo, sem precisar lembrar de invalidar na mão.
+   */
+  private overridesCache: { mtimeMs: number; data: Map<number, RawSkillYaml> } | null = null;
+
+  /**
+   * Leitura em andamento, compartilhada.
+   *
+   * `/by-id` chama `get(id)` uma vez por id dentro de um `Promise.all`
+   * (`routes/skills.ts`) — as N chamadas disparam no MESMO tick, então sem
+   * isto elas corriam juntas para o cache vazio e cada uma relia+parseava o
+   * arquivo por conta própria mesmo depois do cache por mtime acima (só
+   * ajuda a partir da SEGUNDA leva; a primeira, logo após subir o servidor ou
+   * gravar o arquivo, ainda pagava o custo N vezes). Guardar a promise em
+   * andamento faz as N chamadas concorrentes esperarem o mesmo parse.
+   */
+  private overridesInFlight: Promise<Map<number, RawSkillYaml>> | null = null;
+
   async list(query: SkillListQuery): Promise<SkillListResult> {
     const base = await this.delegate.list(query);
     const overrides = await this.readOverrides();
@@ -93,18 +119,38 @@ export class YamlSkillRepository implements SkillRepository {
 
   /** Overrides já gravados, por id — cada um validado contra o schema oficial (nunca lido "na confiança"). */
   private async readOverrides(): Promise<Map<number, RawSkillYaml>> {
+    let mtimeMs: number;
     try {
-      const raw = await readFile(this.importPath, "utf8");
-      const doc = parseYamlText(raw) as { Body?: unknown[] } | null | undefined;
-      const map = new Map<number, RawSkillYaml>();
-      for (const candidate of doc?.Body ?? []) {
-        const parsed = RawSkillYamlSchema.safeParse(candidate);
-        if (parsed.success) map.set(parsed.data.Id, parsed.data);
-      }
-      return map;
+      mtimeMs = (await stat(this.importPath)).mtimeMs;
     } catch {
+      this.overridesCache = null;
       return new Map();
     }
+    if (this.overridesCache && this.overridesCache.mtimeMs === mtimeMs) {
+      return this.overridesCache.data;
+    }
+    if (this.overridesInFlight) return this.overridesInFlight;
+
+    const load = (async () => {
+      try {
+        const raw = await readFile(this.importPath, "utf8");
+        const doc = parseYamlText(raw) as { Body?: unknown[] } | null | undefined;
+        const map = new Map<number, RawSkillYaml>();
+        for (const candidate of doc?.Body ?? []) {
+          const parsed = RawSkillYamlSchema.safeParse(candidate);
+          if (parsed.success) map.set(parsed.data.Id, parsed.data);
+        }
+        this.overridesCache = { mtimeMs, data: map };
+        return map;
+      } catch {
+        this.overridesCache = null;
+        return new Map<number, RawSkillYaml>();
+      } finally {
+        this.overridesInFlight = null;
+      }
+    })();
+    this.overridesInFlight = load;
+    return load;
   }
 
   /** só o que o `applyOverride` de sempre já expunha (nome/nível máx.) — o resto do override não volta pro `Skill` porque a fonte de verdade da dashboard é o catálogo (Supabase/JSON), não o YAML de exportação. */

@@ -5,6 +5,7 @@ import type { GameMap, MapProp } from "@ragnarok/map-format";
 import { propCategory, propUrl } from "../props/registry";
 import { bakeSpeciesImage } from "./treeImpostorBake";
 import { compartilharTexturas } from "../gltfTexturas";
+import { alturaDoHorizonte } from "./HorizonMesh";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 import { isolado } from "../core/diagnostics/isolamento";
 
@@ -80,6 +81,22 @@ import { isolado } from "../core/diagnostics/isolamento";
  * transparente escurecendo a névoa atrás. É a MESMA técnica que os `.gltf`
  * de árvore já usam (`alphaMode: "MASK"`, conferido no catálogo Quaternius) —
  * o atlas herda o corte de quem gerou a imagem.
+ *
+ * ## Coerência de horizonte (Fase de correção, `render-tecnic.txt` seção 25)
+ *
+ * Duas causas faziam árvore/arbusto distante aparecer "voando", desconectados
+ * do terreno visível — nenhuma das duas é a hipótese óbvia (`treeDistance >
+ * terrainDistance`; a malha do horizonte SEMPRE cobre o mapa inteiro):
+ *
+ *  • **Causa A (vertical)**: o Y da instância era o AUTORADO do prop (altura
+ *    do chão DETALHADO) mesmo além do raio de detalhe, onde quem está
+ *    desenhado é `HorizonMesh` — cuja altura é sistematicamente mais BAIXA
+ *    ali (o MÍNIMO de uma vizinhança, de propósito, contra o poke-through).
+ *    Corrigido ancorando o Y em `alturaDoHorizonte` além de uma banda de
+ *    transição (`BANDA_TRANSICAO_ALTURA`), não mais no Y autorado.
+ *  • **Causa B (teto ausente)**: o impostor não tinha limite de distância —
+ *    desenhava instâncias muito além de `fogFar`, 100% atrás de névoa opaca.
+ *    Corrigido com `limite` (de `play/worldVisibility.ts`).
  */
 
 /**
@@ -307,17 +324,120 @@ function makeImpostorMaterial(atlas: THREE.CanvasTexture): THREE.MeshBasicMateri
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion(); // sempre identidade — a rotação do billboard é o truque de view-space, não a instanceMatrix
 const _s = new THREE.Vector3(1, 1, 1); // idem: o tamanho real vai em `aSize`, não na escala da matriz
+const _pos = new THREE.Vector3();
+
+/**
+ * Quanto a árvore/arbusto leva, em unidades de mundo ALÉM do raio de
+ * detalhe, para o Y sair do valor autorado (o mesmo Y que a árvore 3D tinha
+ * bem ali no instante da troca) e chegar ao Y da SUPERFÍCIE DO HORIZONTE
+ * (`alturaDoHorizonte`) — a correção do "impostor voando" (`render-tecnic.txt`
+ * seção 25).
+ *
+ * Sem esta banda, o Y pularia de imediato no exato quadro em que a árvore
+ * vira impostor — um pop vertical bem na linha de troca, mesmo em terreno
+ * plano onde a diferença é pequena. Com ela, a transição de Y anda junto com
+ * a distância, na mesma direção que o jogador já está andando (afastando-se),
+ * então nunca é percebida como salto — só como a árvore "assentar" enquanto
+ * fica pequena na tela.
+ *
+ * 40 unidades = 20 células: cruzado a passo normal de personagem em ~1-2 s,
+ * devagar o bastante para não ler como pop; curto o bastante para o Y já
+ * estar 100% ancorado no horizonte bem antes de chegar perto de `fogFar`
+ * (~230 unidades depois do raio de detalhe no padrão, ver `viewRadius.ts`).
+ */
+const BANDA_TRANSICAO_ALTURA = 40;
+
+export interface InstanciaVisivel {
+  /** índice em `instances`/`alturasHorizonte` — chave pra buscar assetId/escala/flip/atlas depois */
+  index: number;
+  /** Y final da instância (já ancorado, ver `BANDA_TRANSICAO_ALTURA`) */
+  y: number;
+  /** distância (não ao quadrado) ao centro de visão — só para depuração/teste */
+  d: number;
+}
+
+/**
+ * Decide QUAIS instâncias desenham neste `center` e o Y ANCORADO de cada
+ * uma — pura, testável sem `<Canvas>` (mesmo padrão de
+ * `buildTreeImpostorInstances`/`buildHorizonGeometry`). O `useEffect` do
+ * componente só escreve o resultado nos buffers de GPU (matriz/tamanho/
+ * retângulo do atlas); a DECISÃO de visibilidade e altura mora aqui, onde dá
+ * pra travar por teste (`coerenciaHorizonte.test.ts`) sem montar cena nenhuma.
+ *
+ * As DUAS correções da Fase de coerência de horizonte moram neste laço:
+ *  • `d2 > limite2` — teto absoluto (causa B, ver o comentário de `limite`
+ *    no componente): nenhuma instância além da névoa é sequer considerada.
+ *  • `y` — ancorado em `alturasHorizonte[i]` além da banda de transição
+ *    (causa A, ver `BANDA_TRANSICAO_ALTURA`), nunca mais o Y autorado cru.
+ */
+export function resolverInstanciasVisiveis(
+  instances: readonly TreeImpostorInstance[],
+  alturasHorizonte: ArrayLike<number>,
+  center: { x: number; z: number },
+  radius: number,
+  limite: number,
+): InstanciaVisivel[] {
+  const r2 = radius * radius;
+  const limite2 = limite * limite;
+  const out: InstanciaVisivel[] = [];
+  for (let i = 0; i < instances.length; i++) {
+    const inst = instances[i]!;
+    const dx = inst.position.x - center.x;
+    const dz = inst.position.z - center.z;
+    const d2 = dx * dx + dz * dz;
+    // dentro do raio de detalhe: a árvore 3D real (PropInstance) já cobre
+    // este ponto — não desenhar a mesma árvore duas vezes
+    if (d2 <= r2) continue;
+    // ALÉM do teto absoluto: o fragmento já é 100% cor-de-névoa ali —
+    // desenhar é trabalho jogado fora (causa B)
+    if (d2 > limite2) continue;
+    const d = Math.sqrt(d2);
+    const t = Math.min(1, Math.max(0, (d - radius) / BANDA_TRANSICAO_ALTURA));
+    const y = inst.position.y + (alturasHorizonte[i]! - inst.position.y) * t;
+    out.push({ index: i, y, d });
+  }
+  return out;
+}
 
 export function TreeImpostors({
   map,
   center,
   radius,
+  limite,
 }: {
   map: GameMap;
   center: { x: number; z: number };
   radius: number;
+  /**
+   * Teto ABSOLUTO de distância — nenhuma instância além disto é desenhada,
+   * nem processada. Vem de `play/worldVisibility.ts` (`limiteVegetacao`,
+   * hoje = `fogFar`): antes desta Fase, este componente desenhava toda
+   * instância fora de `radius` SEM teto — na diagonal de um mapa grande isso
+   * passava de 3× `fogFar`, cem por cento atrás de névoa opaca (causa B
+   * medida em `render-tecnic.txt` seção 25). Puro trabalho de vértice/fill
+   * jogado fora, sem ganho visual nenhum.
+   */
+  limite: number;
 }) {
   const instances = useMemo(() => buildTreeImpostorInstances(map.props), [map]);
+  /**
+   * Y da superfície do HORIZONTE (não do prop) em cada posição — calculado
+   * UMA vez por prop, aqui, não por quadro nem por troca de `center`: é
+   * estático enquanto o mapa não trocar (mesmo mapa → mesma malha decimada).
+   * Ver `alturaDoHorizonte` (`HorizonMesh.tsx`) — a causa raiz do "impostor
+   * voando" era ancorar a árvore distante no Y AUTORADO (altura do chão
+   * DETALHADO, que não existe mais ali) em vez do Y da malha que de fato está
+   * desenhada além do raio de detalhe.
+   */
+  const alturasHorizonte = useMemo(() => {
+    const arr = new Float32Array(instances.length);
+    for (let i = 0; i < instances.length; i++) {
+      const inst = instances[i]!;
+      arr[i] = alturaDoHorizonte(map, inst.position.x, inst.position.z);
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `instances` já depende de `map`; recalcular por identidade de `instances` basta
+  }, [instances, map]);
   const species = useMemo(() => collectTreeSpecies(map.props), [map]);
   const urls = useMemo(() => species.map((s) => s.url), [species]);
 
@@ -369,18 +489,18 @@ export function TreeImpostors({
     if (!mesh || !atlas || instances.length === 0) return;
     const sizeAttr = geometry.getAttribute("aSize") as THREE.InstancedBufferAttribute;
     const rectAttr = geometry.getAttribute("aAtlasRect") as THREE.InstancedBufferAttribute;
-    const r2 = radius * radius;
+    // a DECISÃO (quem desenha, com que Y) mora em `resolverInstanciasVisiveis`
+    // — pura, testada sem `<Canvas>` (`coerenciaHorizonte.test.ts`). Aqui só
+    // sobra escrever o resultado nos buffers de GPU (matriz/tamanho/atlas).
+    const visiveis = resolverInstanciasVisiveis(instances, alturasHorizonte, center, radius, limite);
     let n = 0;
-    for (const inst of instances) {
-      const dx = inst.position.x - center.x;
-      const dz = inst.position.z - center.z;
-      // dentro do raio de detalhe: a árvore 3D real (PropInstance) já cobre
-      // este ponto — não desenhar a mesma árvore duas vezes
-      if (dx * dx + dz * dz <= r2) continue;
+    for (const v of visiveis) {
+      const inst = instances[v.index]!;
       const size = atlas.sizeByAssetId.get(inst.assetId) ?? FALLBACK_SIZE;
       const rect = atlas.rectByAssetId.get(inst.assetId);
       if (!rect) continue; // espécie não bakeada (não deveria acontecer — collectTreeSpecies gera o mesmo conjunto)
-      _m.compose(inst.position, _q, _s);
+      _pos.set(inst.position.x, v.y, inst.position.z);
+      _m.compose(_pos, _q, _s);
       mesh.setMatrixAt(n, _m);
       sizeAttr.setXY(n, size.width * inst.scale * inst.flip, size.height * inst.scale);
       rectAttr.setXYZW(n, rect[0], rect[1], rect[2], rect[3]);
@@ -394,7 +514,7 @@ export function TreeImpostors({
       registrarEvento("cena", "impostorArvore:create", { instancias: instances.length, visiveis: n });
       primeira.current = false;
     }
-  }, [instances, atlas, geometry, center.x, center.z, radius]);
+  }, [instances, alturasHorizonte, atlas, geometry, center.x, center.z, radius, limite]);
 
   // isolamento (`?iso=semImpostorArvore`): checado DEPOIS dos hooks, mesmo
   // padrão do resto da cena (hook registrado é hook que roda)

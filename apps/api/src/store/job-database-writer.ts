@@ -295,7 +295,8 @@ export class JobDatabaseWriter {
       const aspdOut = jobClassToJobAspdEntry(jc, jobName, before, aspdWarnings);
       for (const w of aspdWarnings) warnings.push(`${jobName}: ${w}`);
       const treeWarnings: string[] = [];
-      const treeOut = jobClassToSkillTreeEntry(jc, jobName, jobs, skills, treeWarnings);
+      const baselineJc = baselineAll.find((b) => b.name === jobName);
+      const treeOut = jobClassToSkillTreeEntry(jc, jobName, jobs, skills, treeWarnings, baselineJc);
       for (const w of treeWarnings) warnings.push(`${jobName}: ${w}`);
 
       diff.push(...diffEntry("jobStats", jobName, before, statsOut));

@@ -40,11 +40,34 @@ export function playOneShot(src: string): void {
   const el = elementFor(src);
   el.volume = getSfxVolume();
   el.currentTime = 0;
-  el.play().catch(() => {
+  el.play().catch((err) => {
     /* stinger de combate só dispara em resposta a um evento de jogo que já
        exigiu interação prévia (personagem já andando/lutando) — o catch é
-       rede de segurança, não caminho esperado */
+       rede de segurança, não caminho esperado. Em DEV, o erro real (autoplay
+       bloqueado, 404, formato não suportado) é logado — antes disto, QUALQUER
+       falha de play() ficava muda, sem nenhum jeito de diagnosticar (achado
+       auditando por que `thunder_storm_hit` não tocava, leia1.txt). */
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error("[oneShotPool] play() falhou", { src, name: err?.name, message: err?.message });
+    }
   });
+}
+
+/**
+ * Para TODO stinger tocando agora, sem descartar o pool (os elementos
+ * continuam prontos pro próximo `playOneShot` — só o SOM para).
+ *
+ * Chamar do cleanup de fim de sessão (`audio/audioLifecycle`,
+ * `encerrar()` em `net/useGatewayEvents.ts`): sem isto, um stinger longo
+ * (voz de morte, efeito de skill) disparado bem antes do disconnect
+ * continuava audível na tela de `/login` por cima da música dela.
+ */
+export function pararTodos(): void {
+  for (const el of pool.values()) {
+    el.pause();
+    el.currentTime = 0;
+  }
 }
 
 /** SÓ PARA TESTE — o app de verdade nunca chama isto (mesmo espírito do

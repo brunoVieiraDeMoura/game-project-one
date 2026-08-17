@@ -78,9 +78,24 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
     if (faltam.length === 0) return;
     for (const id of faltam) pendentes.add(id);
 
+    // instrumentação temporária (auditoria "glitch ~30s" 2026-08-14) — só
+    // DEV, remover/reduzir depois de confirmado em produção que o atraso
+    // some. Mede o próprio tempo de ida-e-volta do `/items/by-id`, não um
+    // palpite.
+    const t0 = import.meta.env.DEV ? performance.now() : 0;
+    if (import.meta.env.DEV) {
+      console.info(`[ITEM_DATA] request iniciado ids=[${faltam.join(",")}] source=API t=${Math.round(t0)}ms`);
+    }
+
     fetch(`${API_URL}/items/by-id?ids=${faltam.join(",")}`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((data: { items?: Array<Record<string, unknown>> }) => {
+        if (import.meta.env.DEV) {
+          const dt = Math.round(performance.now() - t0);
+          console.info(
+            `[ITEM_DATA] request concluído ids=[${faltam.join(",")}] source=API registros=${data.items?.length ?? 0} tempoRespostaMs=${dt}`,
+          );
+        }
         set((s) => {
           const byId = { ...s.byId };
           for (const cru of data.items ?? []) {
@@ -93,7 +108,11 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
             if (!Number.isFinite(id)) continue;
             byId[id] = {
               id,
-              name: String(cru.name ?? cru.aegisName ?? `#${id}`),
+              // NUNCA cair pra aegisName/id aqui — regra absoluta (auditoria
+              // 2026-08-14): `name` vazio é estado terminal (dado incompleto
+              // no catálogo), tratado por `getItemDisplayName`, não mascarado
+              // na ingestão com um identificador legado.
+              name: String(cru.name ?? ""),
               aegisName: String(cru.aegisName ?? ""),
               type: String(cru.type ?? "etc"),
               subType: cru.subType ? String(cru.subType) : undefined,
@@ -145,14 +164,32 @@ export function isEquipableItemType(type: string | undefined): boolean {
   return type != null && EQUIPABLE_ITEM_TYPES.has(type);
 }
 
+/** item respondido pelo catálogo mas sem nome nenhum lá dentro — dado
+ * incompleto (item não seedado com nome no Painel 3000), não "ainda
+ * carregando"; ver `getItemDisplayName` */
+export const ITEM_NAME_FALLBACK = "Unknown";
+
 /**
- * Nome para mostrar.
+ * Nome visual de um item — SEMPRE o `name` atual do catálogo (Painel 3000),
+ * NUNCA o id, NUNCA o `aegisName`.
  *
- * Enquanto a busca não volta, `#501` — a lacuna honesta. Inventar um nome
- * genérico ("Item") seria pior: o jogador não saberia que está esperando.
+ * Regra absoluta (auditoria 2026-08-14): renderizar ID/Aegis como "nome
+ * provisório" enquanto o catálogo carrega foi o próprio bug — o jogador via
+ * `#501` na tela achando que era o dado final, não um placeholder.
+ *
+ * Mesmo contrato de `net/skillCatalog.getSkillDisplayName` (mesmo motivo:
+ * dois estados de "sem nome" são coisas diferentes):
+ *  • `info === undefined` — o catálogo AINDA NÃO RESPONDEU pra este id.
+ *    Retorna `undefined`: quem desenha mostra o loading (`IconSquare
+ *    ({loading:true})`/`LoadingRing`), nunca texto, nunca id, nunca aegis.
+ *  • `info.name` vazio COM `info` presente — o catálogo respondeu e o item
+ *    não tem nome cadastrado (dado incompleto, não vai chegar depois).
+ *    Retorna `ITEM_NAME_FALLBACK` ("Unknown") — não é carregamento, é o
+ *    valor final.
  */
-export function itemLabel(id: number): string {
-  return useItemCatalog.getState().byId[id]?.name ?? `#${id}`;
+export function getItemDisplayName(info: Pick<ItemInfo, "name"> | undefined): string | undefined {
+  if (info === undefined) return undefined;
+  return info.name || ITEM_NAME_FALLBACK;
 }
 
 if (import.meta.env.DEV && typeof window !== "undefined") {

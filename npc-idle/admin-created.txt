@@ -16,3 +16,8 @@ gpqa01,70,70,0	script	QA Audit Final#GPQA_FINAL_AUDIT_NPC	4_M_ALCHE_C,{
 	mes "Auditoria final.";
 	close;
 }
+
+prontera,150,150,0	script	AUDIT_TEST NPC#audit_test_npc	1_M_01,{
+	mes "Auditoria de teste.";
+	close;
+}

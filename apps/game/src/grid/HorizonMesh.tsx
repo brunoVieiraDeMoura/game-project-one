@@ -168,10 +168,16 @@ export interface HorizonBuild {
  * na MESMA coluna de mundo, 59 de 169 pontos amostrados num raio de 60
  * unidades do jogador tinham a malha decimada ACIMA do chão real, até 5,73
  * unidades — não é um caso de canto, é a maioria dos pontos perto de
- * qualquer parede/penhasco. Uma janela de meio passo (4 células) não cobria
- * o suficiente; o passo inteiro (8, ida e volta = 17×17 células por vértice)
- * garante que o vale entre dois pontos decimados AINDA seja visto por pelo
- * menos um deles dos dois lados.
+ * qualquer parede/penhasco. Uma janela de meio passo não cobria o
+ * suficiente; o passo inteiro (ida e volta) garante que o vale entre dois
+ * pontos decimados AINDA seja visto por pelo menos um deles dos dois lados.
+ *
+ * A medição original foi feita com `PASSO_HORIZONTE = 8` (janela ±8 = 17×17
+ * células por vértice); depois da otimização de renderização (prioridade 8,
+ * ver o comentário de `PASSO_HORIZONTE` acima) o passo caiu pra 4, e a
+ * janela — que é DEFINIDA em cima dele, não um número fixo — encolheu junto,
+ * pra ±4 = 9×9. A regra ("passo inteiro, não metade") continua a mesma; só
+ * o valor concreto do passo mudou.
  */
 export const JANELA_NIVEL_MINIMO = PASSO_HORIZONTE;
 
@@ -209,6 +215,87 @@ export function nivelMinimoNaVizinhanca(map: GameMap, col: number, row: number, 
 }
 
 /**
+ * Geometria da grade decimada (passo, franja, contagem de colunas/linhas) —
+ * fatorado para fora de `buildHorizonGeometry` porque `alturaDoHorizonte`
+ * (mais abaixo) precisa da MESMA grade para saber quais 4 vértices cercam um
+ * ponto arbitrário do mundo. Uma função só, não duas fórmulas que podem
+ * divergir silenciosamente se `PASSO_HORIZONTE`/`PADDING_MUNDO` mudar.
+ */
+interface GradeHorizonte {
+  passoMundo: number;
+  padSteps: number;
+  cols: number;
+  rows: number;
+}
+
+function gradeHorizonte(map: GameMap): GradeHorizonte {
+  const { width, height } = map.size;
+  const passoMundo = PASSO_HORIZONTE * SQUARE_SIZE;
+  // franja além da borda real, em PASSOS decimados (arredondado pra cima —
+  // é melhor sobrar um pouco de padding que faltar o suficiente pra cunha
+  // de vazio voltar a aparecer)
+  const padSteps = Math.ceil(PADDING_MUNDO / passoMundo);
+  const cols = Math.max(2, Math.floor(width / PASSO_HORIZONTE) + 1 + 2 * padSteps);
+  const rows = Math.max(2, Math.floor(height / PASSO_HORIZONTE) + 1 + 2 * padSteps);
+  return { passoMundo, padSteps, cols, rows };
+}
+
+/**
+ * Altura (Y) que o vértice decimado (j,k) da grade recebe — MESMA fórmula que
+ * o laço de `buildHorizonGeometry` usa por dentro (nível mínimo da vizinhança
+ * + `OFFSET_Y`), fatorada para ser chamada tanto na construção da geometria
+ * quanto em `alturaDoHorizonte` (consulta pontual, sem construir malha).
+ */
+function alturaNaGrade(map: GameMap, grade: GradeHorizonte, j: number, k: number): number {
+  const { width, height } = map.size;
+  const localX = (j - grade.padSteps) * grade.passoMundo;
+  const localZ = (k - grade.padSteps) * grade.passoMundo;
+  const col = Math.min(width - 1, Math.max(0, Math.round(localX / SQUARE_SIZE)));
+  const row = Math.min(height - 1, Math.max(0, Math.round(localZ / SQUARE_SIZE)));
+  return squareLevelToY(nivelMinimoNaVizinhanca(map, col, row, width, height)) + OFFSET_Y;
+}
+
+/**
+ * A altura (Y) da SUPERFÍCIE QUE DE FATO É DESENHADA em `(x,z)` fora do raio
+ * de detalhe — o que `HorizonMesh` mostra ali, não o Y autorado do heightmap.
+ *
+ * Existe para consertar o "impostor voando" (causa raiz documentada em
+ * `render-tecnic.txt`, seção 25): `TreeImpostors` ancorava a árvore/arbusto
+ * distante no Y AUTORADO do prop, que é a altura do CHÃO DETALHADO — mas além
+ * do raio de detalhe quem está desenhado ali é esta malha decimada, cujo Y é
+ * sistematicamente mais BAIXO (o mínimo da vizinhança, de propósito — ver
+ * `nivelMinimoNaVizinhanca`). Numa borda de platô/penhasco/morro estreito essa
+ * diferença passa de uma unidade inteira, e a árvore fica boiando sobre o
+ * vazio ou sobre a névoa.
+ *
+ * **Bilinear, não vizinho mais próximo**: interpola os 4 vértices decimados
+ * que cercam `(x,z)` — é EXATAMENTE a mesma interpolação que a GPU já faz
+ * entre os vértices do triângulo ao rasterizar `HorizonMesh` (mesmo esquema
+ * `PlaneGeometry` com 2 triângulos por quad). Usar o vizinho mais próximo em
+ * vez disso reintroduziria um degrau que a malha real não tem.
+ *
+ * **Mesma fonte, não uma segunda conta**: usa `gradeHorizonte`/`alturaNaGrade`,
+ * os DOIS helpers que `buildHorizonGeometry` também usa — se `PASSO_HORIZONTE`,
+ * `PADDING_MUNDO` ou `OFFSET_Y` mudarem, as duas funções mudam juntas. O
+ * round-trip (`HorizonMesh.test.ts`) confere que este valor bate com o
+ * atributo `position` da geometria construída, nos próprios vértices.
+ */
+export function alturaDoHorizonte(map: GameMap, x: number, z: number): number {
+  const grade = gradeHorizonte(map);
+  const jf = x / grade.passoMundo + grade.padSteps;
+  const kf = z / grade.passoMundo + grade.padSteps;
+  const j0 = Math.min(grade.cols - 2, Math.max(0, Math.floor(jf)));
+  const k0 = Math.min(grade.rows - 2, Math.max(0, Math.floor(kf)));
+  const tx = Math.min(1, Math.max(0, jf - j0));
+  const tz = Math.min(1, Math.max(0, kf - k0));
+  const h00 = alturaNaGrade(map, grade, j0, k0);
+  const h10 = alturaNaGrade(map, grade, j0 + 1, k0);
+  const h01 = alturaNaGrade(map, grade, j0, k0 + 1);
+  const h11 = alturaNaGrade(map, grade, j0 + 1, k0 + 1);
+  return h00 * (1 - tx) * (1 - tz) + h10 * tx * (1 - tz) + h01 * (1 - tx) * tz + h11 * tx * tz;
+}
+
+/**
  * Constrói a geometria decimada — pura, testável sem `<Canvas>`.
  *
  * Reusa `THREE.PlaneGeometry` como esqueleto (grade regular pronta, sem
@@ -220,13 +307,7 @@ export function nivelMinimoNaVizinhanca(map: GameMap, col: number, row: number, 
 export function buildHorizonGeometry(map: GameMap): HorizonBuild {
   const t0 = performance.now();
   const { width, height } = map.size;
-  const passoMundo = PASSO_HORIZONTE * SQUARE_SIZE;
-  // franja além da borda real, em PASSOS decimados (arredondado pra cima —
-  // é melhor sobrar um pouco de padding que faltar o suficiente pra cunha
-  // de vazio voltar a aparecer)
-  const padSteps = Math.ceil(PADDING_MUNDO / passoMundo);
-  const cols = Math.max(2, Math.floor(width / PASSO_HORIZONTE) + 1 + 2 * padSteps);
-  const rows = Math.max(2, Math.floor(height / PASSO_HORIZONTE) + 1 + 2 * padSteps);
+  const { passoMundo, padSteps, cols, rows } = gradeHorizonte(map);
 
   const geometry = new THREE.PlaneGeometry(
     (cols - 1) * passoMundo,

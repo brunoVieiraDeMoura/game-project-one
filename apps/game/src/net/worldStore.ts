@@ -109,6 +109,17 @@ export interface NetEntity {
   maxHp?: number;
   /** nível do mob — vem junto do nome quando `show_mob_info` está ligado */
   level?: number;
+  /**
+   * "estado do corpo" (`net/gateway.ts: entity:option`, ZC_STATE_CHANGE
+   * 0x119) — enum de posição ÚNICA (rAthena `status.hpp`: 0=nenhum,
+   * 1=petrificado, 2=congelado, 3=atordoado, 4=dormindo), nunca bitmask.
+   * Ausente = nunca chegou nenhum pacote pra este gid (equivalente a 0,
+   * "sem estado" — não force `?? 0` na leitura só por causa disto, os dois
+   * já significam a mesma coisa pra quem consome). Fonte de verdade pra VFX
+   * condicional (Frost Diver/Stone Curse) — nunca assumir petrificação/
+   * congelamento só porque um ataque acertou.
+   */
+  opt1?: number;
   /** caminho célula a célula (ver `Motion.path`) */
   path?: Cell[];
   stepEnds?: number[];
@@ -392,6 +403,7 @@ interface WorldState {
   rename: (gid: number, name: string) => void;
   setLevel: (gid: number, level: number) => void;
   setHp: (gid: number, hp: number, maxHp: number) => void;
+  setOption: (gid: number, opt1: number) => void;
   /**
    * Esquece TUDO que estava em volta, preservando o próprio personagem.
    *
@@ -1270,6 +1282,9 @@ export const useWorldStore = create<WorldState>((set) => ({
 
   setHp: (gid, hp, maxHp) =>
     set((s) => (s.entities[gid] ? { entities: { ...s.entities, [gid]: { ...s.entities[gid]!, hp, maxHp } } } : s)),
+
+  setOption: (gid, opt1) =>
+    set((s) => (s.entities[gid] ? { entities: { ...s.entities, [gid]: { ...s.entities[gid]!, opt1 } } } : s)),
 
   limparEntidades: () => set((s) => ({ entities: {}, gids: [], target: null, geracao: s.geracao + 1 })),
 

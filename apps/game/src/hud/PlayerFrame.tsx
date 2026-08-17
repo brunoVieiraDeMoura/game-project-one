@@ -10,6 +10,9 @@ import { classModelFor } from "../entities/classModels";
 import { useHudStore } from "./hudStore";
 import { CurvedBar } from "../ui/CurvedBar";
 import { CharacterPortrait } from "./CharacterPortrait";
+import { StatusEffectIcons } from "./StatusEffectIcons";
+import { MobInfoSlots } from "./MobInfoSlots";
+import { MobCastBadge } from "./MobCastBadge";
 import { isolado } from "../core/diagnostics/isolamento";
 import type { CharacterKey, WeaponMount } from "../assets";
 import {
@@ -36,6 +39,15 @@ import {
 const PLAYER_WIDTH = 400;
 /** o alvo usa a MESMA placa, 20% menor — é o secundário da dupla */
 const TARGET_WIDTH = 320;
+
+/**
+ * Início da fileira de ícones de buff/debuff (abaixo da placa) alinhado na
+ * MESMA reta em que a barra de HP/SP começa — não a esquerda da placa
+ * inteira, que sobra vazia sob o retrato (pedido explícito 2026-08-14).
+ */
+function inicioNaLinhaDeVida(width: number): number {
+  return (PLATE_LAYOUT.hp.x / PLATE.w) * width;
+}
 
 /**
  * Aro de nível (ring-level.png) com o número dentro.
@@ -281,6 +293,7 @@ export function PlayerFrame() {
   const online = usePlayerStore((s) => s.known);
   const stats = usePlayerStore((s) => s.stats);
   const charName = usePlayerStore((s) => s.charName);
+  const selfGid = useWorldStore((s) => s.selfGid);
 
   const p = online
     ? {
@@ -294,16 +307,28 @@ export function PlayerFrame() {
     : local;
 
   return (
-    <StatPlate
-      width={PLAYER_WIDTH}
-      name={p.name}
-      level={p.level}
-      hp={{ atual: p.hp, max: p.maxHp }}
-      sp={{ atual: p.sp, max: p.maxSp }}
-      jobLevel={online ? stats.jobLevel : localJobLevel}
-      onJobClick={() => useHudStore.getState().openWindow("skills")}
-      portrait={<CharacterPortrait dono="jogador" />}
-    />
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <StatPlate
+        width={PLAYER_WIDTH}
+        name={p.name}
+        level={p.level}
+        hp={{ atual: p.hp, max: p.maxHp }}
+        sp={{ atual: p.sp, max: p.maxSp }}
+        jobLevel={online ? stats.jobLevel : localJobLevel}
+        onJobClick={() => useHudStore.getState().openWindow("skills")}
+        portrait={<CharacterPortrait dono="jogador" />}
+      />
+      {/* Ícones pequenos de buff/debuff/skill-com-duração, LOGO abaixo da HP —
+          div IRMÃ da placa (não filha), então a placa em si nunca muda de
+          tamanho ("auditoria buffs/debuffs" 2026-08-14, pedido explícito).
+          Início alinhado na reta da barra de HP/SP, não na borda esquerda
+          da placa (que sobra vazia sob o retrato). */}
+      {online && (
+        <div style={{ marginLeft: inicioNaLinhaDeVida(PLAYER_WIDTH) }}>
+          <StatusEffectIcons gid={selfGid} size={18} bordered={false} tooltipBelow />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -337,6 +362,7 @@ const FICHA_DE_AQUECIMENTO: FichaDeAlvo = {
   level: "",
   modelo: "skeleton_minion",
   weapons: [],
+  gid: undefined,
 };
 
 export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {}) {
@@ -382,6 +408,7 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
     ficha = {
       name: netTarget.name ?? `#${netTarget.gid}`,
       level: netTarget.level ?? "?",
+      gid: netTarget.gid,
       hp: temHp ? { atual: netTarget.hp!, max: netTarget.maxHp! } : undefined,
       // aparência do alvo = a mesma tabela que a cena usa para desenhá-lo
       // (mob: mob_db; player: classe real — `net.job` É a classe nesse caso;
@@ -393,6 +420,11 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
             ? classModelFor(netTarget.job).character
             : NPC_MODEL.character,
       weapons: netTarget.kind === "player" ? classModelFor(netTarget.job).weapons : [],
+      // só mob tem elemento/raça/tamanho (`hud/MobInfoSlots.tsx`) e barra de
+      // skill própria (`hud/MobCastBadge.tsx`) — `job` de um mob É o mob_db
+      // id (`net/monsterCatalog.ts` busca por ele, mesmo catálogo que
+      // `entities/mobModels.ts` já usa pra escolher o modelo 3D acima).
+      monsterId: netTarget.kind === "mob" ? netTarget.job : undefined,
     };
     ultima.current = ficha;
   } else if (!online && localTarget && localTarget.alive) {
@@ -448,7 +480,14 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
   if (!ficha) return null;
 
   return (
-    <div style={aquecendoSemAlvo ? { visibility: "hidden" } : { display: visivel ? undefined : "none" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        ...(aquecendoSemAlvo ? { visibility: "hidden" } : { display: visivel ? "flex" : "none" }),
+      }}
+    >
       <StatPlate
         width={TARGET_WIDTH}
         name={ficha.name}
@@ -458,6 +497,25 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
         hpFill={ENEMY_FILL}
         portrait={<CharacterPortrait dono="alvo" characterKey={ficha.modelo} weapons={ficha.weapons} />}
       />
+      {ficha.gid !== undefined && (
+        // 16→32 (dobro) — pedido explícito 2026-08-14: ícone de debuff do
+        // ALVO fica NESTA UI 2D (TargetFrame), não flutuando em cima da
+        // cabeça do monstro (removido de `net/EntityLabel.tsx`). Referência
+        // do usuário ("como-quero.jpg"): quadrado grande, peso visual
+        // comparável ao badge de LVL — `TARGET_WIDTH` (320px) sobra espaço.
+        //
+        // Ordem fixa pedida ("auditoria skills/monstros" 2026-08-14):
+        // [Elemento][Raça][Tamanho] (`MobInfoSlots`, só mob) → conjurando
+        // agora (`MobCastBadge`, se houver) → buffs/debuffs reais
+        // (`StatusEffectIcons`) — os 3 primeiros nunca entram DENTRO de
+        // `StatusEffectIcons`, então um buff temporário nunca empurra nem
+        // substitui um slot fixo.
+        <div style={{ marginLeft: inicioNaLinhaDeVida(TARGET_WIDTH), display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+          {ficha.monsterId !== undefined && <MobInfoSlots monsterId={ficha.monsterId} size={32} />}
+          <MobCastBadge gid={ficha.gid} size={32} />
+          <StatusEffectIcons gid={ficha.gid} size={32} bordered={false} tooltipBelow />
+        </div>
+      )}
     </div>
   );
 }
@@ -470,4 +528,10 @@ interface FichaDeAlvo {
   sp?: { atual: number; max: number };
   modelo: CharacterKey;
   weapons: readonly WeaponMount[];
+  /** ausente = alvo LOCAL (preview/demo, sem sessão) — sem gid não há
+   * `status:start`/`status:end` de verdade pra mostrar */
+  gid?: number;
+  /** presente só quando o alvo é MOB — mob_db id, pros 3 slots fixos
+   * (`hud/MobInfoSlots.tsx`) */
+  monsterId?: number;
 }

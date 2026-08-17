@@ -287,12 +287,51 @@ describe("YamlSkillRepository — ItemCost/Equipment resolvem itemId → aegisNa
     expect(raw).not.toContain("888888");
   });
 
-  it("5) skill sem ItemCost/Equipment preserva o comportamento anterior (sem warning de item, sem chaves no YAML)", async () => {
+  it("5) skill sem ItemCost/Equipment não gera warning (Equipment continua omitido, ItemCost agora é emitido vazio — ver teste 8)", async () => {
     const { warnings } = await repo.writeOverride(bash());
     const entry = await readEntry();
     expect(entry.Requires?.ItemCost ?? []).toEqual([]);
     expect(entry.Requires?.Equipment ?? {}).toEqual({});
     expect(warnings.some((w) => w.includes("ItemCost") || w.includes("Equipment"))).toBe(false);
+  });
+
+  it("8) regressão Safety Wall: remover um ItemCost existente grava `ItemCost: []` (chave presente, vazia) — não mais omitida", async () => {
+    // rAthena (skill.cpp:15498, SkillDatabase::parseBodyNode) só reseta
+    // itemid/amount quando a chave ItemCost está PRESENTE no override —
+    // omitir a chave quando o array fica vazio deixava o custo de item da
+    // base (db/re) sobrevivendo pra sempre, mesmo depois do admin remover
+    // (auditoria Safety Wall 2026-08-13).
+    await repo.create(bash({ requirements: { itemsConsumed: [{ itemId: 501, amount: 1 }], requiredEquipment: [], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }));
+    const withGem = await readEntry();
+    expect(withGem.Requires?.ItemCost).toEqual([{ Item: "Red_Potion", Amount: 1 }]);
+
+    await repo.update(
+      5,
+      bash({ requirements: { itemsConsumed: [], requiredEquipment: [], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }),
+    );
+    const withoutGem = await readEntry();
+    expect(withoutGem.Requires?.ItemCost).toEqual([]);
+
+    const raw = await readFile(importPath, "utf8");
+    expect(raw).toContain("ItemCost");
+  });
+
+  it("9) regressão Safety Wall (2ª causa): skill sem munição real não emite AmmoAmount — `Ammo.None: true` não conta como munição marcada", async () => {
+    // Achado ao vivo (não só de leitura de código): com o gate antigo
+    // (`Object.values(ammo).some(Boolean)`), `None: true` — o sentinel de
+    // "sem munição nenhuma" (linha ~249 deste mapper) — contava como
+    // "tem munição marcada" e fazia `AmmoAmount` ser emitido mesmo assim.
+    // rAthena rejeita a entrada INTEIRA nesse caso ("An ammo type is
+    // required before specifying ammo amount.", skill.cpp:15432-15434) —
+    // Safety Wall (sem munição) parou de carregar no servidor de verdade
+    // por causa disso, e a correção de ItemCost (teste 8) nunca chegou a
+    // ser exercitada porque a entrada inteira era descartada no reload.
+    await repo.writeOverride(
+      bash({ requirements: { itemsConsumed: [], requiredEquipment: [], requiredWeapons: [], requiredAmmo: [], requiredStatuses: [] } }),
+    );
+    const entry = await readEntry();
+    expect(entry.Requires?.Ammo?.None).toBe(true);
+    expect(entry.Requires?.AmmoAmount).toBeUndefined();
   });
 
   it("6) múltiplos itens: todos resolvidos individualmente (ItemCost + Equipment juntos)", async () => {

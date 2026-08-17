@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "../net/playerStore";
-import { useItemCatalog } from "../net/itemCatalog";
+import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
 import { useCardStore } from "../net/cardStore";
 import { CurvedBox } from "../ui/CurvedBox";
-import { IconSquare } from "../ui/rpg";
+import { IconSquare, LoadingRing } from "../ui/rpg";
 import { FRAME_FONT } from "../ui/charFrame";
 import { CHROME, TYPE, WINDOW_SCALE } from "../ui/windowChrome";
 import { BOOK } from "../ui/travelbook";
@@ -64,7 +64,8 @@ export function CardApplyDialog() {
 
   if (cardIndex == null || !carta) return null;
 
-  const nomeCarta = nomes[carta.itemId]?.name ?? `#${carta.itemId}`;
+  // NUNCA id como nome provisório (regra absoluta, auditoria 2026-08-14)
+  const nomeCarta = getItemDisplayName(nomes[carta.itemId]);
 
   return (
     <div
@@ -106,7 +107,7 @@ export function CardApplyDialog() {
             marginBottom: px(10),
           }}
         >
-          {nomeCarta}
+          {nomeCarta ?? <LoadingRing size={px(TYPE.small) * 1.4} />}
         </div>
 
         {estado === "esperando" && <Mensagem texto="Consultando equipamentos…" />}
@@ -118,7 +119,7 @@ export function CardApplyDialog() {
             {opcoes.map((item) => (
               <LinhaEquip
                 key={item.index}
-                nome={nomes[item.itemId]?.name ?? `#${item.itemId}`}
+                nome={getItemDisplayName(nomes[item.itemId])}
                 itemId={item.itemId}
                 refine={item.refine}
                 cartasUsadas={item.cards.filter((c) => c > 0).length}
@@ -176,7 +177,7 @@ function LinhaEquip({
   desabilitado,
   onClick,
 }: {
-  nome: string;
+  nome?: string;
   itemId: number;
   refine: number;
   cartasUsadas: number;
@@ -202,7 +203,9 @@ function LinhaEquip({
       }}
     >
       <div style={{ width: px(26), height: px(26), flex: "none" }}>
-        <IconSquare seed={`item-${itemId}`} size={px(26)} />
+        {/* anel de loading enquanto o catálogo não respondeu — nunca o
+            quadrado por seed de itemId (regra absoluta, auditoria 2026-08-14) */}
+        <IconSquare seed={nome ? `item-${itemId}` : undefined} loading={!nome} size={px(26)} />
       </div>
       <span
         style={{
@@ -214,8 +217,14 @@ function LinhaEquip({
           whiteSpace: "nowrap",
         }}
       >
-        {nome}
-        {refine > 0 ? ` +${refine}` : ""}
+        {nome ? (
+          <>
+            {nome}
+            {refine > 0 ? ` +${refine}` : ""}
+          </>
+        ) : (
+          <LoadingRing size={px(TYPE.small)} />
+        )}
       </span>
       <span style={{ font: `${px(TYPE.small)}px ${FRAME_FONT}`, color: BOOK.gold, flex: "none" }}>
         {cartasUsadas}/{slots}

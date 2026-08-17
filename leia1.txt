@@ -1,635 +1,521 @@
-Continue a partir do estado ATUAL do repositório.
+separa tudo emtasks depois de se organizar e poe na memoria até ser resolvido, a cada final de conclusao de task, você da check na memoria
 
-IMPORTANTE:
+# Diretriz de execução — não confundir prova de conceito com solução final
 
-* NÃO faça `git add`.
-* NÃO faça commit.
-* NÃO faça push.
-* NÃO altere histórico do Git.
-* Eu faço toda a parte de Git manualmente.
-* Não crie novos commits nesta tarefa.
+O plano acima está aprovado como direção de investigação, mas quero ajustar a forma de execução.
 
-Quero agora uma **VERIFICAÇÃO COMPLETA DA EXECUÇÃO** da auditoria/correção anterior.
+## Regra principal
 
-A entrega anterior definiu as Fases B–J e descreveu uma arquitetura, mas agora preciso verificar o que realmente existe no código e o que realmente foi executado.
+Não trate a arquitetura GPU como solução comprovada antes dos benchmarks.
 
-NÃO assuma que algo foi implementado apenas porque estava no plano.
+A sequência correta é:
 
-NÃO faça novas otimizações especulativas.
+```text
+MEDIR
+  ↓
+IDENTIFICAR GARGALO
+  ↓
+CORRIGIR INFRA
+  ↓
+CRIAR PROTÓTIPO GPU
+  ↓
+COMPARAR
+  ↓
+VALIDAR ESCALA
+  ↓
+SÓ ENTÃO MIGRAR
+```
 
-Primeiro audite o estado atual.
+Não pule etapas.
 
 ---
 
-# 1. ESTADO REAL DO REPOSITÓRIO
+## 1. Primeiro faça somente o Passo 0
 
-Comece verificando:
+Antes de alterar Fire Ball ou criar qualquer renderer novo, rode os benchmarks já existentes.
 
-* arquivos modificados;
-* arquivos novos;
-* estado atual do código;
-* testes disponíveis;
-* implementação real das mudanças descritas anteriormente.
+Não crie uma infraestrutura paralela de benchmark se a existente realmente cobre o cenário.
 
-Não precisa executar comandos de Git para criar histórico. Apenas leia o estado atual necessário para a auditoria.
-
-Liste objetivamente:
+Para Fire Ball:
 
 ```text
-IMPLEMENTADO
-PARCIAL
-NÃO IMPLEMENTADO
+1
+5
+10
+20
+30
 ```
 
-para cada fase.
+E depois o combo.
+
+Para cada cenário registre, quando disponível:
+
+```text
+FPS
+frame time
+JS
+style
+layout
+paint
+raster
+composite
+GPU
+DOM nodes
+CSS animations
+```
+
+O objetivo dessa primeira etapa é responder:
+
+> Qual parte da Fire Ball realmente domina o custo quando a quantidade de instâncias cresce?
+
+Não basta dizer "ela tem 118 DOMs".
 
 ---
 
-# 2. FASE B — INSTRUMENTAÇÃO
+## 2. Fire Wall deve ser investigado separadamente
 
-Verifique se realmente existem:
-
-```text
-sobraMs
-heapDeltaMb
-```
-
-no flight recorder.
-
-Verifique também os eventos:
+Execute o harness existente com 30 células e faça uma matriz de ablação:
 
 ```text
-cursor:*
-aoe:*
-gltf:clone
+baseline
+
+- embers
+- glow
+- licks
+- smoke
+
+glow only
+smoke only
+embers only
+licks only
+
+glow + smoke
+glow + embers
+smoke + embers
+etc., se necessário
 ```
 
-e qualquer extensão feita em:
+Quero descobrir especificamente de onde vêm os ~39 ms.
 
-```text
-render/quadro-longo
-```
+Não assuma:
 
-Confirme:
+> "é compositor porque tem blur"
 
-* arquivo;
-* função;
-* ponto de chamada;
-* dados registrados;
-* frequência;
-* se ocorre somente quando necessário.
+Isso é uma hipótese.
 
-Não crie eventos duplicados.
+O resultado deve dizer qual combinação explica a maior parte do custo.
+
+Se o custo continuar mesmo com todos os elementos suspeitos removidos, investigue a próxima camada do pipeline.
 
 ---
 
-# 3. FASE C — ISOLAMENTO
+## 3. Damage numbers
 
-Verifique se existe:
+Faça o teste de text-shadow separadamente.
 
-```text
-core/diagnostics/isolamento.ts
-```
-
-e se as chaves existem realmente:
-
-```text
-semRetratoAlvo
-semAoe
-semCursor
-semProps
-semTerreno
-semNevoa
-semHorizonte
-```
-
-Confirme como são ativadas.
-
-Verifique se estão protegidas por:
-
-```ts
-import.meta.env.DEV
-```
-
-ou mecanismo equivalente para não gerar custo no build de produção.
-
-Se os testes de isolamento ainda não foram executados, diga explicitamente:
-
-```text
-IMPLEMENTADO, MAS NÃO MEDIDO
-```
-
-Não invente resultados.
-
----
-
-# 4. CAUSA DO FRAME LONGO — CLASSE 1
-
-Verifique se a correção do retrato do alvo foi realmente implementada.
-
-Analise:
-
-```text
-hud/PlayerFrame.tsx
-views/PlayView.tsx
-play/aquecimento.ts
-```
-
-Confirme se o `TargetFrame` realmente nasce durante o aquecimento.
-
-Quero saber:
-
-* quando o Canvas é criado;
-* quando o WebGLRenderer é criado;
-* quando o terceiro contexto WebGL aparece;
-* se isso ocorre antes do jogador poder selecionar o primeiro alvo;
-* se o Canvas fica efetivamente renderizável durante o aquecimento;
-* se depois volta para `display:none`;
-* se o primeiro alvo ainda consegue disparar criação de renderer/contexto.
-
-Se houver novo flight recorder, procure especificamente o primeiro alvo.
+Não remova definitivamente.
 
 Compare:
 
 ```text
-ANTES:
-primeiro alvo → criação do 3º contexto → spike
-
-DEPOIS:
-aquecimento → criação do 3º contexto
-primeiro alvo → sem criação de contexto
+text-shadow ON
+text-shadow OFF
 ```
 
-Mostre evidência.
+com quantidade alta de números simultâneos.
+
+Além da performance, confira visualmente a legibilidade.
 
 ---
 
-# 5. CLASSE 2 — SHADER COMPILATION
+# 4. Só depois faça os fixes do GPU renderer
 
-Verifique se a solução com:
+Os dois fixes descritos são aceitáveis porque são defeitos objetivos:
 
-```ts
-gl.compileAsync(...)
-```
+### BeamRenderer
 
-realmente existe.
+Eliminar allocations recorrentes por frame.
 
-Procure:
+### Sprite/Particle
 
-* `assets.ts`;
-* `NetEntity.tsx`;
-* outros pontos de montagem de entidades.
-
-Confirme:
-
-* qual objeto é compilado;
-* qual câmera é usada;
-* qual scene é usada;
-* quando a compilação ocorre;
-* se o objeto é visível antes ou depois;
-* se existe espera/Promise;
-* se existe chamada repetida;
-* se isso pode ocorrer no caminho crítico.
-
-Procure também eventos:
+Conectar corretamente:
 
 ```text
-renderer/shader-compilado
+payload.color
+payload.opacity
 ```
 
-nos novos testes.
+ao atributo GPU.
 
-Se não houver medição real depois da implementação, diga:
+Depois rode typecheck/testes.
 
-```text
-CORREÇÃO IMPLEMENTADA, MAS NÃO COMPROVADA POR FLIGHT RECORDER
-```
+Não misture esses fixes com a migração da Fire Ball na mesma mudança sem conseguir identificar qual alteração produziu qual resultado.
 
 ---
 
-# 6. CLASSE 3 — OBRIGATÓRIA
+# 5. Cuidado especial com LOD/Budget
 
-Esta parte é crítica.
+O LOD e o Budget já existem.
 
-Os dados anteriores tinham spikes de aproximadamente:
+Não reescreva o sistema.
 
-```text
-448 ms
-851 ms
-```
-
-sem alteração de:
-
-* draw calls;
-* triângulos;
-* geometrias;
-* texturas;
-* programas;
-* chunks;
-* heap;
-* render CPU.
-
-Agora que existe ou deveria existir:
+Primeiro descubra:
 
 ```text
-sobraMs
-heapDeltaMb
-longtask
+onde o resultado de computeBudgetPressure()
+deveria entrar no pipeline atual.
 ```
 
-analise os novos dados.
+Faça a menor alteração possível para ativá-lo.
 
-Determine se a Classe 3 é:
+Também não escolha thresholds arbitrários apenas para produzir FPS melhor.
 
-* GC;
-* React commit;
-* tarefa longa do browser;
-* criação/destruição de algum recurso;
-* outro trabalho JavaScript;
-* bloqueio externo à aplicação;
-* outra causa comprovável.
+Os thresholds precisam ser derivados dos dados.
 
-Se ainda não for possível identificar:
+E o comportamento deve ser estável.
 
-NÃO invente.
-
-Escreva:
+Evite:
 
 ```text
-Classe 3 ainda não identificada.
+frame ruim
+→ reduz VFX
+
+frame bom
+→ aumenta VFX
+
+frame ruim
+→ reduz
+
+frame bom
+→ aumenta
 ```
 
-e explique exatamente qual dado está faltando.
+a cada frame.
+
+Use histerese/debounce conforme necessário.
 
 ---
 
-# 7. HORIZONTE
+# 6. Fire Ball GPU deve ser um PROTÓTIPO, não uma migração irreversível
 
-Verifique se realmente existe:
+Esse é um ponto importante.
 
-```text
-grid/HorizonMesh.tsx
-```
+A Fire Ball atual deve continuar disponível como baseline.
 
-ou equivalente.
-
-Audite a implementação inteira.
-
-Quero saber:
-
-* quantos vértices;
-* quantos triângulos;
-* quantas geometrias;
-* quantos materiais;
-* quantos draw calls;
-* quando é criado;
-* quando é destruído;
-* se é reconstruído;
-* se é atualizado por frame;
-* se acompanha câmera/jogador;
-* se usa o heightmap existente;
-* se usa dados duplicados;
-* se existe `useFrame`;
-* se existe `useMemo`;
-* se existe `useEffect`;
-* se existe `dispose`.
-
-A regra é:
+Crie uma forma clara de alternar:
 
 ```text
-HorizonMesh
-→ criado uma vez
-→ permanece reutilizado
-→ NÃO reconstrói ao caminhar
+Fire Ball DOM
+vs
+Fire Ball GPU
 ```
 
-Se isso não for verdade, identifique exatamente o problema.
+sem alterar gameplay.
+
+Por exemplo, através de uma flag de benchmark/dev.
+
+Assim podemos executar exatamente o mesmo cenário com:
+
+```text
+renderer = DOM
+```
+
+e:
+
+```text
+renderer = GPU
+```
+
+usando a mesma skill, mesmos jogadores, mesmos casts e mesmos tempos.
 
 ---
 
-# 8. RAIOS SEPARADOS
+# 7. Não tente copiar 118 elementos DOM literalmente
 
-Verifique se o sistema realmente passou a possuir:
-
-```text
-detalhe
-entidades
-horizonte
-fogNear
-fogFar
-```
-
-Audite:
+A versão GPU não precisa ter:
 
 ```text
-play/viewRadius.ts
+8 ember
+6 sparks
+5 flames
+5 forward
+...
 ```
 
-Depois faça uma busca completa por referências a:
+como entidades equivalentes individuais.
 
-```text
-fogFar
-```
+O objetivo é preservar a **linguagem visual**, não a implementação.
 
-Especialmente:
+Se 20 partículas GPU produzem visualmente o mesmo resultado que 80 DOM particles, prefira 20.
 
-```text
-net/NetEntity.tsx
-views/PlayView.tsx
-play/AlvoPorTab.tsx
-```
+Se precisar de 200 GPU particles para preservar o visual, tudo bem.
 
-Quero garantir que entidades NÃO estejam usando inadvertidamente:
-
-```text
-fogFar ≈ 560
-```
-
-como distância de renderização.
-
-O resultado esperado é:
-
-```text
-chunks/terreno detalhado ≈ 130
-entidades ≈ 130
-horizonte ≈ 600
-fog ≈ 300–560
-```
-
-Se os valores reais forem diferentes, mostre os valores reais.
+O benchmark deve mostrar o custo.
 
 ---
 
-# 9. FOG
+# 8. O renderer GPU deve continuar genérico
 
-Confirme que existe:
-
-```text
-uma fog global
-```
-
-e NÃO:
+Não coloque lógica específica de Fire Ball dentro de:
 
 ```text
-fog por chunk
-material por chunk
-fade independente por chunk
+SpriteRenderer
+ParticleRenderer
+BeamRenderer
 ```
 
-Verifique:
+Evite coisas como:
 
 ```text
-scene/skyFog.ts
-views/PlayView.tsx
-play/viewRadius.ts
+if skill === FIRE_BALL
 ```
 
-Confirme se o horizonte também recebe a integração visual da fog.
+O renderer deve receber dados genéricos.
 
-Quero saber se a transição é:
+Fire Ball deve ser uma composição de primitivas existentes:
 
 ```text
-mundo detalhado
-→ terreno simplificado
-→ fog
-→ céu
+particle
+sprite
+ring
+trail
 ```
 
-e não:
-
-```text
-chunk
-→ parede de fog
-→ vazio
-```
+e parâmetros.
 
 ---
 
-# 10. PERFORMANCE DO HORIZONTE
+# 9. Trail
 
-Se houver flight recorder com horizonte:
+Antes de implementar um sistema sofisticado de trail, faça a versão mínima.
 
-compare:
+A pergunta é:
 
-```text
-?iso=semHorizonte
-```
+> conseguimos reproduzir o rastro atual com instâncias GPU sem criar DOM por segmento?
 
-contra:
+Se sim, ótimo.
 
-```text
-horizonte normal
-```
+Não crie um renderer gigantesco de trail se um conjunto de instâncias billboard resolver.
 
-Quero medir:
+Mas tome cuidado para não atualizar todos os slots de todas as skills a cada frame se eles estiverem fora da câmera ou em LOD baixo.
 
-* draw calls;
-* triângulos;
-* geometrias;
-* texturas;
-* programas;
-* frameMs;
-* gpuMs.
-
-A expectativa é aproximadamente:
-
-```text
-+1 draw call
-+~5k triângulos
-```
-
-Mas NÃO trate isso como resultado até medir.
-
-Se não houver medição real, diga:
-
-```text
-CUSTO DO HORIZONTE AINDA NÃO MEDIDO
-```
+O culling/LOD precisa chegar até a simulação.
 
 ---
 
-# 11. TESTES AUTOMÁTICOS
+# 10. Muito importante: separar SIMULAÇÃO de RENDERIZAÇÃO
 
-Execute:
-
-```bash
-pnpm --filter @ragnarok/game test
-pnpm --filter @ragnarok/game test:perf
-pnpm -r typecheck
-```
-
-Se algum comando falhar:
-
-* mostre o erro;
-* identifique se é erro introduzido pelas mudanças;
-* não esconda warnings ou falhas.
-
-Não altere testes apenas para fazê-los passar.
-
----
-
-# 12. TESTE REAL DO PLAY
-
-Se o ambiente estiver disponível:
-
-```bash
-pnpm --filter @ragnarok/game dev
-```
-
-Execute o `/play` em:
+Quero que a arquitetura final mantenha esta separação:
 
 ```text
-prt_fild08
+Gameplay
+   ↓
+VFX event
+   ↓
+VFX instance
+   ↓
+simulation state
+   ↓
+renderer
 ```
 
-Faça uma caminhada equivalente ao teste anterior.
+O renderer não deve possuir a lógica da skill.
 
-O teste precisa:
+E a skill não deve conhecer DOM/GPU.
 
-* durar aproximadamente 2 minutos;
-* trocar de chunks;
-* selecionar pelo menos um alvo;
-* olhar para a borda do mapa;
-* girar a câmera;
-* observar a transição para o horizonte.
+---
 
-Gere:
+# 11. Culling deve impedir trabalho, não apenas desenho
+
+O sistema já possui culling por frustum.
+
+Verifique se um VFX fora da câmera deixa de:
+
+* renderizar;
+* simular partículas desnecessariamente;
+* atualizar buffers;
+* atualizar trails;
+* executar animações caras.
+
+Se atualmente o culling só impede desenho mas continua fazendo toda a simulação, considere isso uma oportunidade de otimização.
+
+Mas meça antes de alterar.
+
+---
+
+# 12. Faça um teste de escala que realmente valide a arquitetura
+
+Depois da Fire Ball GPU funcionar:
 
 ```text
-__voo.baixar()
+DOM:
+1 / 5 / 10 / 20 / 30 Fire Balls
+
+GPU:
+1 / 5 / 10 / 20 / 30 Fire Balls
 ```
 
-antes/depois conforme o mecanismo existente.
+Compare:
 
-Se não puder executar o jogo por alguma limitação do ambiente, diga exatamente qual.
+```text
+FPS
+frame time
+CPU
+GPU
+DOM count
+active CSS animations
+particle count
+draw calls
+memory
+GC, se mensurável
+```
+
+O dado mais importante não é apenas:
+
+> "GPU tem FPS maior".
+
+Quero observar a **curva de crescimento**.
+
+Por exemplo:
+
+```text
+DOM
+1 → 5 → 10 → 20 → 30
+crescimento muito acentuado
+
+GPU
+1 → 5 → 10 → 20 → 30
+crescimento muito menor
+```
+
+É isso que demonstrará que a arquitetura escala.
 
 ---
 
-# 13. COMPARAÇÃO ANTES × DEPOIS
+# 13. Depois teste o combo completo
 
-Se existir novo voo real, gere esta tabela:
+Não declare vitória porque Fire Ball isolada ficou rápida.
 
-| Métrica           |    ANTES | DEPOIS |
-| ----------------- | -------: | -----: |
-| quadroMs p50      |     16,7 |        |
-| quadroMs p95      |     18,3 |        |
-| quadroMs máximo   |   250,3+ |        |
-| gpuMs p50         |     4,16 |        |
-| gpuMs p95         |     9,55 |        |
-| gpuMs máximo      |   242,6+ |        |
-| renderMs máximo   |      86+ |        |
-| drawCalls p95     |      168 |        |
-| drawCalls máximo  |      182 |        |
-| triângulos p95    |   97.928 |        |
-| triângulos máximo |  103.184 |        |
-| geometrias máximo |      167 |        |
-| texturas máximo   |       37 |        |
-| programas máximo  |       28 |        |
-| heap máximo       | 188,7 MB |        |
-| chunks visíveis   |    45–46 |        |
-| frameLongo        |          |        |
+Rode novamente o cenário caótico:
 
-Use os números reais.
+```text
+Fire Ball
+Lightning Storm
+Fire Wall
+Oracle
+Cold Bolt
+Soul Strike
+```
 
-Não estime.
+em:
 
-Não preencha uma coluna com números hipotéticos.
+```text
+1
+5
+10
+20
+30
+```
+
+Compare com o baseline anterior.
+
+Relate separadamente:
+
+```text
+Fire Ball improvement
++
+overall combo improvement
+```
+
+Se Fire Ball melhorar muito mas o combo continuar em ~1 FPS, isso é um resultado válido.
+
+Nesse caso precisamos descobrir o próximo dominante.
+
+Não tente mascarar isso aumentando LOD agressivamente.
 
 ---
 
-# 14. AUDITORIA FINAL DO DIFF
+# 14. Critério de sucesso
 
-Leia todas as alterações feitas nesta tarefa.
-
-Procure especificamente:
+Considere a Fire Ball uma prova de conceito bem-sucedida somente se houver:
 
 ### Performance
 
-* geometria criada por frame;
-* material criado por frame;
-* textura criada por frame;
-* `new THREE.*` dentro de `useFrame`;
-* `useFrame` novo no caminho quente;
-* `setState` dentro de `useFrame`;
-* React re-render desnecessário;
-* recompilação de shader;
-* upload de textura;
-* `dispose` prematuro;
-* reconstrução de HorizonMesh;
-* duplicação de GLTF.
+A curva de custo com muitas instâncias for significativamente melhor que DOM/CSS.
 
-### Chunk
+### Escalabilidade
 
-Confirme que não houve:
+A quantidade de jogadores/efeitos puder crescer sem multiplicar o custo de renderização na mesma proporção que o DOM atual.
 
-* redesign;
-* alteração desnecessária do sistema de streaming;
-* aumento do número de chunks detalhados;
-* alteração da reconciliação;
-* alteração de gameplay.
+### Visual
 
-### Entidades
+A aparência continuar suficientemente próxima do estilo atual.
 
-Confirme que elas continuam limitadas ao raio de detalhe.
+### Arquitetura
 
-### Fog
+A mesma infraestrutura puder ser usada por outras skills sem código específico de Fire Ball.
 
-Confirme que não existe fog individual por chunk.
+### Gameplay
+
+Zero alteração em:
+
+```text
+damage
+cooldown
+target
+duration
+hit detection
+network synchronization
+skill logic
+```
 
 ---
 
-# 15. CRITÉRIO FINAL
+# 15. Se a aproximação visual ficar ruim
 
-Classifique cada item como:
+NÃO descarte automaticamente a arquitetura.
 
-```text
-[OK]
-[PARCIAL]
-[FALTA]
-[NÃO MEDIDO]
-```
-
-Itens:
-
-1. auditoria do chunk;
-2. auditoria do terreno;
-3. cursor investigado;
-4. AOE investigado;
-5. GLTF investigado;
-6. fog investigada;
-7. causa do spike de 250 ms comprovada;
-8. spike de 250 ms corrigido;
-9. shader compilation corrigida;
-10. Classe 3 identificada;
-11. instrumentação adicionada;
-12. isolamento implementado;
-13. horizonte implementado;
-14. horizonte sem reconstrução por movimento;
-15. raios detalhe/entidade/horizonte separados;
-16. entidades não usam `fogFar` como raio de render;
-17. fog contínua;
-18. horizonte sem aumento significativo de custo;
-19. testes automatizados verdes;
-20. teste real ANTES × DEPOIS realizado.
-
-## REGRA FINAL
-
-Não implemente novas mudanças nesta etapa.
-
-Quero primeiro o diagnóstico do estado atual.
-
-Se tudo estiver implementado e comprovado, diga isso.
-
-Se houver algo faltando, mostre exatamente:
+Separe as duas conclusões:
 
 ```text
-FALTA:
-arquivo:
-função:
-problema:
-evidência:
-próximo passo:
+GPU architecture:
+VALIDADA / NÃO VALIDADA
+
+Fire Ball visual:
+ACEITÁVEL / PRECISA DE ARTE MELHOR
 ```
 
-Não faça `git add`, commit ou push.
-Eu farei o Git manualmente.
+É perfeitamente válido concluir:
+
+> "A arquitetura GPU escala muito melhor, mas a representação procedural atual não reproduz suficientemente bem a arte."
+
+Nesse caso, podemos posteriormente introduzir atlas/texturas ou outras técnicas sem abandonar a arquitetura.
+
+---
+
+# 16. Resultado esperado da rodada
+
+No final, quero um relatório objetivo com:
+
+```text
+1. Gargalo real da Fire Ball
+2. Gargalo real do Fire Wall
+3. Resultado do text-shadow
+4. Correções feitas no GPU renderer
+5. Resultado do LOD/Budget
+6. Resultado Fire Ball DOM vs GPU
+7. DOM count antes/depois
+8. FPS/frame time antes/depois
+9. Resultado do combo
+10. Diferença visual
+11. Próximo gargalo identificado
+12. Próxima skill recomendada para migração
+```
+
+Não quero que a conclusão seja simplesmente:
+
+> "GPU é melhor."
+
+Quero saber **quanto melhor, em qual cenário, por qual motivo e onde o próximo gargalo passa a estar**.
+
+A prioridade é construir uma arquitetura de VFX que continue funcionando quando o jogo tiver dezenas de jogadores usando skills simultaneamente — não apenas fazer uma Fire Ball específica ficar rápida.

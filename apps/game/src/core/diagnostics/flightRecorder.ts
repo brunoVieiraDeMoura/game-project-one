@@ -67,7 +67,18 @@ export const LIMITE_CAPTURA_MS = 2000;
  * renderer, shader, textura). São coisas diferentes e por isso são duas
  * categorias — juntá-las faria "render/…" querer dizer as duas.
  */
-export type Categoria = "network" | "prediction" | "reconciliation" | "chunks" | "render" | "renderer" | "cena";
+export type Categoria =
+  | "network"
+  | "prediction"
+  | "reconciliation"
+  | "chunks"
+  | "render"
+  | "renderer"
+  | "cena"
+  /** ciclo de vida do VFX de skill (start/end/mount/unmount) — ver `core/diagnostics/vfxProbe.ts` */
+  | "vfx"
+  /** achados de custo ATRIBUÍDOS a VFX ativo (longtask correlacionada, spike, crescimento de DOM) */
+  | "vfx-performance";
 
 /**
  * Quem escreveu o trecho de movimento em vigor.
@@ -263,6 +274,41 @@ export interface LinhaQuadro {
   /** estado, não acumulador */
   filaDeChunks: number;
   chunksVisiveis: number;
+
+  /**
+   * VFX de skill — escrito pelo `core/diagnostics/vfxProbe.ts`.
+   *
+   * Os VFX de skill são DOM/CSS (`drei <Html>`), não three.js — `drawCalls`/
+   * `triangulos`/`geometrias` deste mesmo quadro continuam valendo (eles
+   * medem o device), mas não atribuem nada a uma skill. Estas colunas são o
+   * lado DOM/CSS que faltava: quantos VFX estão vivos, quanto o portal de
+   * Html cresceu, e long task correlacionada — tudo NUMÉRICO, como o resto
+   * do rascunho; o detalhe "QUAL skill" mora nos eventos `vfx/start` e
+   * `vfx/end` (ver `Evento.dados`), não em coluna nenhuma.
+   */
+  vfxAtivos: number;
+  /**
+   * Portais `<Html>` sob o container do canvas (`gl.domElement.parentNode`),
+   * RELATIVO a uma baseline capturada quando `vfxAtivos` esteve em 0 pela
+   * última vez. `target.children.length` é leitura O(1) — sem
+   * `querySelectorAll`, então cabe todo quadro sem custo de varredura.
+   * Inclui outros overlays do MESMO container (números de dano, rótulos de
+   * entidade) — não é exclusivo de VFX, ver docblock de `vfxProbe.ts`.
+   */
+  vfxHtmlCount: number;
+  /**
+   * Nós DOM totais sob o mesmo container, relativo à mesma baseline —
+   * AMOSTRADO a ~10 Hz (mesma técnica de `objetosRender`/`PASSO_DA_VARREDURA`
+   * do `cenaProbe`), nunca por quadro: é uma varredura de verdade
+   * (`querySelectorAll("*")`), só que escopada ao container de Html em vez
+   * do documento inteiro.
+   */
+  vfxDomNodeCount: number;
+  /** long tasks (PerformanceObserver) que caíram com ≥1 VFX ativo — acumulador do quadro */
+  vfxLongTaskCount: number;
+  vfxLongTaskMs: number;
+  /** nós adicionados+removidos (MutationObserver, só enquanto `vfxAtivos>0`) — acumulador do quadro */
+  vfxMutacoes: number;
 }
 
 const CAMPOS: (keyof LinhaQuadro)[] = [
@@ -322,6 +368,12 @@ const CAMPOS: (keyof LinhaQuadro)[] = [
   "msDeChunk",
   "filaDeChunks",
   "chunksVisiveis",
+  "vfxAtivos",
+  "vfxHtmlCount",
+  "vfxDomNodeCount",
+  "vfxLongTaskCount",
+  "vfxLongTaskMs",
+  "vfxMutacoes",
 ];
 
 /** os acumuladores: descrevem o quadro, então voltam a zero depois de gravados */
@@ -336,6 +388,11 @@ const ACUMULADORES: (keyof LinhaQuadro)[] = [
   "trocaMs",
   "animacaoMs",
   "matrizMs",
+  // long task/mutação correlacionadas a VFX: descrevem o QUADRO (quanto caiu
+  // NELE), não um estado — mesma razão dos três de cima
+  "vfxLongTaskCount",
+  "vfxLongTaskMs",
+  "vfxMutacoes",
 ];
 
 function linhaVazia(): LinhaQuadro {
@@ -488,6 +545,7 @@ export type NomeGatilho =
   | "contextoPerdido"
   | "rendererRecriado"
   | "mundoVazio"
+  | "vfxPerformanceSpike"
   | "manual";
 
 export interface Gatilho {
@@ -536,6 +594,15 @@ const gatilhos: Record<NomeGatilho, Gatilho> = {
    * 60×/s ali, queimando os quatro slots antes de o jogo começar.
    */
   mundoVazio: { ligado: true, limiar: 0, descricao: "os draw calls caíram para zero com a cena montada" },
+  /**
+   * `frameLongo` (200 ms) já pega o engasgo GERAL; este é mais sensível
+   * (33 ms — um quadro perdido a 30 FPS) mas só dispara com VFX de skill
+   * ATIVO — separa "o jogo engasgou" de "o VFX que acabou de nascer
+   * engasgou". Avaliado por `core/diagnostics/vfxProbe.ts`, não aqui: o
+   * gravador não sabe o que é VFX, só recebe o valor (ms) e os dados
+   * (skills ativas) prontos.
+   */
+  vfxPerformanceSpike: { ligado: true, limiar: 33, descricao: "quadro acima de N ms com ≥1 VFX de skill ativo" },
   manual: { ligado: true, limiar: 0, descricao: "pedido pelo console" },
 };
 
@@ -903,6 +970,14 @@ export function timeline(caso: Caso, limiarQuadroMs = 33): string {
         `sobra ${ou(q.sobraMs)} ms`,
         `Δheap ${ou(q.heapDeltaMb, 1)} MB`,
       ];
+      // só aparece quando há VFX de skill ativo — é a linha que responde "o
+      // quadro ficou lento ENQUANTO um VFX estava de pé?" sem precisar cruzar
+      // manualmente com os eventos vfx/start-vfx/end ao redor
+      if (q.vfxAtivos > 0) {
+        partes.push(
+          `vfx ${q.vfxAtivos} ativo(s) · html+${Math.round(q.vfxHtmlCount)} · dom+${Math.round(q.vfxDomNodeCount)}${q.vfxLongTaskMs > 0 ? ` · longtask ${ou(q.vfxLongTaskMs)}ms×${q.vfxLongTaskCount}` : ""}`,
+        );
+      }
       linhas.push({ t: q.t - caso.t0, rotulo: "render/quadro-longo", detalhe: partes.join("  ") });
     }
   }

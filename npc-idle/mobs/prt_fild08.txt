@@ -1,0 +1,24 @@
+//===== game-project Script ===================================
+//= prt_fild08 — Monster Spawn Script (TEMPORÁRIO, teste de buffs/debuffs)
+//===== Descrição: ============================================
+//= Auditoria "checagem completa de buffs/debuffs/skills de ativação"
+//= (2026-08-14): prt_fild08 não tinha spawn NENHUM (o `npc-idle/mobs/
+//= prontera.txt` que cobre os campos de Prontera nunca foi incluído em
+//= `rathena-conf/map_conf.txt` — órfão). Sem monstro nenhum não dava pra
+//= testar debuff/petrificar/congelar contra um alvo de verdade.
+//=
+//= Não existe monstro chamado literalmente "Orc" no mob_db (conferido em
+//= tools/legacy-migration/output/monsters.json e rathena/db/re/mob_db.yml —
+//= só "Orc Warrior"/"Orc Hero"/"Orc Zombie"/etc existem). Substituído por
+//= Orc Warrior (1023) + Orc Lady (1273): os dois são raça demihuman (Orc
+//= Zombie/Skeleton são UNDEAD, que resiste/imuniza a Congelar — inadequado
+//= pro teste pedido), nível parecido, e cobrem "duas espécies de orc
+//= próximas" como pedido. Trocar por outro mob real é só editar as duas
+//= linhas abaixo.
+//=
+//= Remover este arquivo e a linha `npc:` correspondente em map_conf.txt
+//= quando o teste acabar — é temporário, não faz parte do conteúdo do jogo.
+//==============================================================
+
+prt_fild08,195,200,5,5	monster	Orc Warrior	1023,3,5000
+prt_fild08,205,200,5,5	monster	Orc Lady	1273,3,5000

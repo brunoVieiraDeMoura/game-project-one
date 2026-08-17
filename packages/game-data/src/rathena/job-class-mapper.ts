@@ -361,12 +361,14 @@ function rawTreeSkillFromEntry(
   skills: SkillIdResolver,
   warnings: string[],
   jobName: string,
+  baselineRequires?: JobClass["skills"][number]["requires"],
 ): RawSkillTreeSkill | undefined {
   const name = skills.nameOf(s.skillId);
   if (!name) {
     warnings.push(`job ${jobName}: skillId ${s.skillId} sem nome aegis conhecido (pulado na exportação)`);
     return undefined;
   }
+  const currentReqIds = new Set(s.requires.map((r) => r.skillId));
   const requires = s.requires
     .map((r) => {
       const reqName = skills.nameOf(r.skillId);
@@ -377,6 +379,19 @@ function rawTreeSkillFromEntry(
       return { Name: reqName, Level: r.level };
     })
     .filter((r): r is { Name: string; Level: number } => r !== undefined);
+
+  // rAthena (pc.cpp:13599, SkillTreeDatabase::parseBodyNode) só apaga um
+  // prerequisito de `entry->need` quando o override manda `Level: 0`
+  // explícito pra ele — omitir do Requires[] é upsert-only e nunca apaga
+  // (auditoria Napalm Beat/Mage 2026-08-13). Prerequisito que existia na
+  // baseline (db/re) e não está mais em `s.requires` vira tombstone aqui.
+  for (const br of baselineRequires ?? []) {
+    if (currentReqIds.has(br.skillId)) continue;
+    const reqName = skills.nameOf(br.skillId);
+    if (!reqName) continue;
+    requires.push({ Name: reqName, Level: 0 });
+  }
+
   return compact({
     Name: name,
     MaxLevel: s.maxLevel,
@@ -397,6 +412,7 @@ export function jobClassToSkillTreeEntry(
   jobs: JobIdResolver,
   skills: SkillIdResolver,
   warnings: string[],
+  baselineJc?: JobClass,
 ): RawSkillTreeEntry {
   const inherit: Record<string, boolean> = {};
   for (const parentId of jc.skillTreeInherit) {
@@ -407,9 +423,32 @@ export function jobClassToSkillTreeEntry(
     }
     inherit[parentName] = true;
   }
+
+  const baselineBySkillId = new Map((baselineJc?.skills ?? []).map((s) => [s.skillId, s]));
+  const currentSkillIds = new Set(jc.skills.map((s) => s.skillId));
+
   const tree = jc.skills
-    .map((s) => rawTreeSkillFromEntry(s, skills, warnings, jobName))
+    .map((s) => rawTreeSkillFromEntry(s, skills, warnings, jobName, baselineBySkillId.get(s.skillId)?.requires))
     .filter((s): s is RawSkillTreeSkill => s !== undefined);
+
+  // rAthena (pc.cpp:13422 SkillTreeDatabase::parseBodyNode + :13690
+  // loadingFinished) mescla db/re + db/import por upsert: omitir uma skill
+  // do Tree[] do override não remove nada — o registro do db/re continua
+  // valendo pra sempre (auditoria Napalm Beat/Mage 2026-08-13). A única
+  // remoção suportada pelo motor é um tombstone `MaxLevel: 0` explícito, que
+  // `loadingFinished` apaga da árvore depois que TODOS os arquivos são
+  // lidos. Skill que existia na baseline e não está mais em `jc.skills`
+  // vira esse tombstone — mecanismo genérico, não específico de skill/job.
+  for (const skillId of baselineBySkillId.keys()) {
+    if (currentSkillIds.has(skillId)) continue;
+    const name = skills.nameOf(skillId);
+    if (!name) {
+      warnings.push(`job ${jobName}: skillId ${skillId} (removido) sem nome aegis conhecido — tombstone pulado`);
+      continue;
+    }
+    tree.push({ Name: name, MaxLevel: 0 });
+  }
+
   return compact({
     Job: jobName,
     Inherit: Object.keys(inherit).length > 0 ? inherit : undefined,

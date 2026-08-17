@@ -29,6 +29,7 @@ import type { SkillRepository } from "./store/skill-repository.js";
 import { JsonStatusRepository } from "./store/json-status-repository.js";
 import { SupabaseStatusRepository } from "./store/supabase-status-repository.js";
 import type { StatusRepository } from "./store/status-repository.js";
+import { loadEfstTable, type EfstTable } from "./store/efst-table.js";
 import { monsterRoutes } from "./routes/monsters.js";
 import { JsonMonsterRepository } from "./store/json-monster-repository.js";
 import { SupabaseMonsterRepository } from "./store/supabase-monster-repository.js";
@@ -60,6 +61,7 @@ export interface ServerDeps {
   jobClassRepository?: JobClassRepository;
   skillRepository?: SkillRepository;
   statusRepository?: StatusRepository;
+  efstTable?: EfstTable;
   monsterRepository?: MonsterRepository;
   npcRepository?: NpcRepository;
   serverConfigRepository?: ServerConfigRepository;
@@ -273,12 +275,14 @@ export async function buildServer(deps: ServerDeps = {}) {
   const skillRepository = deps.skillRepository ?? defaultSkillRepository(itemRepository);
   const jobClassRepository = deps.jobClassRepository ?? defaultJobClassRepository(skillRepository);
   const statusRepository = deps.statusRepository ?? defaultStatusRepository(skillRepository);
+  const efstTable =
+    deps.efstTable ?? loadEfstTable(join(REPO_ROOT, "tools", "legacy-migration", "output", "efst.json"));
 
   app.get("/health", async () => ({ ok: true }));
   await app.register(itemRoutes(itemRepository, security), { prefix: "/items" });
   await app.register(jobClassRoutes(jobClassRepository, security), { prefix: "/job-classes" });
   await app.register(skillRoutes(skillRepository, security), { prefix: "/skills" });
-  await app.register(statusRoutes(statusRepository, security), { prefix: "/statuses" });
+  await app.register(statusRoutes(statusRepository, security, efstTable), { prefix: "/statuses" });
   const mapRepository = deps.mapRepository ?? defaultMapRepository();
   await app.register(mapRoutes(mapRepository, security), { prefix: "/maps" });
   const monsterRepository = deps.monsterRepository ?? defaultMonsterRepository();

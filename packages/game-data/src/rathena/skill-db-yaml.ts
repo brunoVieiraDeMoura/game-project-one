@@ -709,27 +709,40 @@ export function reemitRawSkillYaml(p: ParsedSkillEntry): RawSkillYaml {
             ZenyCost: perLevel(p.requires.zenyCost, "Amount"),
             ...(Object.keys(p.requires.weapon).length ? { Weapon: p.requires.weapon } : {}),
             ...(Object.keys(p.requires.ammo).length ? { Ammo: p.requires.ammo } : {}),
-            // Nunca emitir sem pelo menos 1 tipo de munição MARCADO (`true`) —
-            // o loader real rejeita ("An ammo type is required before
-            // specifying ammo amount.", skill.cpp:15432-15434) se `AmmoAmount`
-            // existir no YAML e `require.ammo` for 0. `Object.keys(...).length`
-            // não basta de gate: o formulário do admin (MultiSelectField)
-            // manda o mapa de munição com TODAS as chaves presentes e `false`
-            // (não omite as desmarcadas), então `.length` nunca é 0 depois de
-            // uma skill passar pelo admin — precisa checar se ALGUM valor é
-            // `true`. Antes disto `AmmoAmount` era emitido incondicional, e
-            // QUALQUER skill nova (sem munição) recém-criada pelo admin
-            // derrubava a linha inteira no reload/boot — reproduzido ao vivo
-            // na Fase 3 (docs/audit/fase3-testes/skills.md).
-            ...(Object.values(p.requires.ammo).some(Boolean)
+            // Nunca emitir sem pelo menos 1 tipo de munição REAL marcado
+            // (`true`) — o loader real rejeita ("An ammo type is required
+            // before specifying ammo amount.", skill.cpp:15432-15434) se
+            // `AmmoAmount` existir no YAML e `require.ammo` for 0.
+            // `Object.keys(...).length` não basta de gate: o formulário do
+            // admin (MultiSelectField) manda o mapa de munição com TODAS as
+            // chaves presentes e `false` (não omite as desmarcadas), então
+            // `.length` nunca é 0 depois de uma skill passar pelo admin —
+            // precisa checar se ALGUM valor é `true`. Antes disto
+            // `AmmoAmount` era emitido incondicional, e QUALQUER skill nova
+            // (sem munição) recém-criada pelo admin derrubava a linha
+            // inteira no reload/boot — reproduzido ao vivo na Fase 3
+            // (docs/audit/fase3-testes/skills.md). O gate ainda tinha um
+            // furo: `None` é o sentinel de "sem munição nenhuma" (linha
+            // acima) e É `true` nesse caso — `.some(Boolean)` contava ele
+            // como "tem munição marcada" e emitia `AmmoAmount` mesmo assim,
+            // derrubando toda skill sem munição real (achado ao vivo na
+            // auditoria Safety Wall 2026-08-13, skill travava no reload e
+            // NENHUM campo do override — nem o ItemCost corrigido acima —
+            // chegava a valer). `None` precisa ficar de fora da checagem.
+            ...(Object.entries(p.requires.ammo).some(([k, v]) => k !== "None" && v)
               ? { AmmoAmount: perLevel(p.requires.ammoAmount, "Amount") }
               : {}),
             ...(p.requires.state ? { State: p.requires.state } : {}),
             ...(Object.keys(p.requires.status).length ? { Status: p.requires.status } : {}),
             SpiritSphereCost: perLevel(p.requires.spiritSphereCost, "Amount"),
-            ...(p.requires.itemCost.length
-              ? { ItemCost: p.requires.itemCost.map((c) => ({ Item: c.item, Amount: c.amount, ...(c.level ? { Level: c.level } : {}) })) }
-              : {}),
+            // Emitido sempre, mesmo vazio — igual aos outros campos deste
+            // objeto (regra do arquivo: "todo campo que o Mapper sabe
+            // representar é reescrito por INTEIRO"). Omitir a chave quando
+            // vazia fazia `nodeExists(requireNode, "ItemCost")` (skill.cpp)
+            // dar falso e o loader nunca aplicar o reset que o override
+            // pretendia — a remoção do custo do item nunca chegava ao
+            // runtime (auditoria Safety Wall 2026-08-13).
+            ItemCost: p.requires.itemCost.map((c) => ({ Item: c.item, Amount: c.amount, ...(c.level ? { Level: c.level } : {}) })),
             ...(Object.keys(p.requires.equipment).length ? { Equipment: p.requires.equipment } : {}),
           },
         }

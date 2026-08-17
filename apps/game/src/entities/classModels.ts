@@ -57,7 +57,9 @@ const CLASS_MODEL: Record<WeaponFamily, { character: CharacterKey; weapons: Weap
       { weapon: "dagger", slot: "handslotr" },
     ],
   },
-  mage: { character: "mage", weapons: [{ weapon: "staff", slot: "handslotr" }] },
+  // teste isolado (leia1.txt, `assets-new/weapons-test`): `staff_test` no
+  // lugar de `staff` — trocar de volta é só mudar a chave aqui.
+  mage: { character: "mage", weapons: [{ weapon: "staff_test", slot: "handslotr" }] },
   // `ranger`, não `rogue` (troca feita nesta fase, ver auditoria abaixo):
   // rotação do arco (rotX 90° + flipY 180°) vem do picker visual
   // (`/class-preview`, testada sobre `rogue`) e se mantém porque `ranger`

@@ -9,6 +9,7 @@
     "migrate:items": "tsx src/migrate-items.ts",
     "migrate:jobs": "tsx src/migrate-jobs.ts",
     "migrate:statuses": "tsx src/migrate-statuses.ts",
+    "migrate:efst": "tsx src/migrate-efst.ts",
     "migrate:skills": "tsx src/migrate-skills.ts",
     "migrate:monsters": "tsx src/migrate-monsters.ts",
     "migrate:npcs": "tsx src/migrate-npcs.ts",

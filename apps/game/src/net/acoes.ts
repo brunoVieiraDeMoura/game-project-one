@@ -8,6 +8,8 @@ import { alcanceEfetivoDaSkill } from "./skillCatalog";
 import { useAtaqueBasico } from "./ataqueBasico";
 import { alcanceDaArma, precisaDeMunicaoSemTer } from "./equipmentStore";
 import { useDamageFeed } from "./damageFeed";
+import { temLinhaDeVisao } from "./visao";
+import { olharParaAlvo } from "./olharParaAlvo";
 
 /**
  * O que um clique MANDA fazer — num lugar só.
@@ -71,8 +73,18 @@ export function atacar(gid: number, x: number, y: number): void {
    * errada por qualquer outro motivo), mas deixa de ser a ÚNICA fonte.
    */
   useAttackStore.getState().perseguir({ gid, x, y, range: alcanceDaArma() });
-  useAttackStore.getState().marcarPedido(agora);
-  gateway().emit("action:attack", { gid, continuous: true });
+  /**
+   * Alcance não é visibilidade (`net/visao`, `net/lineOfSight`): o rAthena
+   * aceitaria o golpe mesmo com uma montanha entre os dois — ele não conhece o
+   * relevo 3D que só o cliente desenha. Sem LOS o pedido AGORA não sai, mas a
+   * perseguição continua armada: se a aproximação (ou o alvo andando) resolver
+   * a visão, `perseguirAlvo` (`NetPlayer`) reenvia sozinho a cada
+   * `REENVIO_ATAQUE_MS` — a MESMA guarda que ele já aplica no reenvio.
+   */
+  if (temLinhaDeVisao(gid)) {
+    useAttackStore.getState().marcarPedido(agora);
+    gateway().emit("action:attack", { gid, continuous: true });
+  }
 }
 
 /**
@@ -121,6 +133,28 @@ export function castarEmAlvo(skillId: number, level: number, name: string, gid: 
   const eu = interpolatedCell(useWorldStore.getState().self, performance.now());
 
   if (dentroDoAlcance({ x: Math.round(eu.x), y: Math.round(eu.y) }, { x: Math.round(cel.x), y: Math.round(cel.y) }, raio)) {
+    /**
+     * Alcance não é visibilidade (`net/visao`, `net/lineOfSight`): o rAthena
+     * aceitaria o cast mesmo com uma montanha no meio — ele não conhece o
+     * relevo 3D que só o cliente desenha. Já dentro do alcance não há para
+     * onde `irLancar` andar (a borda do alcance É aqui), então sem LOS o cast
+     * simplesmente não sai — mesmo tratamento do "sem munição" acima.
+     */
+    if (!temLinhaDeVisao(gid)) {
+      useDamageFeed.getState().push({
+        gid: useWorldStore.getState().selfGid,
+        value: 0,
+        crit: false,
+        miss: false,
+        onSelf: true,
+        text: "Sem visada!",
+      });
+      return;
+    }
+    // vira para o alvo ANTES do pedido sair — todo cast de alvo passa por
+    // aqui, então a orientação vale para qualquer skill, não só esta (ver
+    // `net/olharParaAlvo`)
+    olharParaAlvo(gid);
     gateway().emit("skill:use", { skillId, level, targetGid: gid });
     return;
   }

@@ -21,3 +21,9 @@ npc: npc/game-project/admin-created.txt
 // servidor responde por ele — o cliente trava em "conectando ao mapa".
 map: gpqa01
 npc: npc/game-project/mobs/gpqa01.txt
+
+// prt_fild08 é mapa STOCK (já tem `map:` em rathena/conf/maps_athena.conf,
+// não precisa de linha própria aqui) — só faltava spawn. TEMPORÁRIO
+// ("checagem completa de buffs/debuffs" 2026-08-14), ver o cabeçalho de
+// npc-idle/mobs/prt_fild08.txt pro porquê.
+npc: npc/game-project/mobs/prt_fild08.txt

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
+import type { TerrainQuery } from "@ragnarok/engine-core";
 import { fogDistances, type GameplayConfig } from "@ragnarok/game-data";
 import { CHARACTER_URLS, useCharacter, type CharacterKey } from "../assets";
 import { classModelFor } from "../entities/classModels";
@@ -47,6 +48,10 @@ import { pulsoDe } from "./combatAnim";
 import { SelfBars } from "./SelfBars";
 import { footstepFrame } from "../audio/footsteps";
 import { registrarPedidoDeColeta } from "../audio/itemSfx";
+import { SQUARE_SIZE } from "../grid/squareGrid";
+import { linhaDeVisaoLivre } from "./lineOfSight";
+import { registrarChecagemDeVisao } from "./visao";
+import { registrarOlharParaAlvo } from "./olharParaAlvo";
 
 /**
  * O roBrowser limita a 200 ms entre pedidos de caminhada, e é o que o cliente
@@ -118,6 +123,27 @@ const POSICAO_SERVIDOR_VALIDA_MS = 400;
 const ATAQUE_VIVO_MS = 1500;
 
 /**
+ * Altura do OLHO, fração da altura do modelo (`views/PlayView.CHAR_MODEL_HEIGHT`,
+ * 1.8 — duplicado aqui de propósito, mesma dupla-fonte do `MAX_WALK_PATH_DEFAULT`:
+ * mudar um lado sem o outro não quebra nada visualmente, só desalinha a mira da
+ * linha de visão com o corpo do personagem).
+ *
+ * Perto do topo (não da cintura): o RO original mira do busto pra cima, e mirar
+ * baixo faria qualquer pedra baixa contar como "montanha bloqueando".
+ */
+const ALTURA_MODELO = 1.8;
+const OLHO_FRACAO = 0.8;
+
+/**
+ * Quanto o chão pode passar da reta OLHO-a-OLHO sem contar como bloqueio.
+ *
+ * Um degrau de menos de um nível (`SQUARE_LEVEL_HEIGHT = 1`, ver `grid/squareGrid`)
+ * é ondulação normal de terreno, não relevo de verdade — sem a folga, qualquer
+ * pedra ou rampa suave apagaria o alvo do outro lado.
+ */
+const LOS_MARGEM = 0.75;
+
+/**
  * Abaixo disto não é recuada, é ruído de ponto flutuante.
  *
  * A posição vem de `hypot` sobre floats; um centésimo de célula é menos de um
@@ -149,6 +175,7 @@ export function NetPlayer({
   // família de clip genérica (histórico "Mago") por não saber a arma certa.
   characterKey,
   cellSize,
+  terrain,
 }: {
   map: GameMap;
   mapping: LegacyMapping;
@@ -157,6 +184,12 @@ export function NetPlayer({
   characterKey?: CharacterKey;
   /** largura da célula em unidades de mundo (barras e marcador) */
   cellSize: number;
+  /**
+   * Relevo do mapa — usado só para a linha de visão (`net/visao`): sem ele
+   * (preview do editor, sem sessão) a checagem cai aberta, como sempre que um
+   * dado opcional falta aqui (ver `temPathfinder()`).
+   */
+  terrain?: TerrainQuery;
 }) {
   const group = useRef<THREE.Group>(null);
   /** só o boneco gira; o que fica no grupo raiz não acompanha a virada */
@@ -270,6 +303,75 @@ export function NetPlayer({
    * calculando a partir de uma célula distante da que se vê.
    */
   const EMENDA_CELULAS = 3;
+
+  /**
+   * Dá para VER o alvo — não só alcançar.
+   *
+   * `dentroDoAlcance` é a MESMA conta do servidor (`battle_check_range`) e
+   * continua necessária, mas não é suficiente: o rAthena não sabe de relevo 3D
+   * nenhum, então ele aceitaria um cast atravessando uma montanha que o cliente
+   * desenhou por cima do `map_cache` dele. Marcha (`net/lineOfSight`) entre os
+   * dois OLHOS (posição interpolada de cada lado, elevada por `OLHO_FRACAO`) e
+   * amostra o relevo de verdade (`terrain.getHeight`, o mesmo que a malha
+   * desenha) — sem `terrain` (preview/editor) cai aberta, como o resto dos
+   * dados opcionais deste componente.
+   */
+  const alvoVisivel = (gid: number): boolean => {
+    if (!terrain) return true;
+    const alvo = useWorldStore.getState().entities[gid];
+    if (!alvo) return true;
+    const now = performance.now();
+    const celEu = interpolatedCell(useWorldStore.getState().self, now);
+    const celAlvo = interpolatedCell(alvo, now);
+    const mundoEu = cellToWorld(map, mapping, celEu.x, celEu.y);
+    const mundoAlvo = cellToWorld(map, mapping, celAlvo.x, celAlvo.y);
+    const olho = ALTURA_MODELO * gameplay.charScale * OLHO_FRACAO;
+    const dist = Math.hypot(mundoAlvo.x - mundoEu.x, mundoAlvo.z - mundoEu.z);
+    const passos = Math.max(4, Math.ceil(dist / SQUARE_SIZE));
+    return linhaDeVisaoLivre(
+      { x: mundoEu.x, y: terrain.getHeight(mundoEu.x, mundoEu.z) + olho, z: mundoEu.z },
+      { x: mundoAlvo.x, y: terrain.getHeight(mundoAlvo.x, mundoAlvo.z) + olho, z: mundoAlvo.z },
+      (x, z) => terrain.getHeight(x, z),
+      LOS_MARGEM,
+      passos,
+    );
+  };
+  // registrado no RENDER e de novo no efeito abaixo — mesmo motivo do freio de
+  // movimento (StrictMode desmonta e remonta em dev)
+  registrarChecagemDeVisao(alvoVisivel);
+  useEffect(() => {
+    registrarChecagemDeVisao(alvoVisivel);
+    return () => registrarChecagemDeVisao(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, mapping, terrain]);
+
+  /**
+   * Vira o MODELO para encarar o alvo — a orientação que todo cast de alvo
+   * pede, não uma skill de cada vez (ver `net/olharParaAlvo` e
+   * `acoes.castarEmAlvo`, o funil por onde toda skill de ALVO passa).
+   *
+   * Só XZ: gira em torno do eixo Y, como a rotação de movimento logo abaixo —
+   * as duas escrevem o MESMO `model.current.rotation.y`, nunca ao mesmo tempo
+   * (uma é side-effect de clique/cast, a outra roda todo quadro enquanto anda).
+   */
+  const olharPara = (gid: number) => {
+    const alvo = useWorldStore.getState().entities[gid];
+    if (!alvo || !model.current) return;
+    const now = performance.now();
+    const celEu = interpolatedCell(useWorldStore.getState().self, now);
+    const celAlvo = interpolatedCell(alvo, now);
+    const mundoEu = cellToWorld(map, mapping, celEu.x, celEu.y);
+    const mundoAlvo = cellToWorld(map, mapping, celAlvo.x, celAlvo.y);
+    const dx = mundoAlvo.x - mundoEu.x;
+    const dz = mundoAlvo.z - mundoEu.z;
+    if (dx * dx + dz * dz > 1e-6) model.current.rotation.y = Math.atan2(dx, dz);
+  };
+  registrarOlharParaAlvo(olharPara);
+  useEffect(() => {
+    registrarOlharParaAlvo(olharPara);
+    return () => registrarOlharParaAlvo(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, mapping]);
 
   /**
    * Pede para andar até a célula, quebrando o pedido quando for longe demais.
@@ -588,7 +690,14 @@ export function NetPlayer({
      */
     const atacando = now - useAttackStore.getState().atacandoEm < ATAQUE_VIVO_MS;
     const precisaInsistir = !encostar && !atacando;
-    if ((alvo.pendente || precisaInsistir) && now - alvo.pedidoEm >= REENVIO_ATAQUE_MS) {
+    /**
+     * Alcance não é visibilidade (`net/visao`): o rAthena aceitaria o golpe
+     * mesmo com uma montanha entre os dois (ele não conhece o relevo 3D), então
+     * quem barra isso é o cliente, aqui, ANTES do pacote sair — nunca só a UI.
+     * Sem LOS o pedido some (nem entra na fila de reenvio); volta a sair sozinho
+     * assim que o alvo (ou o personagem) sair de trás do obstáculo.
+     */
+    if ((alvo.pendente || precisaInsistir) && now - alvo.pedidoEm >= REENVIO_ATAQUE_MS && alvoVisivel(alvo.gid)) {
       useAttackStore.getState().marcarPedido(now);
       gateway().emit("action:attack", { gid: alvo.gid, continuous: true });
     }
@@ -716,12 +825,20 @@ export function NetPlayer({
     const meu = interpolatedCell(useWorldStore.getState().self, now);
     const eu = { x: Math.round(meu.x), y: Math.round(meu.y) };
 
-    if (dentroDoAlcance(eu, dele, p.raio)) {
+    /**
+     * Alcance não é visibilidade: mesma guarda de `perseguirAlvo`, ver
+     * `net/visao`. Sem LOS o pedido não sai — como já está "em alcance",
+     * `celulaNoAlcance` abaixo não tem para onde andar (devolve `null`), então
+     * a ordem fica parada esperando (o alvo se mover, ou o próprio personagem)
+     * até o teto de `PERSEGUICAO_MAX_MS` desistir sozinho.
+     */
+    if (dentroDoAlcance(eu, dele, p.raio) && alvoVisivel(p.gid)) {
       // a ordem morre ANTES do emit: `skill:use` não tem resposta de sucesso
       // aqui, e deixá-la de pé faria o quadro seguinte lançar de novo
       useSkillTargetStore.getState().parar();
       destinoDoCast.current = null;
       destinoFinal.current = null;
+      olharPara(p.gid);
       gateway().emit("skill:use", { skillId: p.skillId, level: p.level, targetGid: p.gid });
       return;
     }

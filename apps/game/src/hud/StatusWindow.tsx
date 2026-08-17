@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { usePlayerStore, type InventoryItem } from "../net/playerStore";
 import { useCharacterStore } from "../character/characterStore";
 import { gateway } from "../net/gateway";
-import { useItemCatalog } from "../net/itemCatalog";
+import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
 import { equipPending, requestUnequip, useEquipment } from "../net/equipmentStore";
 import { useStatusDelta } from "../net/statusDeltaStore";
 import { useHudStore } from "./hudStore";
@@ -219,7 +219,7 @@ export function StatusWindow() {
             cy={s.cy}
             diametro={"d" in s ? s.d : undefined}
             item={item}
-            nome={item ? (nomes[item.itemId]?.name ?? `#${item.itemId}`) : undefined}
+            nome={item ? getItemDisplayName(nomes[item.itemId]) : undefined}
             pendente={item ? equipPending(item.index) : false}
             onDoubleClick={item && online ? () => requestUnequip(item.index) : undefined}
           />
@@ -681,7 +681,9 @@ function SlotEquip({
   const [hover, setHover] = useState(false);
   const d = px(diametro ?? ST_SLOT_D);
   const borda = Math.max(6, d * 0.24);
-  const titulo = item ? `${nome ?? `#${item.itemId}`}${item.refine ? ` +${item.refine}` : ""} — duplo clique desequipa` : label;
+  // NUNCA id como nome provisório (regra absoluta, auditoria 2026-08-14) —
+  // "carregando…" enquanto o catálogo não respondeu, nunca `#${item.itemId}`.
+  const titulo = item ? `${nome ?? "carregando…"}${item.refine ? ` +${item.refine}` : ""} — duplo clique desequipa` : label;
 
   return (
     <div
@@ -714,7 +716,9 @@ function SlotEquip({
         }}
       >
         {item ? (
-          <IconSquare seed={`item-${item.itemId}`} fill radius={borda * 0.66} />
+          // nome ainda não chegou do catálogo → anel de loading, nunca o
+          // quadrado por seed de itemId (regra absoluta, auditoria 2026-08-14)
+          <IconSquare seed={nome ? `item-${item.itemId}` : undefined} loading={!nome} fill radius={borda * 0.66} />
         ) : (
           <img src={art} alt="" draggable={false} style={{ width: "62%", height: "62%", opacity: 0.85 }} />
         )}

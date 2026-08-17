@@ -12,6 +12,10 @@ import { WorldBar } from "./WorldBar";
  *
  * A barra usa a MESMA moldura pintada das barras de HP/SP do HUD, montada em
  * textura por `ui/barTexture.ts` — no mundo 3D não existe `border-image`.
+ *
+ * Ícones de buff/debuff NÃO ficam aqui — pedido explícito 2026-08-14: eles
+ * vivem no `TargetFrame` 2D (`hud/PlayerFrame.tsx`), a UI de alvo no canto
+ * superior esquerdo, não flutuando em cima da cabeça do monstro.
  */
 
 /**

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../net/playerStore";
-import { useItemCatalog, type ItemInfo } from "../net/itemCatalog";
+import { useItemCatalog, getItemDisplayName, type ItemInfo } from "../net/itemCatalog";
 import { useItemInfoStore } from "../net/itemInfoStore";
 import { CurvedBox } from "../ui/CurvedBox";
-import { IconSquare } from "../ui/rpg";
+import { IconSquare, LoadingRing } from "../ui/rpg";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { CHROME, TYPE, WINDOW_SCALE } from "../ui/windowChrome";
 import { BOOK } from "../ui/travelbook";
@@ -82,7 +82,8 @@ export function ItemInfoWindow() {
         style={{ width: px(LARGURA), height: px(220) }}
         inner={{ display: "flex", flexDirection: "column", padding: px(12), height: "100%", boxSizing: "border-box" }}
       >
-        <Cabecalho nome={info?.name ?? `#${item.itemId}`} refine={item.refine} onFechar={fechar} />
+        {/* NUNCA id como nome provisório (regra absoluta, auditoria 2026-08-14) */}
+        <Cabecalho nome={getItemDisplayName(info)} refine={item.refine} onFechar={fechar} />
         <div
           style={{
             display: "grid",
@@ -101,7 +102,7 @@ export function ItemInfoWindow() {
   );
 }
 
-function Cabecalho({ nome, refine, onFechar }: { nome: string; refine: number; onFechar: () => void }) {
+function Cabecalho({ nome, refine, onFechar }: { nome?: string; refine: number; onFechar: () => void }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: px(8) }}>
       <span
@@ -115,10 +116,18 @@ function Cabecalho({ nome, refine, onFechar }: { nome: string; refine: number; o
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          display: "flex",
+          alignItems: "center",
         }}
       >
-        {nome}
-        {refine > 0 ? ` +${refine}` : ""}
+        {nome ? (
+          <>
+            {nome}
+            {refine > 0 ? ` +${refine}` : ""}
+          </>
+        ) : (
+          <LoadingRing size={px(TYPE.section)} />
+        )}
       </span>
       <button
         onClick={onFechar}
@@ -145,7 +154,9 @@ function ColunaEsquerda({ item, info }: { item: { itemId: number; amount: number
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: px(6) }}>
       <div style={{ width: px(ICONE), height: px(ICONE), flex: "none" }}>
-        <IconSquare seed={`item-${item.itemId}`} size={px(ICONE)} />
+        {/* anel de loading enquanto o catálogo não respondeu — nunca o
+            quadrado por seed de itemId (regra absoluta, auditoria 2026-08-14) */}
+        <IconSquare seed={info ? `item-${item.itemId}` : undefined} loading={!info} size={px(ICONE)} />
       </div>
       {info && (
         <>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useItemCatalog } from "../net/itemCatalog";
+import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
+import { LoadingRing } from "../ui/rpg";
 import { CurvedBox } from "../ui/CurvedBox";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { BOOK } from "../ui/travelbook";
@@ -100,13 +101,15 @@ export function LootToast() {
         key={aviso.id}
         itemId={aviso.itemId}
         amount={aviso.amount}
-        nome={nomes[aviso.itemId]?.name ?? `#${aviso.itemId}`}
+        // NUNCA id como nome provisório (regra absoluta, auditoria
+        // 2026-08-14) — `undefined` enquanto o catálogo não respondeu.
+        nome={getItemDisplayName(nomes[aviso.itemId])}
       />
     </div>
   );
 }
 
-function Linha({ itemId, amount, nome }: { itemId: number; amount: number; nome: string }) {
+function Linha({ itemId, amount, nome }: { itemId: number; amount: number; nome?: string }) {
   return (
     <CurvedBox
       border={px(CHROME.tabBorder)}
@@ -143,15 +146,19 @@ function Linha({ itemId, amount, nome }: { itemId: number; amount: number; nome:
        * chão e o que aparece aqui são a mesma coisa, e trocar por um sprite
        * depois é mexer só neste bloco.
        */}
-      <div
-        style={{
-          width: px(LOOT.icone),
-          height: px(LOOT.icone),
-          borderRadius: px(3),
-          background: `hsl(${(itemId * 47) % 360}, 55%, 55%)`,
-          boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.45)",
-        }}
-      />
+      {nome ? (
+        <div
+          style={{
+            width: px(LOOT.icone),
+            height: px(LOOT.icone),
+            borderRadius: px(3),
+            background: `hsl(${(itemId * 47) % 360}, 55%, 55%)`,
+            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.45)",
+          }}
+        />
+      ) : (
+        <LoadingRing size={px(LOOT.icone)} />
+      )}
       <span
         style={{
           fontFamily: FRAME_FONT,
@@ -163,7 +170,10 @@ function Linha({ itemId, amount, nome }: { itemId: number; amount: number; nome:
         }}
       >
         {"- Você obteve "}
-        <span style={{ color: COR_NOME }}>{nome}</span>
+        {/* NUNCA id como nome provisório (regra absoluta, auditoria
+            2026-08-14) — enquanto o catálogo não respondeu, o anel acima já
+            avisa "carregando", o texto some em vez de mostrar `#id`. */}
+        <span style={{ color: COR_NOME }}>{nome ?? "…"}</span>
         {amount > 1 && (
           <span
             style={{

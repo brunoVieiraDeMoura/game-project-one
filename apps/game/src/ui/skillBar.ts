@@ -122,6 +122,33 @@ export const SB_COLORS = {
 /** largura de render do painel; toda medida da arte escala a partir daqui */
 export const SB_WIDTH = 660;
 
+/** quantos slots cabem por página — `SkillSlot` usa `flex:1` sobre esta
+ * contagem FIXA, então na prática o tamanho de cada slot já é constante. */
+const SKILL_SLOT_COUNT = 9;
+
+/**
+ * Tamanho de TELA (não de arte) do slot da barra de habilidades — a MESMA
+ * conta que `SkillSlot` já faz via `flex:1` em cima de `SB_LAYOUT.slots`, só
+ * que como número explícito. `ui/bag.ts`/`hud/InventoryWindow.tsx` reusam
+ * isto pro slot do inventário ter EXATAMENTE o mesmo tamanho da barra, em vez
+ * de duplicar um valor aproximado — a barra em si continua com `flex:1` como
+ * sempre (não passou a depender desta constante), os dois só batem porque a
+ * conta é idêntica.
+ *
+ * Um número só (não `{w,h}`): o slot da barra não é perfeitamente quadrado
+ * (~47×53 na escala atual), e `Slot` do inventário é desenhado para uma
+ * célula QUADRADA (ícone + faixa de nome embaixo, ver `hud/InventoryWindow`).
+ * O MENOR dos dois lados garante que o slot do inventário nunca passe do
+ * tamanho real da barra em nenhum eixo — a folga de ~6px que sobra na altura
+ * é o "espaço vazio" que o pedido pede, nunca usado pra esticar o slot.
+ */
+export const SKILL_SLOT_SIZE = (() => {
+  const escalaBarra = SB_WIDTH / SB_PLATE.w;
+  const w = ((SB_LAYOUT.slots.w - SLOT_GAP * (SKILL_SLOT_COUNT - 1)) / SKILL_SLOT_COUNT) * escalaBarra;
+  const h = SB_LAYOUT.slots.h * escalaBarra;
+  return Math.min(w, h);
+})();
+
 /**
  * Barra de conjuração (ui-change.txt): fica ENTRE a barra de skills e o
  * personagem, com um terço da largura dela.

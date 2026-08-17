@@ -1,8 +1,8 @@
-import { readFile, rm } from "node:fs/promises";
+import { readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
-import { parse as parseYamlText } from "yaml";
+import { parse as parseYamlText, stringify as stringifyYaml } from "yaml";
 import {
   JobStatsDocSchema,
   SkillTreeDocSchema,
@@ -13,7 +13,7 @@ import {
   type JobIdResolver,
   type SkillIdResolver,
 } from "@ragnarok/game-data";
-import { JobDatabaseWriter, type JobDatabasePaths } from "./job-database-writer";
+import { JobDatabaseWriter, type JobDatabasePaths, type JobDatabaseBaselinePaths } from "./job-database-writer";
 
 /**
  * Testes exigidos antes de qualquer gravação real nos 5 arquivos (leia1.txt,
@@ -80,6 +80,7 @@ function resolvers(): { jobs: JobIdResolver; skills: SkillIdResolver } {
   const skillNames = new Map([
     [100, "SM_SWORD"],
     [101, "KN_SPEARBOOMERANG"],
+    [102, "SM_BASH"],
   ]);
   const skillIds = new Map([...skillNames].map(([id, name]) => [name, id]));
   return {
@@ -234,5 +235,110 @@ describe("JobDatabaseWriter — Writer atômico dos 5 arquivos (Mapper+Validator
     await writer.writeClasses([jobFixture(), swordman(), knight()], jobs, skills);
     const treeDoc = SkillTreeDocSchema.parse(parseYamlText(await readFile(paths.skillTree, "utf8")));
     expect(treeDoc.Body.map((e) => e.Job).sort()).toEqual(["Knight", "Novice", "Swordman"]);
+  });
+});
+
+/**
+ * Regressão Napalm Beat/Mage (auditoria 2026-08-13): rAthena
+ * (`SkillTreeDatabase::parseBodyNode`, pc.cpp:13422) mescla `db/re` +
+ * `db/import` por upsert — omitir uma skill do `Tree[]` do override NUNCA
+ * remove o registro da baseline, ele continua valendo pra sempre. A única
+ * remoção suportada pelo motor é um tombstone `MaxLevel: 0` explícito
+ * (apagado por `loadingFinished`, pc.cpp:13690). Este bloco prova que o
+ * Writer emite esse tombstone — pra qualquer skill/job, sem hardcode —
+ * quando compara o lote contra a baseline real (`rathena/db/re/skill_tree.yml`).
+ */
+describe("JobDatabaseWriter — remoção de skill da árvore vira tombstone MaxLevel:0 (baseline db/re)", () => {
+  let paths: JobDatabasePaths;
+  let baseline: JobDatabaseBaselinePaths;
+  let writer: JobDatabaseWriter;
+
+  beforeEach(async () => {
+    const stamp = `${Date.now()}-${Math.random()}`;
+    paths = {
+      jobStats: join(tmpdir(), `job_stats-${stamp}.yml`),
+      skillTree: join(tmpdir(), `skill_tree-${stamp}.yml`),
+    };
+    baseline = {
+      jobStats: join(tmpdir(), `base-job_stats-${stamp}.yml`),
+      jobBasepoints: join(tmpdir(), `base-job_basepoints-${stamp}.yml`),
+      jobExp: join(tmpdir(), `base-job_exp-${stamp}.yml`),
+      jobAspd: join(tmpdir(), `base-job_aspd-${stamp}.yml`),
+      skillTree: join(tmpdir(), `base-skill_tree-${stamp}.yml`),
+    };
+    // baseline "db/re": Swordman tem SM_SWORD + SM_BASH; Knight exige SM_BASH
+    // pra existir — exatamente o cenário de Napalm Beat sendo pré-requisito
+    // de outra skill do Mago.
+    const baseTreeDoc = {
+      Header: { Type: "SKILL_TREE_DB", Version: 1 },
+      Body: [
+        {
+          Job: "Swordman",
+          Tree: [
+            { Name: "SM_SWORD", MaxLevel: 5 },
+            { Name: "SM_BASH", MaxLevel: 10, Requires: [{ Name: "SM_SWORD", Level: 3 }] },
+          ],
+        },
+        {
+          Job: "Knight",
+          Tree: [{ Name: "KN_SPEARBOOMERANG", MaxLevel: 10, Requires: [{ Name: "SM_BASH", Level: 5 }] }],
+        },
+      ],
+    };
+    await writeFile(baseline.skillTree, stringifyYaml(baseTreeDoc), "utf8");
+    writer = new JobDatabaseWriter(paths, baseline);
+  });
+
+  afterEach(async () => {
+    for (const p of [...Object.values(paths), ...Object.values(baseline)]) {
+      await rm(p, { force: true });
+      await rm(`${p}.bak`, { force: true });
+      await rm(`${p}.tmp`, { force: true });
+    }
+  });
+
+  it("remover SM_BASH da árvore do Swordman grava tombstone MaxLevel:0 (não some em silêncio)", async () => {
+    const { jobs, skills } = resolvers();
+    await writer.writeClasses(
+      [jobFixture(), swordman({ skills: [{ skillId: 100, maxLevel: 5, requires: [] }] })],
+      jobs,
+      skills,
+    );
+
+    const treeDoc = SkillTreeDocSchema.parse(parseYamlText(await readFile(paths.skillTree, "utf8")));
+    const swordmanTree = treeDoc.Body.find((e) => e.Job === "Swordman")?.Tree ?? [];
+    expect(swordmanTree).toContainEqual({ Name: "SM_SWORD", MaxLevel: 5 });
+    expect(swordmanTree).toContainEqual({ Name: "SM_BASH", MaxLevel: 0 });
+  });
+
+  it("remover SM_BASH como pré-requisito de outra skill grava tombstone Level:0 (não fica preso pra sempre)", async () => {
+    const { jobs, skills } = resolvers();
+    // Knight não exige mais SM_BASH (só o que já existia — SM_SWORD via herança)
+    await writer.writeClasses([jobFixture(), swordman(), knight()], jobs, skills);
+
+    const treeDoc = SkillTreeDocSchema.parse(parseYamlText(await readFile(paths.skillTree, "utf8")));
+    const knightTree = treeDoc.Body.find((e) => e.Job === "Knight")?.Tree ?? [];
+    const spearBoomerang = knightTree.find((s) => s.Name === "KN_SPEARBOOMERANG");
+    expect(spearBoomerang?.Requires).toContainEqual({ Name: "SM_SWORD", Level: 3 });
+    expect(spearBoomerang?.Requires).toContainEqual({ Name: "SM_BASH", Level: 0 });
+  });
+
+  it("reescrever o mesmo lote de novo continua emitindo o tombstone (idempotente através de @reloadpcdb/restart)", async () => {
+    const { jobs, skills } = resolvers();
+    const trimmedSwordman = swordman({ skills: [{ skillId: 100, maxLevel: 5, requires: [] }] });
+    await writer.writeClasses([jobFixture(), trimmedSwordman], jobs, skills);
+    await writer.writeClasses([jobFixture(), trimmedSwordman], jobs, skills);
+
+    const treeDoc = SkillTreeDocSchema.parse(parseYamlText(await readFile(paths.skillTree, "utf8")));
+    const swordmanTree = treeDoc.Body.find((e) => e.Job === "Swordman")?.Tree ?? [];
+    expect(swordmanTree).toContainEqual({ Name: "SM_BASH", MaxLevel: 0 });
+  });
+
+  it("skill que nunca existiu na baseline não gera tombstone nenhum (não é genérico demais)", async () => {
+    const { jobs, skills } = resolvers();
+    await writer.writeClasses([jobFixture()], jobs, skills);
+    const treeDoc = SkillTreeDocSchema.parse(parseYamlText(await readFile(paths.skillTree, "utf8")));
+    const novice = treeDoc.Body.find((e) => e.Job === "Novice");
+    expect(novice?.Tree ?? []).toEqual([]);
   });
 });

@@ -4,6 +4,9 @@ import { useCombatStore } from "../combat/combatStore";
 import { useHudStore } from "./hudStore";
 import { PlayerFrame, TargetFrame } from "./PlayerFrame";
 import { Minimap } from "./Minimap";
+import { StatusEffectIcons } from "./StatusEffectIcons";
+import { MINIMAP_WIDTH } from "../ui/minimap";
+import { useWorldStore } from "../net/worldStore";
 import { SkillBar } from "./SkillBar";
 import { CastBar } from "./CastBar";
 import { MenuBar } from "./MenuBar";
@@ -20,6 +23,20 @@ import { Panel, RpgButton } from "../ui/rpg";
 import { SondaDeMontagem } from "../core/diagnostics/SondaDeCanvas";
 
 const wrap: React.CSSProperties = { position: "absolute", userSelect: "none" };
+
+/**
+ * Painel grande de buffs/debuffs: 6 colunas, mesma largura aproximada do
+ * minimapa (divisão 1fr/1fr — pedido explícito 2026-08-14). SEM `Panel`
+ * (sem fundo/texto/canto arredondado, pedido explícito) — só a grade de
+ * ícones redondos, sem moldura (`bordered={false}`, pedido explícito
+ * 2026-08-17, mesmo tratamento do `TargetFrame`/`PlayerFrame`).
+ */
+const BUFF_PANEL_COLUMNS = 6;
+/** mesmo `gap:4` que `StatusEffectIcons` já usa na grade (`columns` presente) */
+const BUFF_PANEL_GAP = 4;
+const BUFF_PANEL_ICON_SIZE = Math.floor((MINIMAP_WIDTH - BUFF_PANEL_GAP * (BUFF_PANEL_COLUMNS - 1)) / BUFF_PANEL_COLUMNS);
+const BUFF_PANEL_WIDTH =
+  BUFF_PANEL_ICON_SIZE * BUFF_PANEL_COLUMNS + BUFF_PANEL_GAP * (BUFF_PANEL_COLUMNS - 1);
 
 /** HUD completo do /play (soul + antes.txt): frames, minimapa, skillbar, menu,
  * chat, quests ativas, janelas e overlay de morte. Renderizado sobre o Canvas. */
@@ -39,6 +56,7 @@ export function Hud({
   aquecendo?: boolean;
 }) {
   useHudHotkeys(); // Alt+A/E/S/Q… como no RO
+  const selfGid = useWorldStore((s) => s.selfGid);
   return (
     <>
       {/*
@@ -60,23 +78,22 @@ export function Hud({
           num canto) — ele se centraliza sozinho e não recebe clique. */}
       <LootToast />
 
-      {/* topo-direita: minimapa e, logo abaixo dele, o acesso rápido às
-          missões. Os dois na MESMA coluna para o quadro acompanhar a altura do
-          minimapa em vez de depender de um `top` cravado — e como o tracker some
-          quando não há missão aceita, o `gap` do flex não deixa buraco. */}
-      <div
-        style={{
-          ...wrap,
-          top: 10,
-          right: 10,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 8,
-        }}
-      >
-        <Minimap map={map} playerPos={playerPos} />
-        <QuestTracker />
+      {/* topo-direita: painel de buffs/debuffs à ESQUERDA do minimapa (nunca
+          acima/abaixo — pedido explícito da "auditoria buffs/debuffs"
+          2026-08-14), divisão ~1fr/1fr — o painel usa a MESMA largura do
+          minimapa. À direita, minimapa e, logo abaixo dele, o acesso rápido
+          às missões: os dois na MESMA coluna para o quadro acompanhar a
+          altura do minimapa em vez de depender de um `top` cravado — e como
+          o tracker some quando não há missão aceita, o `gap` do flex não
+          deixa buraco. */}
+      <div style={{ ...wrap, top: 10, right: 10, display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ width: BUFF_PANEL_WIDTH }}>
+          <StatusEffectIcons gid={selfGid} size={BUFF_PANEL_ICON_SIZE} columns={BUFF_PANEL_COLUMNS} tooltipBelow bordered={false} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          <Minimap map={map} playerPos={playerPos} />
+          <QuestTracker />
+        </div>
       </div>
 
       {/* baixo-esquerda: chat */}

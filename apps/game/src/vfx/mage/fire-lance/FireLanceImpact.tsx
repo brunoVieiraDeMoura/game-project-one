@@ -3,32 +3,39 @@ import type { CSSProperties } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Html } from "@react-three/drei";
+import { multiHitTotalMs } from "../multiHitShared";
+import { createSeededRng } from "../../core/particleMath";
 
 /**
  * Fire Lance (MG_FIREBOLT) — lança de fogo em CSS puro, MESMA estrutura de
- * `mage/cold-bolt/ColdBoltImpact.tsx` (5 hits escalonados, dano repartido,
- * cascata de números, total amarelo no 5º hit — ver o docblock daquele
- * arquivo pro raciocínio completo de timing/posição/`<Html>`/escala por
- * alvo, não duplicado aqui). Só o VFX — arte da lança e do burst de impacto
- * — é próprio de fogo; os NÚMEROS de dano usam a mesma receita visual (só
- * cor), porque o pedido foi reutilizar o sistema de dano e trocar só o
- * elemento.
+ * `mage/cold-bolt/ColdBoltImpact.tsx` (N hits escalonados pelo nível da
+ * skill, dano repartido, cascata de números, total amarelo no último hit —
+ * ver o docblock daquele arquivo pro raciocínio completo de timing/posição/
+ * `<Html>`/escala por alvo, não duplicado aqui). Só o VFX — arte da lança e
+ * do burst de impacto — é próprio de fogo; os NÚMEROS de dano usam a mesma
+ * receita visual (só cor), porque o pedido foi reutilizar o sistema de dano
+ * e trocar só o elemento.
  */
 
-export const FIRE_LANCE_HITS = 5;
-export const FIRE_LANCE_STAGGER_MS = 140;
+/** teto de lanças no nível MÁXIMO da skill — a quantidade de VERDADE por
+ * lançamento vem do nível real (`getSkillProjectileCount`,
+ * `vfx/mage/multiHitShared`), nunca fixa em 5 */
+// teto REAL do skill_db (Lv10→10), não mais um chute de 5 (auditoria
+// "count real" 2026-08-19).
+export const FIRE_LANCE_MAX_HITS = 10;
+export const FIRE_LANCE_STAGGER_MS = 200;
 export const FIRE_LANCE_FALL_MS = 560;
 export const FIRE_LANCE_IMPACT_FRACTION = 0.82;
 const IMPACT_AT_MS = FIRE_LANCE_FALL_MS * FIRE_LANCE_IMPACT_FRACTION;
 export const FIRE_LANCE_DAMAGE_NUMBER_MS = 1000;
 export const FIRE_LANCE_VISIBLE_MS = IMPACT_AT_MS + FIRE_LANCE_DAMAGE_NUMBER_MS;
-const LAST_HIT_AT_MS = (FIRE_LANCE_HITS - 1) * FIRE_LANCE_STAGGER_MS + IMPACT_AT_MS;
 export const FIRE_LANCE_TOTAL_VISIBLE_MS = 1500;
-/** duração total que o efeito precisa ficar vivo no `vfxStore` — mesmo
- * cálculo do Cold Bolt (`ICICLE_TOTAL_MS`), usado por `vfx/mage/multiHitRegistry`. */
-export const FIRE_LANCE_TOTAL_MS =
-  Math.max((FIRE_LANCE_HITS - 1) * FIRE_LANCE_STAGGER_MS + FIRE_LANCE_VISIBLE_MS, LAST_HIT_AT_MS + FIRE_LANCE_TOTAL_VISIBLE_MS) +
-  100;
+/** duração total que o efeito precisa ficar vivo no `vfxStore` PARA `hits`
+ * lanças de verdade — mesma fórmula compartilhada do Cold Bolt/Thunder
+ * Storm/Soul Strike, só com o timing próprio do fogo. */
+export function fireLanceTotalMs(hits: number): number {
+  return multiHitTotalMs(hits, FIRE_LANCE_STAGGER_MS, IMPACT_AT_MS, FIRE_LANCE_DAMAGE_NUMBER_MS, FIRE_LANCE_TOTAL_VISIBLE_MS);
+}
 
 function splitDamage(total: number, hits: number): number[] {
   const base = Math.floor(total / hits);
@@ -53,10 +60,10 @@ interface LanceSpec {
   dmgStackY: number;
 }
 
-function buildSpecs(seed: number, dmgSlices: number[] | undefined): LanceSpec[] {
+function buildSpecs(seed: number, hits: number, dmgSlices: number[] | undefined): LanceSpec[] {
   const specs: LanceSpec[] = [];
-  for (let i = 0; i < FIRE_LANCE_HITS; i++) {
-    const angle = (i / FIRE_LANCE_HITS) * Math.PI * 2 + seed * Math.PI * 2;
+  for (let i = 0; i < hits; i++) {
+    const angle = (i / hits) * Math.PI * 2 + seed * Math.PI * 2;
     specs.push({
       angle,
       delayMs: i * FIRE_LANCE_STAGGER_MS,
@@ -74,27 +81,32 @@ export function FireLanceImpact({
   crit,
   onSelf,
   targetScale = 1,
+  hits = FIRE_LANCE_MAX_HITS,
 }: {
   onHit?: (index: number) => void;
   damage?: number;
   crit?: boolean;
   onSelf?: boolean;
   targetScale?: number;
+  /** quantidade REAL de lanças — vem do nível da skill
+   * (`getSkillProjectileCount`, `net/useWorldEvents`), nunca fixa em 5. */
+  hits?: number;
 }) {
   useFireLanceStyles();
   const bornAt = useRef(performance.now());
+  const hitCount = Math.min(FIRE_LANCE_MAX_HITS, Math.max(1, hits));
   const dmgSlices = useMemo(
-    () => (damage !== undefined && damage > 0 ? splitDamage(damage, FIRE_LANCE_HITS) : undefined),
-    [damage],
+    () => (damage !== undefined && damage > 0 ? splitDamage(damage, hitCount) : undefined),
+    [damage, hitCount],
   );
-  const specs = useMemo(() => buildSpecs(Math.random(), dmgSlices), [dmgSlices]);
+  const specs = useMemo(() => buildSpecs(Math.random(), hitCount, dmgSlices), [hitCount, dmgSlices]);
   const totalRef = useRef<FinalTotalHandle>(null);
   const hitsLanded = useRef(0);
 
   const handleHit = (i: number) => {
     onHit?.(i);
     hitsLanded.current += 1;
-    if (hitsLanded.current === FIRE_LANCE_HITS) totalRef.current?.trigger();
+    if (hitsLanded.current === hitCount) totalRef.current?.trigger();
   };
 
   return (
@@ -124,8 +136,7 @@ interface FragmentSpec {
 
 function buildFragments(seed: number): FragmentSpec[] {
   const out: FragmentSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < FRAGMENT_COUNT; i++) {
     const angle = ((i / FRAGMENT_COUNT) * 360 + rnd() * 24) * (Math.PI / 180);
     const dist = 60 + rnd() * 52;
@@ -145,8 +156,7 @@ interface EmberRiseSpec {
 }
 function buildEmberRise(seed: number): EmberRiseSpec[] {
   const out: EmberRiseSpec[] = [];
-  let s = seed;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = createSeededRng(seed);
   for (let i = 0; i < EMBER_RISE_COUNT; i++) {
     out.push({ ex: (rnd() - 0.5) * 70, delayMs: rnd() * 120 });
   }
@@ -349,15 +359,18 @@ const FIRE_LANCE_CSS = `
   background: linear-gradient(205deg, rgba(120, 10, 0, 0.1), rgba(90, 8, 0, 0.65));
   opacity: 0.8;
 }
+/* sem filter:blur — mesma troca de ColdBoltImpact.tsx (.cb-ice-spike__glow):
+   já é radial-gradient, o blur(3px) só somava raster por cima de um degradê
+   que já nasce macio. Estágio extra em 45% no lugar do único de 70% pra
+   preservar a suavidade da transição. */
 .fl-fire-spike__glow {
   position: absolute;
   left: 50%;
   top: 58%;
-  width: 130%;
-  height: 78%;
+  width: 138%;
+  height: 85%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(255, 140, 40, 0.55), rgba(255, 90, 20, 0) 70%);
-  filter: blur(3px);
+  background: radial-gradient(circle, rgba(255, 140, 40, 0.55), rgba(255, 110, 25, 0.32) 45%, rgba(255, 90, 20, 0) 75%);
   animation: flSpikeGlow 420ms ease-in-out infinite;
 }
 /* labareda fina lambendo a lança — chamas animadas, distinto do glow difuso acima */

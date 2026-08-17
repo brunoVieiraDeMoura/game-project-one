@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactElement, RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { GameMap } from "@ragnarok/map-format";
@@ -12,10 +13,18 @@ import { ColdBoltImpact } from "./mage/cold-bolt/ColdBoltImpact";
 import { ColdBoltCastFrost } from "./mage/cold-bolt/ColdBoltCastFrost";
 import { FireLanceImpact } from "./mage/fire-lance/FireLanceImpact";
 import { FireLanceCastFire } from "./mage/fire-lance/FireLanceCastFire";
-import { ThunderStormImpact } from "./mage/thunder-storm/ThunderStormImpact";
 import { ThunderStormCastElectric } from "./mage/thunder-storm/ThunderStormCastElectric";
+import { LightBoltImpact } from "./mage/light-bolt/LightBoltImpact";
+import { SoulStrikeImpact } from "./mage/soul-strike/SoulStrikeImpact";
+import { SoulStrikeCastSpirit } from "./mage/soul-strike/SoulStrikeCastSpirit";
+import { FrostDiverImpact } from "./mage/frost-diver/FrostDiverImpact";
+import { StoneCurseCast } from "./mage/stone-curse/StoneCurseCast";
+import { StoneCurseImpact } from "./mage/stone-curse/StoneCurseImpact";
 import { mobModel, NPC_MODEL } from "../entities/mobModels";
+import { anchorDeArma } from "../entities/weaponAnchors";
 import { classModelFor } from "../entities/classModels";
+import { aoImpactoMultiHit } from "../audio/mage/multiHitCastAudio";
+import { marcarDesmontagemVfx, marcarMontagemVfx } from "../core/diagnostics/vfxProbe";
 
 /** skills de "N hits com VFX próprio" (skill_db, nome Aegis — nunca id, ele
  * diverge de projeto pra projeto no rAthena) — cada uma tem um par
@@ -23,17 +32,96 @@ import { classModelFor } from "../entities/classModels";
  * Aegis em vez de um `if` por skill nova (o registro de duração fica em
  * `vfx/mage/multiHitRegistry`, usado por `net/useWorldEvents`; aqui só
  * escolhe QUAL componente desenhar — são preocupações diferentes, mesma
- * fonte de nomes Aegis). */
+ * fonte de nomes Aegis).
+ *
+ * Light Bolt (MG_LIGHTNINGBOLT) reaproveita o CAST da Thunder Storm de
+ * propósito (`ThunderStormCastElectric`, sem componente próprio) — as duas
+ * são elétricas e o estágio de "carregando no caster" é IDÊNTICO na
+ * natureza (partículas/arcos/glow subindo antes do raio sair); só o
+ * IMPACTO diverge (AoE espalhada × raio único na cabeça de um alvo), por
+ * isso só o `IMPACT_VFX` tem uma entrada própria (`LightBoltImpact`). É a
+ * infra "genuinamente compartilhável" que o pedido pediu pra identificar
+ * antes de duplicar.
+ *
+ * MG_FIREBALL e MG_THUNDERSTORM saíram de CAST_VFX/IMPACT_VFX na migração
+ * pro VFX Core (leia1.txt, Fase 3) — vivem em `fire-ball/fireBallVfxDef.tsx`
+ * e `thunder-storm/thunderStormVfxDef.tsx` agora. `ThunderStormCastElectric`
+ * (componente React) continua viva só porque Light Bolt ainda a usa —
+ * migrar Light Bolt é Fase 5; quando isso acontecer, a definição dele passa
+ * a apontar pro MESMO `vfxId` `thunder_storm_cast` (a arte é idêntica) e
+ * este componente é removido de vez.
+ */
 const CAST_VFX: Record<string, typeof ColdBoltCastFrost> = {
   MG_COLDBOLT: ColdBoltCastFrost,
   MG_FIREBOLT: FireLanceCastFire,
-  MG_THUNDERSTORM: ThunderStormCastElectric,
+  MG_LIGHTNINGBOLT: ThunderStormCastElectric,
+  MG_SOULSTRIKE: SoulStrikeCastSpirit,
+  // Congelar reaproveita o cast de gelo da Cold Bolt de propósito — mesma
+  // natureza (partículas/cristais concentrando no caster antes de sair),
+  // só o IMPACTO diverge (trilha no chão + prisão condicional).
+  MG_FROSTDIVER: ColdBoltCastFrost,
+  MG_STONECURSE: StoneCurseCast,
 };
 const IMPACT_VFX: Record<string, typeof ColdBoltImpact> = {
   MG_COLDBOLT: ColdBoltImpact,
   MG_FIREBOLT: FireLanceImpact,
-  MG_THUNDERSTORM: ThunderStormImpact,
+  MG_LIGHTNINGBOLT: LightBoltImpact,
+  MG_SOULSTRIKE: SoulStrikeImpact,
+  // Congelar idem — 1 hit só, dano pelo damageFeed normal, prisão de gelo
+  // CONDICIONAL (só se `opt1` real virar OPT1_FREEZE, ver componente).
+  MG_FROSTDIVER: FrostDiverImpact,
+  // Petrificar idem — 1 hit, `damageFlags:["no_damage"]` no skill_db (dano
+  // sempre 0 de propósito), transformação em pedra CONDICIONAL (`opt1 ===
+  // OPT1_STONE` real, ver componente).
+  MG_STONECURSE: StoneCurseImpact,
 };
+/** skills de "área com visual próprio por célula" — cada `skill:ground`
+ * (uma célula real plantada pelo servidor) ganha o componente do aegis em
+ * vez do `AreaCell` genérico (roxo). Mesmo formato de registro do
+ * `CAST_VFX`/`IMPACT_VFX` acima.
+ *
+ * MG_SAFETYWALL e MG_FIREWALL saíram daqui na migração pro VFX Core
+ * (leia1.txt, Fase 3) — vivem em `vfx/mage/ghost-dome/ghostDomeVfxDef.tsx`
+ * e `vfx/mage/fire-wall/fireWallVfxDef.tsx` agora, e `vfx/vfxStore.ts:
+ * spawn()` nunca deixa um efeito delas chegar até este dispatcher (ver
+ * `vfx/skillVfxBindings.ts`). Fire Wall também perdeu o caso especial de
+ * agrupamento (`FireWallGroup.tsx`, removido) — o `DomRenderer` do Core já
+ * agrupa QUALQUER skill `renderer:"dom"` num React root só, de graça, sem
+ * precisar de um componente próprio por skill agrupada. Registro vazio de
+ * propósito: o formato continua aqui pronto pra qualquer área NOVA que
+ * ainda não tenha sido migrada. */
+const AREA_VFX: Record<string, (props: { cx: number; cy: number; cz: number; cellSize: number }) => ReactElement> = {};
+/** contrato de props pra um buff PRÓPRIO ainda não migrado — mesmo formato
+ * que `OracleBuff` usava antes de migrar (referência viva de contrato,
+ * pra quando o próximo buff precisar dele). */
+interface BuffVfxComponentProps {
+  areaRadius?: number;
+  targetScale: number;
+  terrain: TerrainQuery;
+  cellSize: number;
+  anchorRef: RefObject<{ x: number; y: number; z: number }>;
+}
+/** skills de "self-buff com visual próprio" (`kind: "buff"`) — nunca planta
+ * célula (`target:"self"`, sem `unit` no skill_db), só decide QUAL
+ * componente desenhar no lugar do `BuffRing` genérico.
+ *
+ * MG_SIGHT saiu daqui na migração pro VFX Core (leia1.txt, Fase 3) — vive
+ * em `vfx/mage/oracle/oracleVfxDef.tsx` agora (era o hotspot PRINCIPAL da
+ * investigação: 111 `<Html>`/69 `useFrame` por instância). Registro vazio
+ * de propósito, pronto pra qualquer buff NOVO que ainda não tenha sido
+ * migrado. */
+const BUFF_VFX: Record<string, (props: BuffVfxComponentProps) => ReactElement> = {};
+/** impactos que precisam de onde o CASTER estava (voam/partem dele até o
+ * alvo) — offset pré-calculado em `VfxNode` (`casterOffset`, abaixo). */
+const NEEDS_CASTER_OFFSET = new Set<unknown>([SoulStrikeImpact, FrostDiverImpact, StoneCurseImpact]);
+/** altura chutada (unidades locais) só pro FALLBACK de posição do caster
+ * (célula/chão, sem cajado) — aproxima peito/mão até a ponta real resolver.
+ * Frost Diver não usa (nasce no CHÃO de propósito), os outros três sim. */
+const FALLBACK_LAUNCH_Y_BIAS = 1.0;
+/** subconjunto de `NEEDS_CASTER_OFFSET` que voa da MÃO/cajado — usa a ponta
+ * real (`anchorDeArma`) assim que ela resolve. Frost Diver fica de fora
+ * (nasce no chão, ver comentário no `useFrame` que lê este set). */
+const NEEDS_WAND_TIP = new Set<unknown>([SoulStrikeImpact, StoneCurseImpact]);
 
 /**
  * Tamanho visual do ALVO — MESMO catálogo que `net/NetEntity` já usa pra
@@ -90,6 +178,18 @@ export function SkillVfx({
     useVfxStore.getState().prune(performance.now());
   });
 
+  /**
+   * `ensure()` pros efeitos de ÁREA — resolve o `aegisName` cedo pra
+   * `VfxNode` já poder escolher entre `AREA_VFX` (componente próprio, pra
+   * quem ainda não migrou pro Core) e o `AreaCell` genérico (roxo) desde o
+   * primeiro quadro, em vez de esperar o `ensure()` de dentro do próprio
+   * `VfxNode` responder um quadro depois.
+   */
+  useEffect(() => {
+    const ids = effects.filter((e) => e.kind === "area").map((e) => e.skillId);
+    if (ids.length > 0) useSkillCatalog.getState().ensure(ids);
+  }, [effects]);
+
   // grupo NOMEADO e inerte, só como rótulo para a contagem por categoria do
   // flight recorder (`core/diagnostics/cenaProbe`)
   return (
@@ -117,6 +217,18 @@ function VfxNode({
   const group = useRef<THREE.Group>(null);
   const born = useRef(performance.now());
 
+  // VFX_MOUNT/VFX_UNMOUNT (leia1.txt) — `VfxNode` é o ÚNICO componente React
+  // que monta para QUALQUER VFX de skill (`effects.map` abaixo, `key=
+  // {effect.id}`), então instrumentar aqui cobre as 18 famílias de uma vez.
+  // Roda depois do `spawn()` já ter disparado VFX_START (`vfx/vfxStore.ts`)
+  // — a distinção importa porque o array pode crescer um quadro antes do
+  // React comitar o novo `VfxNode`.
+  useEffect(() => {
+    marcarMontagemVfx(effect.id, { kind: effect.kind, skillId: effect.skillId });
+    return () => marcarDesmontagemVfx(effect.id, { kind: effect.kind, skillId: effect.skillId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // O tamanho do disco de conjuração tem que ser o da ÁREA DE VERDADE da
   // skill, não um chute — sem o catálogo, o disco saía sempre do mesmo
   // tamanho (2 células) para qualquer magia, do Bash à Storm Gust. O nível de
@@ -128,8 +240,17 @@ function VfxNode({
   // o primeiro impacto de uma skill nunca antes vista no catálogo cai sempre
   // no flash genérico (mesmo lapso honesto do disco de conjuração acima).
   const impactInfo = useSkillCatalog((s) => (effect.kind === "impact" ? s.byId[effect.skillId] : undefined));
+  // "area" idem, pro `AREA_VFX` abaixo (Cúpula Fantasma/Parede de Fogo)
+  // decidir entre a célula genérica roxa e um visual próprio por aegis.
+  const groundInfo = useSkillCatalog((s) => (effect.kind === "area" ? s.byId[effect.skillId] : undefined));
+  // "buff" idem, pro `BUFF_VFX` abaixo (registro vazio hoje, ver docblock) —
+  // precisa do `aegisName` (qual componente desenhar) e do `areaRadius` real.
+  const buffInfo = useSkillCatalog((s) => (effect.kind === "buff" ? s.byId[effect.skillId] : undefined));
   useEffect(() => {
-    if ((effect.kind === "cast" || effect.kind === "impact") && effect.skillId) {
+    if (
+      (effect.kind === "cast" || effect.kind === "impact" || effect.kind === "area" || effect.kind === "buff") &&
+      effect.skillId
+    ) {
       useSkillCatalog.getState().ensure([effect.skillId]);
     }
   }, [effect.kind, effect.skillId]);
@@ -141,6 +262,15 @@ function VfxNode({
     () => worldPositionOf(effect, map, mapping) ?? { x: 0, y: -999, z: 0 },
     [effect, map, mapping],
   );
+  // pé do efeito, atualizado todo quadro (abaixo) — repassado a qualquer
+  // componente com partículas/pontos deslocados do centro que ainda caia
+  // neste dispatcher legado, pra consultar o TERRENO REAL na própria
+  // posição em vez de herdar a altura do centro (`vfx/terrainFollow.ts`).
+  // Oráculo/Fire Ball/Thunder Storm fazem o equivalente pelo Core agora
+  // (`DomArtUpdateCtx.terrainFollowDeltaY`). Ref (não state) de propósito:
+  // atualizar isto via setState a 60fps
+  // re-renderizaria a árvore inteira por quadro.
+  const anchorRef = useRef(initial);
 
   /**
    * `area`/`cast` são PRESOS À CÉLULA — `worldPositionOf` devolve o mesmo
@@ -150,6 +280,14 @@ function VfxNode({
    * `position`/`scale` que mudaria a forma da malha moldada a cada quadro.
    */
   const presoNaCelula = effect.kind === "area" || effect.kind === "cast";
+  // Oráculo tem VFX PRÓPRIO de buff (espíritos orbitando + partículas de
+  // área) — o "sobe e assenta em 70%" genérico do `BuffRing` (pensado pra um
+  // flash de 600ms) ficaria errado num efeito que fica de pé por 10s: os
+  // espíritos sairiam subindo ~1 célula acima do caster e ficariam presos lá
+  // em cima. `hasCustomBuffVfx` desliga esses dois ajustes só pra quem tem
+  // componente PRÓPRIO — o `BuffRing` genérico continua com o comportamento
+  // de sempre.
+  const hasCustomBuffVfx = effect.kind === "buff" && buffInfo?.aegisName !== undefined && buffInfo.aegisName in BUFF_VFX;
 
   useFrame(() => {
     if (presoNaCelula) return;
@@ -158,23 +296,32 @@ function VfxNode({
 
     const world = worldPositionOf(effect, map, mapping);
     if (!world) return;
+    anchorRef.current = world;
 
     // "vida" do efeito em 0..1 — o anel sobe, o flash cresce
     const life = Math.min(1, (performance.now() - born.current) / 600);
 
     // A altura é SEMPRE recalculada a partir do chão. Somar no y do frame
     // anterior fazia o anel subir sem parar (ele saía voando do mapa).
-    const lift = effect.kind === "buff" ? life * cellSize : 0;
+    const lift = effect.kind === "buff" && !hasCustomBuffVfx ? life * cellSize : 0;
     g.position.set(world.x, world.y + 0.05 + lift, world.z);
 
     // A escala de célula já está no `scale` do grupo (montado no primeiro
     // render); aqui só entra a animação, senão o efeito fica cellSize² e cobre
     // meia tela.
-    const grow = effect.kind === "impact" ? 0.4 + life * 0.8 : 1 - life * 0.3;
+    const grow = effect.kind === "impact" ? 0.4 + life * 0.8 : hasCustomBuffVfx ? 1 : 1 - life * 0.3;
     g.scale.setScalar(grow * cellSize);
   });
 
   if (effect.kind === "area") {
+    // Cúpula Fantasma (Safety Wall, `unit.layout:0`) e Parede de Fogo (Fire
+    // Wall, `unit.layout:-1`) ganham visual PRÓPRIO por célula — o fluxo de
+    // rede é o MESMO de qualquer área (um `skill:ground` por célula
+    // plantada, some no `skill:ground-gone`), só a pintura muda.
+    const AreaComponent = groundInfo?.aegisName ? AREA_VFX[groundInfo.aegisName] : undefined;
+    if (AreaComponent) {
+      return <AreaComponent cx={initial.x} cy={initial.y} cz={initial.z} cellSize={cellSize} />;
+    }
     return <AreaCell cx={initial.x} cz={initial.z} raioMundo={cellSize / 2} terrain={terrain} />;
   }
   if (effect.kind === "cast") {
@@ -196,30 +343,137 @@ function VfxNode({
 
   const ImpactComponent =
     effect.kind === "impact" && impactInfo?.aegisName ? IMPACT_VFX[impactInfo.aegisName] : undefined;
-  // só calcula (lookup no worldStore) quando realmente vai ser usado
+  const BuffComponent = hasCustomBuffVfx && buffInfo?.aegisName ? BUFF_VFX[buffInfo.aegisName] : undefined;
+  // só calcula (lookup no worldStore) quando realmente vai ser usado —
+  // Oráculo também precisa (escala do CASTER, `effect.gid` pra "buff" já é o
+  // `sourceGid`, ver `net/useWorldEvents.onSkillCast`)
   const targetScale = useMemo(
-    () => (ImpactComponent ? targetVisualScale(effect.gid) : 1),
-    [ImpactComponent, effect.gid],
+    () => (ImpactComponent || BuffComponent ? targetVisualScale(effect.gid) : 1),
+    [ImpactComponent, BuffComponent, effect.gid],
   );
+  // Soul Strike/Fire Ball/Frost Diver/Stone Curse PRECISAM de onde o caster
+  // estava (os projéteis voam/partem dele até o alvo, não caem de cima do
+  // alvo como as outras três) — offset LOCAL (caster menos alvo, já
+  // dividido por `cellSize`). `null` quando não precisa ou o caster não
+  // resolveu posição nenhuma — cada componente tem um fallback próprio pra
+  // esse caso (nunca nasce em cima do alvo por falta de dado).
+  //
+  // Fallback IMEDIATO: posição da CÉLULA do caster (`worldPositionOf`,
+  // centro do chão, sem altura de cajado) — disponível desde o primeiro
+  // quadro. Assim que a ponta do cajado resolve de verdade
+  // (`anchorDeArma`, MESMO registro que `FireBallCastFire`/`ColdBoltCastFrost`
+  // já usam pro cast), o `useFrame` abaixo SUBSTITUI por ela — "tem que
+  // iniciar na ponta do cajado", não no centro do corpo do caster. A troca
+  // acontece 1-2 quadros depois do nascimento do efeito (o voo inteiro dura
+  // centenas de ms), imperceptível.
+  const casterOffsetFallback = useMemo(() => {
+    if (!ImpactComponent || !NEEDS_CASTER_OFFSET.has(ImpactComponent) || effect.sourceGid === undefined) return null;
+    const casterPos = worldPositionOf({ gid: effect.sourceGid }, map, mapping);
+    if (!casterPos) return null;
+    // Frost Diver nasce no CHÃO de propósito (trilha de gelo) — nunca leva
+    // o viés de altura; os outros três (voam da mão/cajado) levam, só no
+    // FALLBACK (a ponta REAL, abaixo, já vem com a altura certa embutida —
+    // somar de novo ali jogaria o lançamento pra cima da cabeça do caster).
+    const yBias = ImpactComponent === FrostDiverImpact ? 0 : FALLBACK_LAUNCH_Y_BIAS;
+    return {
+      x: (casterPos.x - initial.x) / cellSize,
+      y: (casterPos.y - initial.y) / cellSize + yBias,
+      z: (casterPos.z - initial.z) / cellSize,
+    };
+  }, [ImpactComponent, effect.sourceGid, map, mapping, initial, cellSize]);
+  const [casterTipOffset, setCasterTipOffset] = useState<{ x: number; y: number; z: number } | null>(null);
+  const tipCaptured = useRef(false);
+  useFrame(() => {
+    if (tipCaptured.current) return;
+    // Frost Diver fica de FORA de propósito: a trilha dela nasce no CHÃO
+    // (pé do caster), a ponta do cajado ficaria flutuando na altura da mão
+    // — errado pra essa skill especificamente. Só quem VOA da mão/cajado
+    // usa a ponta real.
+    if (!ImpactComponent || !NEEDS_WAND_TIP.has(ImpactComponent) || effect.sourceGid === undefined) return;
+    const tip = anchorDeArma(effect.sourceGid);
+    if (!tip) return; // ainda não montou (ex.: primeiro quadro) — tenta de novo no próximo
+    tipCaptured.current = true;
+    const world = new THREE.Vector3();
+    tip.getWorldPosition(world);
+    setCasterTipOffset({
+      x: (world.x - initial.x) / cellSize,
+      y: (world.y - initial.y) / cellSize,
+      z: (world.z - initial.z) / cellSize,
+    });
+  });
+  const casterOffset = casterTipOffset ?? casterOffsetFallback;
+  // valor de VERDADE que já foi pro VFX (ver `net/useWorldEvents`,
+  // `getSkillProjectileCount(p.level)`) — o áudio usa o MESMO número, nunca
+  // um chute próprio, pra nunca divergir de quantos hits o VFX desenhou
+  const resolvedHits = effect.hits ?? 5;
+  /**
+   * `hits` decide QUAL arquivo tocar (a faixa 1-2/3-4/.../9-10), NÃO quantas
+   * vezes tocar — cada `*_hit_lvl_*.mp3` já É a sequência sonora inteira
+   * daquela faixa (achado revisando o pedido: um `.mp3` de "3 hits" não é
+   * "o som de 1 hit, tocado 3 vezes", é uma faixa PRÓPRIA com os 3 já
+   * embutidos). O VFX ainda dispara `onHit` uma vez por estalactite/lança/
+   * pulso/descarga/alma de verdade (isso não muda — é o número que decide a
+   * FAIXA); esta ref é a coordenação pra só o PRIMEIRO `onHit` desta
+   * instância (`VfxNode` remonta por `effect.id`, um por conjuração —
+   * `key={effect.id}` no `.map` acima) tocar o arquivo, os demais são
+   * ignorados. Sem isto, uma faixa "5 hits" tocaria 5 vezes seguidas por
+   * cima de si mesma.
+   */
+  const impactAudioTocado = useRef(false);
+  const onImpactHit = () => {
+    if (!ImpactComponent || impactAudioTocado.current) return;
+    impactAudioTocado.current = true;
+    aoImpactoMultiHit(effect.skillId, resolvedHits);
+  };
 
   return (
     <group ref={group} position={[initial.x, initial.y + 0.05, initial.z]} scale={cellSize}>
-      {effect.kind === "buff" ? (
+      {effect.kind === "buff" && BuffComponent ? (
+        <BuffComponent areaRadius={buffInfo?.areaRadius} targetScale={targetScale} terrain={terrain} cellSize={cellSize} anchorRef={anchorRef} />
+      ) : effect.kind === "buff" ? (
         <BuffRing />
-      ) : ImpactComponent === ThunderStormImpact ? (
-        // única exceção com prop própria no lookup genérico: Thunder Storm é
-        // AoE de verdade (skill_db `type:"area"`) — os raios decorativos
-        // caem espalhados no raio REAL da área, não num chute fixo. Cold
-        // Bolt/Fire Lance continuam com a MESMA assinatura de sempre.
-        <ThunderStormImpact
+      ) : ImpactComponent === SoulStrikeImpact ? (
+        <SoulStrikeImpact
           damage={effect.damage}
           crit={effect.crit}
           onSelf={effect.onSelf}
           targetScale={targetScale}
-          areaRadius={impactInfo?.areaRadius}
+          hits={effect.hits}
+          casterOffsetX={casterOffset?.x}
+          casterOffsetY={casterOffset?.y}
+          casterOffsetZ={casterOffset?.z}
+          onHit={onImpactHit}
+        />
+      ) : ImpactComponent === FrostDiverImpact ? (
+        // sem damage/crit/onSelf/hits/onHit de propósito, mesma razão da
+        // Fire Ball — burst de impacto puro, sem alvo condicional nenhum: a
+        // prisão de gelo persistente vive em `FreezeBodyVfx`
+        // (`net/NetEntity.tsx`), fora do ciclo de vida deste cast.
+        <FrostDiverImpact
+          targetScale={targetScale}
+          casterOffsetX={casterOffset?.x}
+          casterOffsetY={casterOffset?.y}
+          casterOffsetZ={casterOffset?.z}
+        />
+      ) : ImpactComponent === StoneCurseImpact ? (
+        // idem — a transformação em pedra persistente é tint de material
+        // direto no body, não VFX (`net/NetEntity.tsx: usePetrifyMaterial`,
+        // `entities/petrifyMaterial.ts`).
+        <StoneCurseImpact
+          targetScale={targetScale}
+          casterOffsetX={casterOffset?.x}
+          casterOffsetY={casterOffset?.y}
+          casterOffsetZ={casterOffset?.z}
         />
       ) : ImpactComponent ? (
-        <ImpactComponent damage={effect.damage} crit={effect.crit} onSelf={effect.onSelf} targetScale={targetScale} />
+        <ImpactComponent
+          damage={effect.damage}
+          crit={effect.crit}
+          onSelf={effect.onSelf}
+          targetScale={targetScale}
+          hits={effect.hits}
+          onHit={onImpactHit}
+        />
       ) : (
         <ImpactFlash />
       )}
@@ -441,9 +695,16 @@ function ImpactFlash() {
   );
 }
 
-/** onde o efeito é desenhado: na entidade (impacto/buff) ou na célula (área). */
+/**
+ * Onde o efeito é desenhado: na entidade (impacto/buff) ou na célula (área).
+ *
+ * Só lê `gid`/`cell` (não o `VfxInstance` inteiro) — permite chamar com um
+ * objeto literal mínimo pra resolver a posição de QUALQUER gid, não só o do
+ * próprio efeito (`SoulStrikeImpact` usa isto pra achar o CASTER, ver
+ * `casterOffset` em `VfxNode`, acima).
+ */
 function worldPositionOf(
-  effect: VfxInstance,
+  effect: Pick<VfxInstance, "gid" | "cell">,
   map: GameMap,
   mapping: LegacyMapping,
 ): { x: number; y: number; z: number } | null {

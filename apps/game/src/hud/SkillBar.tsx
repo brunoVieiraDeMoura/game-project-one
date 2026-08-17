@@ -9,7 +9,7 @@ import { useAimStore } from "../net/aimStore";
 import { castarEmAlvo } from "../net/acoes";
 import { getSkillDisplayName, SKILL_NAME_FALLBACK, useSkillCatalog } from "../net/skillCatalog";
 import { useCooldownStore } from "../net/cooldownStore";
-import { useItemCatalog, isUsableItemType } from "../net/itemCatalog";
+import { useItemCatalog, isUsableItemType, getItemDisplayName } from "../net/itemCatalog";
 import { equipPending, requestEquip } from "../net/equipmentStore";
 import { gateway } from "../net/gateway";
 import { isTyping } from "../play/isTyping";
@@ -241,14 +241,20 @@ export function SkillBar() {
                     ? skill.name // Ataque Básico: nome do próprio cliente, nunca do catálogo — sempre disponível, nunca é Aegis
                     : getSkillDisplayName(catalog[skill.id])
                   : item
-                    ? (itemNames[item.itemId]?.name ?? `#${item.itemId}`)
+                    ? // NUNCA id como nome provisório (regra absoluta,
+                      // auditoria 2026-08-14) — `undefined` enquanto o
+                      // catálogo não respondeu já faz `SkillSlot` desenhar
+                      // o anel de loading (mesmo caminho da skill acima).
+                      getItemDisplayName(itemNames[item.itemId])
                     : undefined
               }
               seed={skill ? `sk-${skill.id}` : item ? `item-${item.itemId}` : undefined}
               iconSrc={
-                skill && !basico && catalog[skill.id]?.icon
-                  ? `/assets/skills/${catalog[skill.id]!.icon}`
-                  : undefined
+                basico
+                  ? `/assets/skills/auto-atack-${ataqueBasicoAtivo ? "on" : "off"}.png`
+                  : skill && catalog[skill.id]?.icon
+                    ? `/assets/skills/${catalog[skill.id]!.icon}`
+                    : undefined
               }
               detalhe={
                 skill

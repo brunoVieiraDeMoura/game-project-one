@@ -863,6 +863,7 @@ export default {
 	0xadd: PACKET.ZC.ITEM_FALL_ENTRY3, // ok
 	0xade: PACKET.ZC.RECOVER_PENALTY_OVERWEIGHT,
 	0xadf: PACKET.ZC.ACK_REQNAMEALL3,
+	0xae0: PACKET.ZC.STATUS_DURATION, // custom deste projeto, nao existe no RO real
 	0xae4: PACKET.ZC.ADD_MEMBER_TO_GROUP4, // ok
 	0xae5: PACKET.ZC.GROUP_LIST3, // ok
 	0xb02: PACKET.AC.REFUSE_LOGIN_EX, // ok

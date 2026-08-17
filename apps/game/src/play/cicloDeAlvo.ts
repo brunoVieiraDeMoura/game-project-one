@@ -46,6 +46,26 @@ export interface AlvoCandidato {
 export const PESO_CAMERA = 12;
 
 /**
+ * Alcance do Tab, em CÉLULAS — teto único, usado por `play/AlvoPorTab` pra
+ * filtrar candidatos ANTES de ordenar (não é corte de UI: um alvo fora
+ * disto nunca vira `AlvoCandidato`).
+ *
+ * Achado auditando o Tab (2026-08-14): ele lia `raioEntidade` (`play/
+ * viewRadius.ts: RaiosDeVisao.entidades`, igual a `renderDistance`, default
+ * 130 unidades = 65 células) — o raio de DESENHO, não um raio de combate.
+ * Resultado: Tab alcançava qualquer mob visível no horizonte inteiro do
+ * mapa.
+ *
+ * **14 células** — não é chute: é o próprio `AREA_SIZE` PADRÃO do rAthena
+ * (o "29×29 = 841 células (o padrão)" documentado em `rathena-conf/
+ * battle_conf.txt`, onde este projeto SOBE pra 60 só por causa da névoa
+ * mais distante — 60 é tuning de rede/render, não de combate). 14 é a
+ * distância de visão/engajamento que o próprio RO original considera "perto
+ * o bastante para interagir" — a mesma régua, sem inventar um número novo.
+ */
+export const RAIO_TAB_CELULAS = 14;
+
+/**
  * Custo de um candidato — MENOR é melhor.
  *
  * `alinhamento` vem em −1..1; converte-se para 0..2 ("quanto está fora da

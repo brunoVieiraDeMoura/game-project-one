@@ -41,10 +41,11 @@ export const BAG_PLATE = { w: 294, h: 342 } as const;
  * lado): antes as caixas iam de 20 a 274 e encostavam na moldura, o que fazia
  * aba, slot e contador parecerem estourados para fora.
  *
- * A grade é 4 × 4: com 5 colunas o slot ficava estreito demais para a faixa do
- * nome caber embaixo dele, que é o que quebrava a janela quando o item tinha
- * nome longo. Quatro colunas dão ~25% mais lado por slot, e o excedente passou a
- * ser problema de ROLAGEM, não de espremer mais coisa na mesma largura.
+ * A grade é 3 × 4: quatro colunas espremiam o slot além do que a arte
+ * (`inventory-background.png`) desenha para o campo — o "Alt+E estourando o
+ * container" do relato. Três colunas dão ~33% mais lado por slot que quatro, e
+ * o excedente de itens passa a ser problema de ROLAGEM, não de espremer mais
+ * coisa na mesma largura.
  */
 export const BAG_CONTENT = { x: 30, w: 234 } as const;
 
@@ -70,7 +71,7 @@ export const BAG_LAYOUT = {
 } as const;
 
 export const BAG_GRID = {
-  cols: 4,
+  cols: 3,
   /** fileiras VISÍVEIS — o que passar disso rola */
   rows: 4,
   gap: 5,
@@ -87,15 +88,26 @@ export const BAG_GRID = {
 } as const;
 
 /**
+ * Teto do slot do inventário, em múltiplo do slot da SkillBar
+ * (`ui/skillBar.SKILL_SLOT_SIZE`) — o inventário pode ter slot MAIOR que a
+ * barra de habilidades (pedido explícito), nunca a barra fica maior por
+ * causa disto: o multiplicador entra só do lado do inventário
+ * (`hud/InventoryWindow.tsx: ladoSlot`), `SKILL_SLOT_SIZE` em si não muda.
+ */
+export const INVENTORY_SLOT_SCALE = 1.5;
+
+/**
  * Teto de caracteres do nome sob o slot.
  *
  * Nome de item do RO passa de trinta caracteres ("Wing Of Fly", "Old Blue Box",
  * e os equipamentos são piores). Sem teto ele empurrava a faixa e estourava a
  * moldura — o Alt+E "quebrado" do relato.
  *
- * Doze é o que cabe no slot de quatro colunas. O corte tira os TRÊS últimos
- * caracteres do que sobra e concatena "…", então o resultado tem exatamente 12:
- * nove de nome mais as reticências.
+ * Doze é o que cabia no slot de QUATRO colunas (a densidade antiga, ver
+ * `BAG_GRID.cols`) — com três colunas o slot ficou mais largo, então o teto
+ * continua seguro (nunca estoura), só deixou de ser o limite exato. O corte
+ * tira os TRÊS últimos caracteres do que sobra e concatena "…", então o
+ * resultado tem exatamente 12: nove de nome mais as reticências.
  */
 export const BAG_NOME_MAX = 12;
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gateway } from "../net/gateway";
-import { ATAQUE_BASICO, ATAQUE_BASICO_ID } from "../net/ataqueBasico";
+import { ATAQUE_BASICO, ATAQUE_BASICO_ID, useAtaqueBasico } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
 import { getSkillDisplayName, useSkillCatalog, type SkillInfo } from "../net/skillCatalog";
 import { useHudStore } from "./hudStore";
@@ -372,6 +372,7 @@ function Detalhe({ linha }: { linha: Linha }) {
   const moldura = useNineSlice(SLOT_FRAME);
   const bordaIcone = pxLivro(9);
   const basica = linha.id === ATAQUE_BASICO_ID;
+  const ataqueBasicoAtivo = useAtaqueBasico((s) => s.ativo);
   const info = linha.info;
   const tipo = basica ? "Ativa" : info ? (SK_TYPE_NAMES[info.type] ?? info.type) : "—";
   const elemento = basica ? "—" : info ? (SK_ELEMENT_NAMES[info.element] ?? info.element) : "—";
@@ -437,7 +438,13 @@ function Detalhe({ linha }: { linha: Linha }) {
             radius={bordaIcone * 0.66}
             label={linha.nome}
             loading={linha.nome === undefined}
-            imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
+            imageSrc={
+              basica
+                ? `/assets/skills/auto-atack-${ataqueBasicoAtivo ? "on" : "off"}.png`
+                : linha.info?.icon
+                  ? `/assets/skills/${linha.info.icon}`
+                  : undefined
+            }
           />
         </div>
       </div>
@@ -580,6 +587,8 @@ function Icone({
   const bordaGrade = pxLivro(9);
   const podeSubir = linha.upgradable && pontos > 0;
   const noMaximo = linha.maxNivel > 0 && linha.nivel >= linha.maxNivel;
+  const basica = linha.id === ATAQUE_BASICO_ID;
+  const ataqueBasicoAtivo = useAtaqueBasico((s) => s.ativo);
 
   return (
     <div
@@ -620,7 +629,13 @@ function Icone({
           radius={bordaGrade * 0.66}
           label={linha.nome}
           loading={linha.nome === undefined}
-          imageSrc={linha.info?.icon ? `/assets/skills/${linha.info.icon}` : undefined}
+          imageSrc={
+            basica
+              ? `/assets/skills/auto-atack-${ataqueBasicoAtivo ? "on" : "off"}.png`
+              : linha.info?.icon
+                ? `/assets/skills/${linha.info.icon}`
+                : undefined
+          }
         />
       </div>
       {/* respiro dourado — só a que está aberta na descrição à esquerda.

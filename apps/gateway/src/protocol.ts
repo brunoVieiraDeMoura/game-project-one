@@ -114,30 +114,22 @@ export interface ServerEvents {
 	 * (NOTIFY_SKILL/USE_SKILL) porque SEMPRE há um alvo — skill de chão pode
 	 * ser lançada em célula vazia, sem acertar ninguém, e aí NENHUM pacote de
 	 * dano sai. Este pacote é o único sinal garantido de "a conjuração
-	 * terminou" pra esse tipo de skill — dispara mesmo com zero acertos,
-	 * e SEMPRE ANTES de qualquer `skill:ground-hit` (rathena/src/map/
-	 * skill.cpp: `skill_castend_pos2` manda `clif_skill_poseffect` antes de
-	 * chamar `castendPos2`, que é quem gera os hits de verdade).
+	 * terminou" pra esse tipo de skill — dispara mesmo com zero acertos.
+	 *
+	 * QUANDO acerta alguém, o dano ainda sai por `skill:cast` normal — mesmo
+	 * `clif_skill_damage`/ZC.NOTIFY_SKILL (0x114) que Cold Bolt/Fire Bolt já
+	 * usam (`rathena/src/map/skill.cpp`, dispatch `default:` do bloco
+	 * "Display damage" em `skill_attack` — MG_THUNDERSTORM não tem case
+	 * próprio, cai nesse default). `ZC_NOTIFY_SKILL_POSITION` (0x115,
+	 * `clif_skill_damage2`) existe na struct mas é CÓDIGO MORTO neste
+	 * rAthena — `clif_skill_damage2` é definido e nunca chamado (confirmado
+	 * por grep em todo `rathena/src`) — por isso não é usado aqui.
 	 *
 	 * NÃO carrega dano nem alvo (é célula, não `targetGid`) — por isso não
 	 * reaproveita `SkillCast`. Quem tratar isto do lado do jogo trata como
 	 * "liberação sem dano conhecido", nunca inventa um número.
 	 */
 	"skill:ground-cast": (payload: SkillGroundCast) => void;
-	/**
-	 * Skill de alvo no CHÃO ACERTOU alguém — ZC.NOTIFY_SKILL_POSITION (0x115,
-	 * `clif_skill_damage2`). Só existe pra permitir distinguir "conjuração
-	 * terminou E acertou" de "conjuração terminou E não acertou ninguém"
-	 * (leia1.txt: Thunder Storm não deve soltar o som de impacto se a célula
-	 * clicada estava vazia) — NUNCA usado pra número de dano/VFX (isso
-	 * continua sem existir no cliente, gap conhecido e separado).
-	 *
-	 * Pode chegar MAIS DE UMA VEZ por conjuração (Thunder Storm tem
-	 * `HitCount` até 10 no skill_db, um pacote por hit/alvo) — quem consome
-	 * isto do lado do jogo já é responsável por tocar o som UMA vez só (ver
-	 * `audio/mage/multiHitCastAudio.aoRegistrarAcertoDeChao`).
-	 */
-	"skill:ground-hit": (payload: SkillGroundHit) => void;
 	"skill:ground": (payload: SkillGround) => void;
 	"skill:ground-gone": (payload: { gid: number }) => void;
 	/**
@@ -176,6 +168,58 @@ export interface ServerEvents {
 		action: number;
 	}) => void;
 	"entity:hp": (payload: { gid: number; hp: number; maxHp: number }) => void;
+	/**
+	 * "estado do corpo" de uma entidade (`ZC_STATE_CHANGE`/`STATE_CHANGE3`,
+	 * 0x119/0x229) — DOIS campos independentes do mesmo pacote:
+	 *  - `opt1` (`bodyState`): enum de posição ÚNICA, nunca bitmask
+	 *    (`status.hpp`: 0=nenhum, 1=petrificado, 2=congelado, 3=atordoado,
+	 *    4=dormindo, 6=petrificando, 7=queimando, 8=aprisionado).
+	 *    Petrificação/congelamento/etc não têm ícone de status (EFST); é por
+	 *    aqui que o cliente sabe que aconteceram de verdade, pra VFX
+	 *    condicional (Stone Curse, Frost Diver) nunca assumir que o status
+	 *    pegou só porque o ataque acertou.
+	 *  - `opt2` (`healthState`): BITMASK, vários bits simultâneos
+	 *    (`status.hpp: OPT2_POISON=0x1, OPT2_CURSE=0x2, OPT2_SILENCE=0x4,
+	 *    OPT2_CONFUSION=0x8, OPT2_BLIND=0x10, …`) — envenenado, amaldiçoado,
+	 *    silenciado, confuso, cego etc podem estar TODOS ativos ao mesmo
+	 *    tempo (auditoria "opt2/healthState" 2026-08-14). Família
+	 *    arquiteturalmente separada de `opt1` — nunca combinar os dois.
+	 */
+	"entity:option": (payload: { gid: number; opt1: number; opt2: number }) => void;
+	/**
+	 * Duração REAL (já resistida) de um status `opt1`/`opt2` — pacote
+	 * CUSTOMIZADO deste projeto (`PACKET_ZC_STATUS_DURATION`, 0xae0, NÃO
+	 * existe no protocolo real do RO). Cobre exatamente os 10 status sem
+	 * `Icon:` em `status.yml` (Freeze/Stone/StoneWait/Stun/Sleep/Poison/
+	 * Curse/Silence/Confusion/Blind), que por isso nunca disparam
+	 * `clif_status_change`/`status:start` — auditoria "contador de duração"
+	 * 2026-08-14 (ver `rathena/src/map/packets_struct.hpp` pro raciocínio
+	 * completo). Sempre chega ALÉM de `entity:option`, nunca no lugar — a
+	 * ORDEM entre os dois não é garantida (client precisa correlacionar por
+	 * `gid`+`bodyState`/`healthState`, nunca assumir sequência).
+	 */
+	"entity:status-duration": (payload: {
+		gid: number;
+		bodyState: number;
+		healthState: number;
+		durationMs: number;
+	}) => void;
+	/**
+	 * Ícone de status (EFST) ligou — buff/debuff/skill com duração, id
+	 * NUMÉRICO (o servidor já traduz SC_* pra EFST_*, `status_db.getIcon`).
+	 * `totalMs===0` = sem timer conhecido (0x196 flag=1); fica até um
+	 * `status:end` chegar, nunca some por conta própria no cliente.
+	 */
+	"status:start": (payload: {
+		gid: number;
+		efstId: number;
+		totalMs: number;
+		remainMs: number;
+		val1: number;
+		val2: number;
+		val3: number;
+	}) => void;
+	"status:end": (payload: { gid: number; efstId: number }) => void;
 	"chat:message": (payload: { gid?: number; name?: string; text: string; scope: ChatScope }) => void;
 	"friend:list": (payload: Friend[]) => void;
 	/** um amigo entrou/saiu (ZC_FRIENDS_STATE) — casa por accountId+charId */
@@ -338,19 +382,22 @@ export interface SkillGroundCast {
 	y: number;
 }
 
-/** Skill de alvo no chão acertou alguém (ver comentário em `ServerEvents`). */
-export interface SkillGroundHit {
-	skillId: number;
-	sourceGid: number;
-}
-
 /** Unidade de skill no chão (área, armadilha, parede). */
 export interface SkillGround {
 	gid: number;
 	creatorGid: number;
 	x: number;
 	y: number;
+	/** `e_skill_unit_id` do rAthena (`skill.hpp`, ex. `UNT_SAFETYWALL = 0x7e`)
+	 * — o id da UNIDADE de chão, não o id da skill no skill_db. Mantido cru
+	 * pro cliente nunca precisar decodificar o enum sozinho. */
 	unitId: number;
+	/** id REAL da skill no skill_db (`MG_SAFETYWALL`=12, `MG_FIREWALL`=18…),
+	 * traduzido de `unitId` em `session.ts` (`UNIT_ID_TO_SKILL_ID`) — sem
+	 * isto o cliente nunca conseguia consultar o catálogo pra decidir o VFX
+	 * por aegis (ficava sempre no genérico). 0 = unidade sem tradução
+	 * conhecida ainda (cai no VFX de área genérico, nunca quebra). */
+	skillId: number;
 	visible: boolean;
 }
 

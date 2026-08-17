@@ -86,6 +86,7 @@ describe("items API", () => {
 
 describe("items API auth", () => {
   const audited: string[] = [];
+  const auditEntries: Parameters<SecurityContext["audit"]>[0][] = [];
   const stubSecurity: SecurityContext = {
     async verify(token) {
       if (token === "admin-token") return { accountId: 1, username: "gm", groupLevel: 99 };
@@ -94,6 +95,7 @@ describe("items API auth", () => {
     },
     async audit(entry) {
       audited.push(`${entry.action}:${entry.targetType}:${entry.targetId}`);
+      auditEntries.push(entry);
     },
   };
 
@@ -101,6 +103,7 @@ describe("items API auth", () => {
 
   beforeEach(async () => {
     audited.length = 0;
+    auditEntries.length = 0;
     app = await buildServer({ itemRepository: tempRepo(), security: stubSecurity });
   });
 
@@ -138,5 +141,99 @@ describe("items API auth", () => {
     expect(del.statusCode).toBe(200);
 
     expect(audited).toEqual(["create:item:5", "delete:item:5"]);
+  });
+
+  it("PARTE 18: update real gera audit log com o campo alterado (oldValue/newValue)", async () => {
+    await app.inject({
+      method: "POST", url: "/items", payload: sampleItem(20, "Potion"),
+      headers: { authorization: "Bearer admin-token" },
+    });
+    auditEntries.length = 0; // só quer o PUT daqui pra baixo
+    audited.length = 0;
+
+    const upd = await app.inject({
+      method: "PUT", url: "/items/20",
+      payload: { ...sampleItem(20, "Potion"), buyPrice: 45 },
+      headers: { authorization: "Bearer admin-token" },
+    });
+    expect(upd.statusCode).toBe(200);
+
+    expect(audited).toEqual(["update:item:20"]);
+    const entry = auditEntries[0]!;
+    const payload = entry.payload as { entityName: string; changes: { field: string; oldValue: unknown; newValue: unknown }[] };
+    expect(payload.entityName).toBe("Potion");
+    expect(payload.changes).toEqual([{ field: "buyPrice", oldValue: 10, newValue: 45 }]);
+  });
+
+  it("PARTE 10: salvar o MESMO valor não cria audit log nenhum", async () => {
+    await app.inject({
+      method: "POST", url: "/items", payload: sampleItem(21),
+      headers: { authorization: "Bearer admin-token" },
+    });
+    auditEntries.length = 0;
+    audited.length = 0;
+
+    const upd = await app.inject({
+      method: "PUT", url: "/items/21",
+      payload: sampleItem(21), // idêntico ao que já está persistido
+      headers: { authorization: "Bearer admin-token" },
+    });
+    expect(upd.statusCode).toBe(200);
+
+    expect(audited).toEqual([]); // nenhum log — nada mudou de verdade
+  });
+
+  it("PARTE 11: múltiplos campos alterados na mesma edição — todos aparecem, cada um separado", async () => {
+    await app.inject({
+      method: "POST", url: "/items", payload: sampleItem(22, "Potion"),
+      headers: { authorization: "Bearer admin-token" },
+    });
+    auditEntries.length = 0;
+
+    await app.inject({
+      method: "PUT", url: "/items/22",
+      payload: { ...sampleItem(22, "Red Potion"), buyPrice: 45, weight: 15 },
+      headers: { authorization: "Bearer admin-token" },
+    });
+
+    const payload = auditEntries[0]!.payload as { changes: { field: string; oldValue: unknown; newValue: unknown }[] };
+    expect(payload.changes).toContainEqual({ field: "name", oldValue: "Potion", newValue: "Red Potion" });
+    expect(payload.changes).toContainEqual({ field: "buyPrice", oldValue: 10, newValue: 45 });
+    expect(payload.changes).toContainEqual({ field: "weight", oldValue: 10, newValue: 15 });
+    expect(payload.changes).toHaveLength(3);
+  });
+
+  it("PARTE 13/12: create grava snapshot; delete grava o snapshot do que foi removido", async () => {
+    const created = await app.inject({
+      method: "POST", url: "/items", payload: sampleItem(23, "Doomed Item"),
+      headers: { authorization: "Bearer admin-token" },
+    });
+    expect(created.statusCode).toBe(201);
+    const createPayload = auditEntries[0]!.payload as { entityName: string; snapshot: { id: number } };
+    expect(createPayload.entityName).toBe("Doomed Item");
+    expect(createPayload.snapshot.id).toBe(23);
+
+    await app.inject({ method: "DELETE", url: "/items/23", headers: { authorization: "Bearer admin-token" } });
+    const deleteEntry = auditEntries[1]!;
+    const deletePayload = deleteEntry.payload as { entityName: string; snapshot: { id: number; name: string } };
+    expect(deleteEntry.action).toBe("delete");
+    expect(deletePayload.entityName).toBe("Doomed Item");
+    expect(deletePayload.snapshot.name).toBe("Doomed Item");
+  });
+
+  it("PARTE 14: persistência que falha (409 duplicado) NÃO gera audit log de sucesso", async () => {
+    await app.inject({
+      method: "POST", url: "/items", payload: sampleItem(24),
+      headers: { authorization: "Bearer admin-token" },
+    });
+    auditEntries.length = 0;
+    audited.length = 0;
+
+    const dup = await app.inject({
+      method: "POST", url: "/items", payload: sampleItem(24), // mesmo id — repo.create rejeita
+      headers: { authorization: "Bearer admin-token" },
+    });
+    expect(dup.statusCode).toBe(409);
+    expect(audited).toEqual([]); // create falhou — nenhum log deve existir
   });
 });

@@ -5,6 +5,7 @@ import { findPath } from "../net/pathfind";
 import { destinoAlcancavel } from "../net/moveTarget";
 import { GameplayConfigSchema } from "@ragnarok/game-data";
 import { raiosDeVisao } from "../play/viewRadius";
+import { visibilidadeDoMundo } from "../play/worldVisibility";
 import { afterAll } from "vitest";
 import { calibrar, custoRelativo, imprimirRelatorio, relatorio } from "./orcamento";
 
@@ -284,5 +285,29 @@ describe("o horizonte cobre onde a névoa fecha, e entidade nunca usa o raio da 
 
   it("vale em qualquer raio que o admin permita", () => {
     for (const raio of [10, 60, 130, 300, 700, 1000]) conferir({ renderDistance: raio });
+  });
+});
+
+/**
+ * WORLD VISIBILITY BUDGET (Fase de coerência de horizonte, `render-tecnic.txt`
+ * seção 23): `visibilidadeDoMundo` acrescenta os raios de VEGETAÇÃO por cima
+ * dos 4 de `raiosDeVisao` — a cadeia inteira tem de continuar ordenada, senão
+ * a vegetação volta a poder ultrapassar a superfície que a sustenta.
+ */
+describe("visibilidadeDoMundo — a vegetação nunca ultrapassa o que a sustenta", () => {
+  it("vegetacaoRasteira ≤ vegetacaoDetalhe ≤ limiteVegetacao ≤ fogFar < horizonte, em qualquer raio", () => {
+    for (const raio of [10, 60, 130, 300, 700, 1000]) {
+      const cfg = GameplayConfigSchema.parse({ renderDistance: raio });
+      const v = visibilidadeDoMundo(cfg);
+      expect(v.vegetacaoRasteira).toBeLessThanOrEqual(v.vegetacaoDetalhe);
+      expect(v.vegetacaoDetalhe).toBeLessThanOrEqual(v.limiteVegetacao);
+      expect(v.limiteVegetacao).toBeLessThanOrEqual(v.fogFar);
+      expect(v.fogFar).toBeLessThan(v.horizonte);
+    }
+  });
+
+  it("limiteVegetacao é EXATAMENTE fogFar (o teto do impostor não é um número novo)", () => {
+    const v = visibilidadeDoMundo(GameplayConfigSchema.parse({}));
+    expect(v.limiteVegetacao).toBe(v.fogFar);
   });
 });

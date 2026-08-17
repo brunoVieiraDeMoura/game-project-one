@@ -160,6 +160,8 @@ export function IconSquare({
   imageSrc,
   fill,
   radius = 0,
+  border = true,
+  nativeTooltip,
 }: {
   seed?: string;
   standard?: boolean;
@@ -188,18 +190,29 @@ export function IconSquare({
    * (`ui-skills.jpg`: ícone redondo POR DENTRO da moldura de madeira, não
    * um quadrado colado nela) */
   radius?: number;
+  /** `false` tira o traço de madeira (`boxShadow` inset) que todo IconSquare
+   * desenha por padrão — pedido explícito 2026-08-17 pros ícones de buff/
+   * debuff (`hud/StatusEffectIcons.tsx`), que já ficam redondos e não devem
+   * ter borda nenhuma. Default `true` preserva todo chamador existente. */
+  border?: boolean;
+  /** `false` pra quando o chamador já desenha o PRÓPRIO tooltip por cima
+   * (`hud/StatusEffectIcons.tsx`: precisa do tempo restante ATUALIZANDO, e o
+   * `title` nativo do browser não repinta sozinho enquanto já está aberto) —
+   * sem isto os dois tooltips se sobrepunham. Default `true` preserva o
+   * comportamento de todo chamador existente. */
+  nativeTooltip?: boolean;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const color = standard ? BOOK.woodLight : colorFromSeed(seed ?? "x");
   const useImage = !loading && imageSrc && !imgFailed;
   return (
     <div
-      title={loading ? undefined : label}
+      title={loading || nativeTooltip === false ? undefined : label}
       style={{
         width: fill ? "100%" : size,
         height: fill ? "100%" : size,
         background: loading ? BOOK.wood : useImage ? "transparent" : color,
-        boxShadow: `inset 0 0 0 ${UI_SCALE}px ${BOOK.wood}`,
+        boxShadow: border ? `inset 0 0 0 ${UI_SCALE}px ${BOOK.wood}` : undefined,
         borderRadius: radius,
         display: "flex",
         alignItems: "center",

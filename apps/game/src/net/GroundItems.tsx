@@ -9,7 +9,7 @@ import { BOOK } from "../ui/travelbook";
 import { GlowChao } from "./GlowChao";
 import { GEO_CAIXA, MATERIAL_INVISIVEL, materialOpaco } from "./recursosCompartilhados";
 import { pegar } from "./acoes";
-import { useItemCatalog } from "./itemCatalog";
+import { useItemCatalog, getItemDisplayName } from "./itemCatalog";
 
 /**
  * Itens caídos no chão.
@@ -123,7 +123,10 @@ function ItemNoChao({
    * mouse deixaria o nome chegar depois do ponteiro já ter saído. Ele só busca o
    * que falta, então um chão com vinte poções vermelhas custa uma requisição.
    */
-  const nome = useItemCatalog((s) => s.byId[item.itemId]?.name ?? `#${item.itemId}`);
+  // NUNCA id como nome provisório (regra absoluta, auditoria 2026-08-14) —
+  // `undefined` enquanto o catálogo não respondeu; a plaquinha (abaixo) só
+  // aparece quando há nome de verdade pra mostrar.
+  const nome = useItemCatalog((s) => getItemDisplayName(s.byId[item.itemId]));
   useEffect(() => {
     useItemCatalog.getState().ensure([item.itemId]);
   }, [item.itemId]);
@@ -203,7 +206,7 @@ function ItemNoChao({
        * dezenas de itens — todos nomeados de uma vez viraria uma parede de
        * letras.
        */}
-      {realce && (
+      {realce && nome && (
         <Billboard position={[0, -cellSize * 0.06, 0]}>
           <Text
             fontSize={cellSize * 0.1}
