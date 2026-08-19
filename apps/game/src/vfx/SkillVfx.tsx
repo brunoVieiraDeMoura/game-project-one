@@ -402,28 +402,17 @@ function VfxNode({
     });
   });
   const casterOffset = casterTipOffset ?? casterOffsetFallback;
-  // valor de VERDADE que já foi pro VFX (ver `net/useWorldEvents`,
-  // `getSkillProjectileCount(p.level)`) — o áudio usa o MESMO número, nunca
-  // um chute próprio, pra nunca divergir de quantos hits o VFX desenhou
-  const resolvedHits = effect.hits ?? 5;
   /**
-   * `hits` decide QUAL arquivo tocar (a faixa 1-2/3-4/.../9-10), NÃO quantas
-   * vezes tocar — cada `*_hit_lvl_*.mp3` já É a sequência sonora inteira
-   * daquela faixa (achado revisando o pedido: um `.mp3` de "3 hits" não é
-   * "o som de 1 hit, tocado 3 vezes", é uma faixa PRÓPRIA com os 3 já
-   * embutidos). O VFX ainda dispara `onHit` uma vez por estalactite/lança/
-   * pulso/descarga/alma de verdade (isso não muda — é o número que decide a
-   * FAIXA); esta ref é a coordenação pra só o PRIMEIRO `onHit` desta
-   * instância (`VfxNode` remonta por `effect.id`, um por conjuração —
-   * `key={effect.id}` no `.map` acima) tocar o arquivo, os demais são
-   * ignorados. Sem isto, uma faixa "5 hits" tocaria 5 vezes seguidas por
-   * cima de si mesma.
+   * `<skill>_hit.mp3` é o estalo de UM golpe só (pedido 2026-08-19) — toca
+   * em CADA `onHit` real, sem dedupe: o VFX já dispara `onHit` uma vez por
+   * estalactite/lança/pulso/descarga/alma de verdade, e `playOneShot`
+   * (reinicia o mesmo `<audio>` a cada chamada) já dá o efeito "golpes
+   * rápidos se cortando, só o último toca inteiro" sem nenhuma coordenação
+   * extra aqui — ver `audio/mage/multiHitCastAudio.ts`.
    */
-  const impactAudioTocado = useRef(false);
   const onImpactHit = () => {
-    if (!ImpactComponent || impactAudioTocado.current) return;
-    impactAudioTocado.current = true;
-    aoImpactoMultiHit(effect.skillId, resolvedHits);
+    if (!ImpactComponent) return;
+    aoImpactoMultiHit(effect.skillId);
   };
 
   return (

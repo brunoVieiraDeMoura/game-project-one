@@ -1,4 +1,4 @@
-import { StrictMode, type ReactNode } from "react";
+import { StrictMode, type ReactNode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
 import { SpectatorView } from "./views/SpectatorView";
@@ -74,33 +74,6 @@ if (import.meta.env.DEV) {
    */
   observarCriacaoDeContexto();
   observarTarefasLongas();
-  /**
-   * DIAGNÓSTICO TEMPORÁRIO — investigação de DC durante troca de mapa.
-   *
-   * `observarTarefasLongas` já alimenta o flight recorder, mas só aparece lá
-   * dentro de uma captura (`__voo`). Isto aqui é o mesmo sinal nativo
-   * (`PerformanceObserver` + `longtask`), só que direto no console — pra
-   * correlacionar visualmente com `[GAME_LOAD]`/`[MAP_CACHE]`/`[HEARTBEAT]`
-   * sem precisar exportar/ler um JSON à parte. `attribution` do navegador
-   * costuma vir vazio (não é bug daqui, é limitação da API); o que importa é
-   * DURAÇÃO + INSTANTE, que já bastam pra saber se um `[LONG_TASK]` cobre o
-   * mesmo intervalo em que o heartbeat parou de bater.
-   */
-  if (typeof PerformanceObserver !== "undefined") {
-    try {
-      const obs = new PerformanceObserver((lista) => {
-        for (const e of lista.getEntries()) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `[LONG_TASK] duration=${Math.round(e.duration)}ms start=${Math.round(e.startTime)}ms`,
-          );
-        }
-      });
-      obs.observe({ entryTypes: ["longtask"] });
-    } catch {
-      // `longtask` não existe em todo navegador — ausência não é erro
-    }
-  }
 }
 
 /**
@@ -113,6 +86,18 @@ function App({ children }: { children?: ReactNode }) {
   useGatewayEvents();
   // cursores pintados no lugar dos do sistema, em TODAS as telas (ver ui/cursors)
   useCursorGlobal();
+  /**
+   * Suprime só o menu de contexto NATIVO do navegador, em todo o Game (HUD,
+   * canvas, overlay, portal — tudo bubbla até `window`). Só `preventDefault`,
+   * nunca `stopPropagation`: os handlers de gameplay do botão direito
+   * (FollowCamera, SkillBar, InventoryWindow, EditorView) continuam recebendo
+   * o evento inteiro e decidindo sozinhos o que fazer com ele.
+   */
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener("contextmenu", onContextMenu);
+    return () => window.removeEventListener("contextmenu", onContextMenu);
+  }, []);
   return (
     <>
       {/* inputs e botões herdam o cursor pintado em vez do cursor do sistema */}

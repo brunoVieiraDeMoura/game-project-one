@@ -253,6 +253,7 @@ export interface ClientEvents {
   "char:create": (p: { slot: number; name: string; hair: number; hairColor: number }) => void;
   "char:delete": (p: { gid: number; email: string }) => void;
   "world:ready": () => void;
+  "world:render-ready": () => void;
   "move:to": (p: Cell) => void;
   "action:attack": (p: { gid: number; continuous: boolean }) => void;
   /** `scope` escolhe o canal (party/guild/global/trade); omitido = fala de mapa */
@@ -305,7 +306,6 @@ export function gateway(): GatewaySocket {
       (window as unknown as { __gateway?: GatewaySocket }).__gateway = socket;
       instalarPingSimulado(socket);
       instalarGravadorDeRede(socket);
-      instalarDiagnosticoDeConexao(socket);
     }
   }
   return socket;
@@ -375,68 +375,6 @@ function instalarGravadorDeRede(s: GatewaySocket): void {
 }
 
 /**
- * DIAGNÓSTICO TEMPORÁRIO — investigação de DC durante troca de mapa.
- *
- * Loga o heartbeat de BAIXO NÍVEL do Engine.IO (não o `world:ready`/eventos de
- * jogo): `ping` chega do SERVIDOR, o Engine.IO client responde `pong`
- * automaticamente — e essa resposta só roda quando a fila de eventos do
- * navegador está livre para processá-la. Se o main thread ficar bloqueado por
- * uma tarefa síncrona longa o bastante (bake de atlas, parse de mapa, GLTF),
- * o `pong` atrasa; se atrasar mais que `pingInterval + pingTimeout` do
- * `socket.io` no gateway (`apps/gateway/src/server.ts`, sem override = padrão
- * 25000+20000 ms), o SERVIDOR derruba a conexão por falta de resposta — e o
- * cliente só percebe o `disconnect` quando a tarefa termina e a fila volta a
- * rodar. Isso separa objetivamente "o socket ficou mudo" (heartbeat parou de
- * bater, DC é consequência de bloqueio local) de "o socket seguiu ativo e
- * mesmo assim caiu" (aí o suspeito é o gateway/rAthena, não o cliente).
- */
-function instalarDiagnosticoDeConexao(s: GatewaySocket): void {
-  let ultimoPingRecebido = 0;
-  let ultimoPongEnviado = 0;
-
-  const ligarEngine = () => {
-    // `io.engine` só existe depois do transporte de baixo nível abrir —
-    // religa a cada `connect` porque uma reconexão troca a instância
-    const engine = (s.io as unknown as { engine?: { on: (ev: string, cb: (p: { type: string }) => void) => void } })
-      .engine;
-    if (!engine) return;
-    engine.on("packet", (p) => {
-      if (p.type !== "ping") return;
-      ultimoPingRecebido = performance.now();
-      // eslint-disable-next-line no-console
-      console.info(`[HEARTBEAT] ping recebido do gateway em t=${Math.round(ultimoPingRecebido)}ms`);
-    });
-    engine.on("packetCreate", (p) => {
-      if (p.type !== "pong") return;
-      ultimoPongEnviado = performance.now();
-      const atraso = ultimoPingRecebido > 0 ? Math.round(ultimoPongEnviado - ultimoPingRecebido) : null;
-      // eslint-disable-next-line no-console
-      console.info(`[HEARTBEAT] pong enviado em t=${Math.round(ultimoPongEnviado)}ms (atraso vs. ping: ${atraso}ms)`);
-    });
-  };
-
-  s.on("connect", () => {
-    // eslint-disable-next-line no-console
-    console.info(`[SOCKET] connect id=${s.id} t=${Math.round(performance.now())}ms`);
-    ligarEngine();
-  });
-  s.on("disconnect", (reason) => {
-    const desdeUltimoPong = ultimoPongEnviado > 0 ? Math.round(performance.now() - ultimoPongEnviado) : null;
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[SOCKET] disconnect reason="${reason}" t=${Math.round(performance.now())}ms ` +
-        `(${desdeUltimoPong}ms desde o último pong enviado — perto de ~45000ms aponta pra` +
-        ` pingTimeout+pingInterval padrão do socket.io por bloqueio local; bem menor aponta pra outra causa)`,
-    );
-  });
-  s.io.on("reconnect_attempt", (n) => {
-    // eslint-disable-next-line no-console
-    console.info(`[SOCKET] reconnect_attempt #${n} t=${Math.round(performance.now())}ms`);
-  });
-  ligarEngine();
-}
-
-/**
  * Ping falso, para poder DESENVOLVER netcode com o servidor a zero ms daqui.
  *
  * Predição, reconciliação e interpolação são remédios para latência: no WSL
@@ -475,10 +413,6 @@ function instalarPingSimulado(s: GatewaySocket): void {
     guardarPing(cfg);
     return { ...cfg };
   };
-  if (cfg.subida > 0 || cfg.jitter > 0) {
-    // eslint-disable-next-line no-console
-    console.info(`[gateway] ping simulado: ${cfg.subida + cfg.descida} ms RTT, jitter ${cfg.jitter} ms`);
-  }
 }
 
 export function disconnectGateway(): void {

@@ -9,6 +9,7 @@ import { gateway } from "../net/gateway";
 import { Panel, IconSquare, RpgButton, Slot, UI_PACK_CREDIT } from "../ui/rpg";
 import { useCombatVisuals } from "./combatVisualsStore";
 import { useAudioSettings } from "../audio/audioSettingsStore";
+import { useVfxQuality, type VfxQualityTier } from "../vfx/vfxQualityStore";
 import { InventoryWindow } from "./InventoryWindow";
 import { StatusWindow as StatusArtWindow } from "./StatusWindow";
 import { FriendsWindow } from "./FriendsWindow";
@@ -383,6 +384,11 @@ function SettingsWindow() {
   const sfxVolume = useAudioSettings((s) => s.sfxVolume);
   const setMusicVolume = useAudioSettings((s) => s.setMusicVolume);
   const setSfxVolume = useAudioSettings((s) => s.setSfxVolume);
+  // qualidade GLOBAL de VFX (vfx/vfxQualityStore.ts) — hoje só Fire Lance lê
+  // (fire-lance/fireLanceRenderMode.ts), skill nova com tiers pode ler daqui
+  // livremente, nunca uma config isolada por skill.
+  const vfxQuality = useVfxQuality((s) => s.tier);
+  const setVfxQuality = useVfxQuality((s) => s.setTier);
 
   return (
     <div style={{ font: "12px system-ui", color: "#493333" }}>
@@ -411,7 +417,23 @@ function SettingsWindow() {
               style={{ width: "100%" }}
             />
           </div>
-          <div style={{ marginTop: 6 }}>Qualidade<br /><input type="range" style={{ width: "100%" }} /></div>
+          <div style={{ marginTop: 6 }}>
+            Qualidade dos efeitos
+            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+              {(
+                [
+                  ["low", "Baixo"],
+                  ["medium", "Médio"],
+                  ["high", "Alto"],
+                ] as [VfxQualityTier, string][]
+              ).map(([t, label]) => (
+                <label key={t} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                  <input type="radio" name="vfx-quality" checked={vfxQuality === t} onChange={() => setVfxQuality(t)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
           <div style={{ marginTop: 6 }}>Iluminação<br /><input type="range" style={{ width: "100%" }} /></div>
         </div>
         <div>

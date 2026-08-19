@@ -93,12 +93,6 @@ export function CharSelectView() {
   };
 
   const enter = (slot: number) => {
-    // instrumentação temporária (auditoria "glitch ~30s" 2026-08-14) — mede
-    // a partir do clique de verdade, não do carregamento da página inteira.
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.info(`[GAME_LOAD] T-1 char:select emitido slot=${slot} t=${Math.round(performance.now())}ms`);
-    }
     useSessionStore.getState().selectSlot(slot);
     const chosen = chars.find((c) => c.slot === slot);
     if (chosen) usePlayerStore.getState().seedFromChar(chosen);

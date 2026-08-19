@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { registrarEvento } from "../core/diagnostics/flightRecorder";
 
 /**
  * Petrificar aplicado DIRETO no material do body do alvo — sem overlay, sem
@@ -240,6 +242,7 @@ function applyTint(mat: THREE.Material, tint: Tint): void {
 }
 
 export function usePetrifyMaterial(scene: THREE.Object3D | null | undefined, phase: PetrifyPhase): void {
+  const { gl, camera, scene: cenaRaiz } = useThree();
   useEffect(() => {
     const tint = tintFor(phase);
     if (!scene || !tint) return;
@@ -273,8 +276,48 @@ export function usePetrifyMaterial(scene: THREE.Object3D | null | undefined, pha
       }
     });
 
+    /**
+     * FASE 7 (auditoria de performance) — mesma técnica de `assets.ts`
+     * (useCharacter, "FASE E2"): compila o material NOVO atrás de um
+     * `requestAnimationFrame`, nunca dentro do `render()` que o disparou.
+     *
+     * Achado que motivou isto: o material de Petrificar injeta GLSL
+     * triplanar via `onBeforeCompile` (`injectStoneTriplanar` acima) — um
+     * programa que nunca existiu antes da 1ª petrificação da sessão inteira
+     * (`stoneTex`/o programa em si são cache de módulo, nunca por entidade).
+     * Sem aquecimento, o primeiro Petrificar de uma sessão pagava o
+     * link do programa de forma SÍNCRONA dentro de `gl.render()` — medido em
+     * produção: quadro de 356,8ms, 337,4ms dentro de `renderMs`. Nenhum dos
+     * outros 8 usos de `onBeforeCompile` do projeto sofre disso porque todos
+     * pertencem ao MAPA (terreno/água/vento/etc.) e já são varridos pela
+     * cortina de carregamento comum — este é o único material acionado por
+     * EVENTO DE GAMEPLAY (status effect), fora do alcance dela.
+     *
+     * A textura (`stoneStatueTexture()`, chamada dentro de
+     * `injectStoneTriplanar`/`applyTint` acima) continua carregando por rede
+     * na 1ª vez — isso é assíncrono por natureza (não é o que bloqueava o
+     * frame) e permanece fora do escopo desta correção.
+     */
+    let vivo = true;
+    const t0 = performance.now();
+    const idRaf = requestAnimationFrame(() => {
+      if (!vivo) return;
+      const pronto = gl.compileAsync
+        ? gl.compileAsync(scene, camera, cenaRaiz)
+        : (gl.compile(scene, camera), Promise.resolve());
+      void Promise.resolve(pronto).then(() => {
+        if (!vivo || !import.meta.env.DEV) return;
+        registrarEvento("cena", "shader:compile-petrificar", {
+          ms: Math.round(performance.now() - t0),
+          programas: gl.info.programs?.length ?? 0,
+        });
+      });
+    });
+
     return () => {
+      vivo = false;
+      cancelAnimationFrame(idRaf);
       for (const restore of restores) restore();
     };
-  }, [scene, phase]);
+  }, [scene, phase, gl, camera, cenaRaiz]);
 }

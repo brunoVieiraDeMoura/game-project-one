@@ -472,12 +472,12 @@ export function NetEntityView({
       </group>
 
       {/* Congelar persistente — um por entidade, vida inteira do componente
-          (nunca por cast, ver docblock). Escala igual à usada pelos bursts
-          de impacto (`vfx/SkillVfx.targetVisualScale`): só a espécie, sem o
-          multiplicador global `charScale`. Petrificar NÃO tem VFX aqui —
+          (nunca por cast, ver docblock). GPU (Core), escala resolvida
+          sozinha via `anchor:"entity"`/`entityVisualScale` — não precisa
+          mais de `targetScale` como prop. Petrificar NÃO tem VFX aqui —
           ele é aplicado direto no material do body (`petrifyPhase` acima,
           `entities/petrifyMaterial.ts`). */}
-      <FreezeBodyVfx gid={gid} targetScale={modelInfo.scale} />
+      <FreezeBodyVfx gid={gid} />
 
       {entity.name && (
         <EntityLabel

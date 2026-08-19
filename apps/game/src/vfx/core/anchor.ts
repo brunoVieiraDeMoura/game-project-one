@@ -70,6 +70,16 @@ export interface ResolvedAnchor {
    * dado de caster nenhum (mesmo fallback documentado em `SkillVfx.tsx`). */
   casterOffset: WorldPoint | null;
   targetScale: number;
+  /** entidade de `anchor:"entity"` não resolveu (gid sumiu do `worldStore`)
+   * E `opts.payload?.trackTargetSafely === true` — sinal pro `manager.ts`
+   * NÃO sobrescrever `instance.position` neste quadro (mantém a última
+   * posição boa em vez de saltar pro sentinela `{0,-999,0}`). Opt-in de
+   * PROPÓSITO (Fire Lance/Cold Bolt tracking, 2026-08-19-e): o
+   * comportamento DEFAULT (flag ausente) continua EXATAMENTE o de sempre —
+   * `manager.test.ts` já prova/documenta o salto pro sentinela como
+   * intencional pra quem não pede o contrário. `undefined`/`false` = não
+   * mexe em nada. */
+  stale?: boolean;
 }
 
 /**
@@ -99,8 +109,18 @@ export function resolveAnchor(
     // mesmo tempo (`vfx/migratedVfxBridge.ts: toSpawnOptions` só preenche
     // um dos dois por `kind`), então a ordem de fallback nunca é ambígua.
     const gid = opts.targetGid ?? opts.sourceGid;
-    const pos = resolveEntityOrCellPosition(world, { gid, cell: opts.cell }) ?? opts.position ?? { x: 0, y: -999, z: 0 };
-    return { position: pos, casterOffset: null, targetScale };
+    const resolved = resolveEntityOrCellPosition(world, { gid, cell: opts.cell });
+    const base = resolved ?? opts.position ?? { x: 0, y: -999, z: 0 };
+    // jitter horizontal opcional (Fire Lance/Cold Bolt: pequena variação
+    // entre lanças do MESMO alvo, aplicado TODO quadro em cima da posição
+    // AO VIVO — nunca congelado, senão a lança pararia de acompanhar o
+    // alvo assim que ele se move). Ausente/zero = sem mudança nenhuma pra
+    // qualquer skill que não passar isto.
+    const jitterX = Number(opts.payload?.anchorJitterX ?? 0);
+    const jitterZ = Number(opts.payload?.anchorJitterZ ?? 0);
+    const pos = jitterX !== 0 || jitterZ !== 0 ? { x: base.x + jitterX, y: base.y, z: base.z + jitterZ } : base;
+    const stale = opts.payload?.trackTargetSafely === true && gid !== undefined && !opts.cell && resolved === null;
+    return { position: pos, casterOffset: null, targetScale, stale };
   }
 
   if (anchorKind === "caster-tip") {

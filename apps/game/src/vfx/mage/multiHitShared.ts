@@ -31,26 +31,6 @@ export function getSkillProjectileCount(level: number): number {
 }
 
 /**
- * Rótulo do ARQUIVO de áudio pra um `hits` real — só existem 5 variantes
- * gravadas (`SFX/classes/mage/combat_skills_cast/<skill>/
- * <skill>_hit_lvl_1_2.mp3` .. `_9_10.mp3`, ver `audio/mage/
- * multiHitCastAudio.ts`), nunca uma por hit — o MESMO arquivo toca uma
- * vez por hit real. `hits` indexa DIRETO no arquivo (hits=1→"1-2",
- * hits=4→"7-8", ...) — nunca precisou de bucketização por 2, porque cada
- * hit já É o índice do arquivo, não um nível. Reconfirmado correto na
- * auditoria "count real" (2026-08-19): `hits` acima de 5 (agora possível
- * de verdade, `HitCount` de Cold Bolt/Fire Lance/Thunder Storm/Light
- * Bolt vai até 10) CLAMPA pro arquivo mais intenso ("9-10") — só 5
- * arquivos existem, não tem 6º/7º/8º/9º/10º pra tocar, clampar no mais
- * alto é a escolha certa, nunca foi bug.
- */
-const HIT_LEVEL_TIER_LABEL = ["1-2", "3-4", "5-6", "7-8", "9-10"] as const;
-export function hitsToLevelTierLabel(hits: number): string {
-  const index = Math.min(5, Math.max(1, Math.round(hits))) - 1;
-  return HIT_LEVEL_TIER_LABEL[index]!;
-}
-
-/**
  * Duração TOTAL que o efeito precisa ficar vivo no `vfxStore` — mesma conta
  * nas quatro skills, só os números de entrada mudam (stagger entre hits,
  * quando dentro do hit o "impacto" acontece, duração do rabo da cascata de
@@ -85,7 +65,9 @@ export function multiHitTotalMs(
  * arquivos): a arte também as usa pra desenhar a MESMA cadência, mas os
  * dois lados não devem DEPENDER um do outro.
  */
-const THUNDER_PULSE_STAGGER_MS = 260;
+// pedido 2026-08-19 (sincronizar velocidade da animação/áudio): era 260 —
+// manter os DOIS lados em sync ao mudar, ver `thunder-storm/thunderStormVfxDef.tsx`.
+const THUNDER_PULSE_STAGGER_MS = 170;
 const THUNDER_PULSE_DAMAGE_NUMBER_MS = 1000;
 const THUNDER_TOTAL_VISIBLE_MS = 1500;
 export function thunderStormTotalMs(pulses: number): number {

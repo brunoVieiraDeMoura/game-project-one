@@ -13,6 +13,8 @@ import { CharacterPortrait } from "./CharacterPortrait";
 import { StatusEffectIcons } from "./StatusEffectIcons";
 import { MobInfoSlots } from "./MobInfoSlots";
 import { MobCastBadge } from "./MobCastBadge";
+import { Skeleton } from "../ui/rpg";
+import { useMonsterCatalog } from "../net/monsterCatalog";
 import { isolado } from "../core/diagnostics/isolamento";
 import type { CharacterKey, WeaponMount } from "../assets";
 import {
@@ -178,7 +180,10 @@ function StatPlate({
   hpFill = HP_FILL,
 }: {
   width: number;
-  name: string;
+  /** `undefined` = nome ainda não chegou (nem do REQNAME nem do catálogo por
+   * espécie) — a placa desenha um skeleton pulsando, NUNCA gid/aegis/id como
+   * substituto (regra absoluta da ficha do monstro) */
+  name: string | undefined;
   /** string quando o servidor ainda não respondeu (mob recém-avistado) */
   level: number | string;
   /** `undefined` = o servidor não disse quanto é; a barra fica vazia com "—" */
@@ -239,7 +244,7 @@ function StatPlate({
           textOverflow: "ellipsis",
         }}
       >
-        {name}
+        {name ?? <Skeleton width={PLATE_LAYOUT.name.h * s * 3.2} height={PLATE_LAYOUT.name.h * s * 0.66} />}
       </div>
 
       <CurvedBar
@@ -358,7 +363,7 @@ export function PlayerFrame() {
  * alguma variante de material específica da espécie.
  */
 const FICHA_DE_AQUECIMENTO: FichaDeAlvo = {
-  name: "",
+  name: undefined,
   level: "",
   modelo: "skeleton_minion",
   weapons: [],
@@ -383,6 +388,16 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
     }),
   );
   const localTarget = useCombatStore((s) => (s.target ? s.monsters[s.target] : undefined));
+  /**
+   * Fallback INSTANTÂNEO pro nome/nível do mob: enquanto o REQNAME daquele
+   * gid específico não volta, o catálogo por ESPÉCIE (`net/monsterCatalog`,
+   * pré-carregado no spawn — `net/useWorldEvents.ts`) já pode ter o mesmo
+   * mobId de um alvo anterior. Nunca lido para player/npc (só mob tem
+   * `job` = mob_db id).
+   */
+  const monsterInfo = useMonsterCatalog((s) =>
+    netTarget && netTarget.kind === "mob" ? s.byId[netTarget.job] : undefined,
+  );
 
   /**
    * A ÚLTIMA ficha vista, para a placa nunca precisar DESMONTAR.
@@ -406,8 +421,11 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
   if (online && netTarget) {
     const temHp = netTarget.hp !== undefined && netTarget.maxHp !== undefined && netTarget.maxHp > 0;
     ficha = {
-      name: netTarget.name ?? `#${netTarget.gid}`,
-      level: netTarget.level ?? "?",
+      // nome AO VIVO (REQNAME deste gid) primeiro; enquanto ele não volta,
+      // o catálogo por espécie cobre a espera — jamais gid/aegis/id como
+      // texto (regra absoluta do chat "informações dos monstros").
+      name: netTarget.name ?? monsterInfo?.name,
+      level: netTarget.level ?? monsterInfo?.level ?? "?",
       gid: netTarget.gid,
       hp: temHp ? { atual: netTarget.hp!, max: netTarget.maxHp! } : undefined,
       // aparência do alvo = a mesma tabela que a cena usa para desenhá-lo
@@ -522,7 +540,9 @@ export function TargetFrame({ aquecendo = false }: { aquecendo?: boolean } = {})
 
 /** o que a placa do alvo precisa saber — guardado para sobreviver ao "sem alvo" */
 interface FichaDeAlvo {
-  name: string;
+  /** `undefined` = nome ainda não chegou — `StatPlate` desenha skeleton,
+   * nunca gid/aegis/id (regra absoluta) */
+  name: string | undefined;
   level: number | string;
   hp?: { atual: number; max: number };
   sp?: { atual: number; max: number };

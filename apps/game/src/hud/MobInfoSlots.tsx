@@ -61,7 +61,7 @@ export function MobInfoSlots({ monsterId, size = 32 }: { monsterId: number; size
   const race = info?.race as Race | undefined;
   const sizeCat = info?.size as Size | undefined;
 
-  const slots: { key: string; code: string; label: string; value: string; extra?: string; imageSrc?: string }[] = [
+  const slots: { key: string; code: string; label: string; value: string; extra?: string; imageSrc?: string; loading: boolean }[] = [
     {
       key: "element",
       code: element ? (ELEMENT_ABBR[element] ?? "?") : "?",
@@ -69,6 +69,7 @@ export function MobInfoSlots({ monsterId, size = 32 }: { monsterId: number; size
       value: element ? ELEMENT_LABELS[element] : "?",
       extra: element ? `[${info?.elementLevel ?? 1}]` : undefined,
       imageSrc: elementIconSrc(element),
+      loading: !info,
     },
     {
       key: "race",
@@ -76,6 +77,7 @@ export function MobInfoSlots({ monsterId, size = 32 }: { monsterId: number; size
       label: "Raça",
       value: race ? RACE_LABELS[race] : "?",
       imageSrc: raceIconSrc(race),
+      loading: !info,
     },
     {
       key: "size",
@@ -83,6 +85,7 @@ export function MobInfoSlots({ monsterId, size = 32 }: { monsterId: number; size
       label: "Tamanho",
       value: sizeCat ? SIZE_LABELS[sizeCat] : "?",
       imageSrc: sizeIconSrc(sizeCat),
+      loading: !info,
     },
   ];
 
@@ -100,7 +103,7 @@ function MobInfoSlot({
   size,
   raio,
 }: {
-  slot: { key: string; code: string; label: string; value: string; extra?: string; imageSrc?: string };
+  slot: { key: string; code: string; label: string; value: string; extra?: string; imageSrc?: string; loading: boolean };
   size: number;
   raio: number;
 }) {
@@ -120,8 +123,9 @@ function MobInfoSlot({
         radius={raio}
         border={false}
         nativeTooltip={false}
+        loading={slot.loading}
       />
-      {hover && (
+      {!slot.loading && hover && (
         <div
           style={{
             position: "absolute",

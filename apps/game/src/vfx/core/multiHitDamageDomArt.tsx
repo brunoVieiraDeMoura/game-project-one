@@ -124,19 +124,6 @@ function MultiHitDamageArt(palette: MultiHitDamagePalette) {
   };
 }
 
-/** instâncias (`refs` é 1 por instância de arte DOM, criado na montagem e
- * reaproveitado em todo `update()` seguinte, nunca recriado por quadro) que
- * já mandaram tocar o SFX de impacto — trava pra nunca soar mais de 1 vez
- * por instância. Sem isto, o loop de hits abaixo chamava `aoImpactoMultiHit`
- * a CADA hit pousando (5 hits reais = 5 chamadas do MESMO arquivo) e, em
- * instâncias coalescidas (Thunder Storm, `coalesce:{by:"target"}`), a
- * contagem de hits crescia entre pulsos — cada crescimento podia cruzar pra
- * uma FAIXA de nível diferente e tocar um arquivo `hit-lvl-*` diferente no
- * meio do mesmo cast. Um `WeakSet` (nunca um campo em `refs`, que é
- * `HTMLElement | SVGElement | null` por contrato) morre sozinho quando a
- * instância desmonta — não precisa de limpeza manual. */
-const impactAudioTocadoPara = new WeakSet<DomArtRefs>();
-
 function updateMultiHitDamage(palette: MultiHitDamagePalette, refs: DomArtRefs, ctx: DomArtUpdateCtx): void {
   const hitCount = hitCountFrom(palette, ctx.payload);
   const t = ctx.elapsedMs;
@@ -160,10 +147,10 @@ function updateMultiHitDamage(palette: MultiHitDamagePalette, refs: DomArtRefs, 
       dmgEl.classList.add(`${palette.dmgClass}--impact`);
       hitsLanded++;
       if (totalEl) totalEl.dataset.hitsLanded = String(hitsLanded);
-      if (ctx.skillId !== undefined && !impactAudioTocadoPara.has(refs)) {
-        impactAudioTocadoPara.add(refs);
-        aoImpactoMultiHit(ctx.skillId, hitCount);
-      }
+      // `dmgEl` só entra aqui uma vez por hit `i` (a própria checagem da
+      // classe `--impact` acima já garante isso) — `<skill>_hit.mp3` é UM
+      // golpe, toca em CADA pouso real, ver `audio/mage/multiHitCastAudio.ts`.
+      if (ctx.skillId !== undefined) aoImpactoMultiHit(ctx.skillId);
     }
   }
 

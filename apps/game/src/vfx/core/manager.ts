@@ -407,7 +407,13 @@ export class VFXManager {
         if (!frozen) {
           const anchorStart = performance.now();
           const resolved = resolveAnchor(this.world, instance.def.anchor, instance.spawnOptions);
-          instance.position = resolved.position;
+          // `stale` (opt-in, `payload.trackTargetSafely`, ver `anchor.ts`)
+          // — alvo sumiu do `worldStore`, mantém a ÚLTIMA posição boa em
+          // vez de sobrescrever com o sentinela. Ausente/`false` (todo o
+          // resto do jogo) preserva o comportamento de sempre — sobrescreve
+          // sempre, mesmo com o sentinela (`manager.test.ts` documenta essa
+          // intenção pra quem não pede o contrário).
+          if (!resolved.stale) instance.position = resolved.position;
           // `caster-to-target` só resolve o offset UMA VEZ, no spawn (o caster
           // já lançou; o offset é fixo pro resto do voo) — nunca sobrescrever
           // aqui, senão o projétil "esquece" de onde partiu a cada quadro.

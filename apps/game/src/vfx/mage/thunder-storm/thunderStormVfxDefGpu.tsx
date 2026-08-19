@@ -17,16 +17,23 @@ import type { VfxDefinition, VfxLayer } from "../../core/types";
  * faíscas orbitando — MESMA receita da Fire Ball (glow central + burst de
  * partículas), cor elétrica em vez de fogo.
  *
- * Impact (`thunder_storm_impact`, `coalesce:{by:"target",windowMs:400}`
- * preservado — item 14 do pedido, 1 raio por mob mesmo com N pulsos):
- * flash central (substitui `.ts-bolt__glow`+`__core`) + faíscas
- * radiais (substitui `.ts-shock__arc`+`__spark`+`.ts-ground__branch`) +
- * números de dano (`thunder_storm_dmgnum`, mesma exceção documentada —
- * cascata por pulso + total não cabe no `damageFeed` genérico).
+ * Impact (`thunder_storm_impact`) — SÓ os NÚMEROS agora (2026-08-19-t,
+ * "faz o mesmo efeito pra Tempestade de Raios, ela é AoE mas é
+ * basicamente a mesma habilidade"): o raio caindo em si saiu daqui e
+ * virou o MESMO driver por-hit de Eletrocutar (`spawnLightBoltHits`,
+ * chamado direto pra `MG_THUNDERSTORM` também em `useWorldEvents.ts`) —
+ * mesmos `VfxDefinition` (mesmo atlas, mesmos ids `light_bolt_bolt_*`/
+ * `light_bolt_impact_burst_*`), reusados tal qual, não recriados aqui.
+ * Correto: o servidor já entrega Tempestade de Raios como N eventos de
+ * alvo independentes (um por mob atingido na AoE, cada um com seu
+ * próprio `hits`/pulsos) — é exatamente a mesma forma que Eletrocutar já
+ * consome hoje, só que Eletrocutar tem 1 alvo por cast e Tempestade tem
+ * vários. `coalesce:{by:"target",windowMs:400}` preservado (item 14 do
+ * pedido original, defensivo contra pacote duplicado no mesmo alvo) —
+ * agora só protege a cascata de números, não mais um flash visual.
  */
 
 const ELECTRIC_GLOW = "#b4dcff";
-const ELECTRIC_CORE = "#f2fbff";
 const ELECTRIC_SPARK = "#c8ecff";
 
 function buildCastGpuLayers(): VfxLayer[] {
@@ -51,29 +58,11 @@ export const THUNDER_STORM_CAST_GPU_DEF: VfxDefinition = {
   layers: buildCastGpuLayers(),
 };
 
-function buildImpactGpuLayers(): VfxLayer[] {
-  return [
-    {
-      renderer: "sprite",
-      scale: { base: 0.6 },
-      offset: [0, 1.1, 0],
-      params: { color: ELECTRIC_CORE, opacity: 0.95 },
-    },
-    {
-      renderer: "particle",
-      scale: { base: 0.16 },
-      params: { particleCount: 24, radius: 0.55, color: ELECTRIC_SPARK },
-    },
-    {
-      renderer: "dom",
-      dom: { art: "thunder_storm_dmgnum" },
-    },
-  ];
-}
-
+/** SÓ os NÚMEROS (`dom`) — o raio/burst reais vêm do driver por-hit
+ * compartilhado com Light Bolt, ver docblock do arquivo. */
 export const THUNDER_STORM_IMPACT_GPU_DEF: VfxDefinition = {
   id: "thunder_storm_impact",
-  renderer: "sprite",
+  renderer: "dom",
   anchor: "entity",
   coalesce: { by: "target", windowMs: 400 },
   // congela no spawn — mesma razão de Cold Bolt/Fire Lance (auditoria
@@ -82,5 +71,5 @@ export const THUNDER_STORM_IMPACT_GPU_DEF: VfxDefinition = {
   // hit desta sequência (correto: "onde a sequência de dano aconteceu",
   // não onde o alvo estava a cada pulso).
   freezeAnchorAfterMs: 0,
-  layers: buildImpactGpuLayers(),
+  dom: { art: "thunder_storm_dmgnum" },
 };

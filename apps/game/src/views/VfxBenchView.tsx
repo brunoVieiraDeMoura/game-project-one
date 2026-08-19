@@ -12,6 +12,14 @@ import { vfxManager } from "../vfx/core/manager";
 import { resolveMigratedVfxId } from "../vfx/migratedVfxBridge";
 import { useDamageFeed } from "../net/damageFeed";
 import { MULTI_HIT_DURATION_MS } from "../vfx/mage/multiHitRegistry";
+import { spawnCombatHitVfx, spawnCombatHitImpacts } from "../vfx/combat/combatHitVfx";
+import { shardColorForElement } from "../vfx/mage/multiHitShardImpact";
+import { spawnFireLanceHits } from "../vfx/mage/fire-lance/fireLanceMultiHit";
+import type { FireLanceGpuTier } from "../vfx/mage/fire-lance/fireLanceVfxDefGpu";
+import { spawnColdBoltHits } from "../vfx/mage/cold-bolt/coldBoltMultiHit";
+import type { ColdBoltGpuTier } from "../vfx/mage/cold-bolt/coldBoltVfxDefGpu";
+import { spawnLightBoltHits } from "../vfx/mage/light-bolt/lightBoltMultiHit";
+import type { LightBoltGpuTier } from "../vfx/mage/light-bolt/lightBoltVfxDefGpu";
 import { NetDamageNumbers } from "../net/NetDamageNumbers";
 import { gridFor } from "../grid";
 import { PerfProbe, PerfOverlay } from "../scene/PerfHud";
@@ -259,6 +267,31 @@ interface BenchApi {
    * "chaotic", mas só as skills em `skills` (chaves: "fireball",
    * "thunderstorm", "firewall", "oracle", "coldbolt", "soulstrike"). */
   spawnComboSubset: (slot: number, skills: string[]) => void;
+  /** Combat Hit VFX genérico (auditoria "fechar Normal/Single/Critical",
+   * 2026-08-19) — dispara em TODOS os slots plantados, MESMO caminho que
+   * `entity:action` usa de verdade (`spawnCombatHitVfx`/
+   * `spawnCombatHitImpacts`, fora do `vfxStore`/`BENCH_SKILLS` porque
+   * ataque básico não tem `skillId`). `hits<=1` (default) = NORMAL/SINGLE/
+   * CRITICAL (1 instância por slot); `hits>1` = MULTI_HIT/MULTI_HIT_
+   * CRITICAL (N instâncias staggered por slot, mesmo `spawnHitImpacts`). */
+  spawnCombatHitAll: (opts?: { hits?: number; critical?: boolean }) => void;
+  /** Fire Lance real, driver dedicado (`fire-lance/fireLanceMultiHit.ts:
+   * spawnFireLanceHits`) — EXERCITA o caminho de produção completo
+   * (projétil+trail+burst de impacto tier-específicos, agendados por
+   * `setTimeout`, mesmo mecanismo que `useWorldEvents.ts` usa num pacote
+   * `skill:cast` real), não `useVfxStore.spawn()` (esse só cobria a
+   * cascata de números DOM — o burst GPU nunca era medido antes desta
+   * auditoria, achado explícito da reconstrução 2026-08-19-b). Dispara em
+   * TODOS os slots plantados de uma vez, `hits`/`tier` iguais pra todos —
+   * suficiente pro benchmark de escala (1/5/10/20/30/50 players ×
+   * LOW/MEDIUM/HIGH). */
+  spawnFireLanceHitsAll: (opts: { hits: number; tier: FireLanceGpuTier; critical?: boolean }) => void;
+  /** MESMO mecanismo, driver dedicado de Cold Bolt (reconstrução
+   * 2026-08-19-d) — ver docblock de `spawnFireLanceHitsAll` acima. */
+  spawnColdBoltHitsAll: (opts: { hits: number; tier: ColdBoltGpuTier; critical?: boolean }) => void;
+  /** Eletrocutar real, driver dedicado (reconstrução 2026-08-19-f) — ver
+   * docblock de `spawnFireLanceHitsAll` acima. */
+  spawnLightBoltHitsAll: (opts: { hits: number; tier: LightBoltGpuTier; critical?: boolean }) => void;
   clear: () => void;
   domNodeCount: () => number;
   /** draw calls/triângulos do quadro mais recente (`gl.info.render`, mesma
@@ -973,6 +1006,34 @@ function makeApi(): BenchApi {
     return ids;
   }
 
+  function spawnCombatHitAll(opts?: { hits?: number; critical?: boolean }): void {
+    const hits = Math.max(1, Math.floor(opts?.hits ?? 1));
+    const critical = opts?.critical === true;
+    const color = shardColorForElement(undefined); // ataque básico não tem elemento
+    for (const targetGid of lastTargetGids) {
+      if (hits <= 1) spawnCombatHitVfx({ targetGid, color, critical });
+      else spawnCombatHitImpacts({ targetGid, hits, color, critical });
+    }
+  }
+
+  function spawnFireLanceHitsAll(opts: { hits: number; tier: FireLanceGpuTier; critical?: boolean }): void {
+    for (const targetGid of lastTargetGids) {
+      spawnFireLanceHits({ targetGid, hits: opts.hits, tier: opts.tier, critical: opts.critical === true });
+    }
+  }
+
+  function spawnColdBoltHitsAll(opts: { hits: number; tier: ColdBoltGpuTier; critical?: boolean }): void {
+    for (const targetGid of lastTargetGids) {
+      spawnColdBoltHits({ targetGid, hits: opts.hits, tier: opts.tier, critical: opts.critical === true });
+    }
+  }
+
+  function spawnLightBoltHitsAll(opts: { hits: number; tier: LightBoltGpuTier; critical?: boolean }): void {
+    for (const targetGid of lastTargetGids) {
+      spawnLightBoltHits({ targetGid, hits: opts.hits, tier: opts.tier, critical: opts.critical === true });
+    }
+  }
+
   return {
     reset,
     spawn: spawnOne,
@@ -981,6 +1042,10 @@ function makeApi(): BenchApi {
     spawnAreaLine,
     spawnCombo,
     spawnComboSubset,
+    spawnCombatHitAll,
+    spawnFireLanceHitsAll,
+    spawnColdBoltHitsAll,
+    spawnLightBoltHitsAll,
     clear: () => useVfxStore.getState().reset(),
     domNodeCount: () => document.getElementsByTagName("*").length,
     perfSnapshot,

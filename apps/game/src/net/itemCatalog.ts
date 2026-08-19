@@ -78,24 +78,9 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
     if (faltam.length === 0) return;
     for (const id of faltam) pendentes.add(id);
 
-    // instrumentação temporária (auditoria "glitch ~30s" 2026-08-14) — só
-    // DEV, remover/reduzir depois de confirmado em produção que o atraso
-    // some. Mede o próprio tempo de ida-e-volta do `/items/by-id`, não um
-    // palpite.
-    const t0 = import.meta.env.DEV ? performance.now() : 0;
-    if (import.meta.env.DEV) {
-      console.info(`[ITEM_DATA] request iniciado ids=[${faltam.join(",")}] source=API t=${Math.round(t0)}ms`);
-    }
-
     fetch(`${API_URL}/items/by-id?ids=${faltam.join(",")}`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((data: { items?: Array<Record<string, unknown>> }) => {
-        if (import.meta.env.DEV) {
-          const dt = Math.round(performance.now() - t0);
-          console.info(
-            `[ITEM_DATA] request concluído ids=[${faltam.join(",")}] source=API registros=${data.items?.length ?? 0} tempoRespostaMs=${dt}`,
-          );
-        }
         set((s) => {
           const byId = { ...s.byId };
           for (const cru of data.items ?? []) {

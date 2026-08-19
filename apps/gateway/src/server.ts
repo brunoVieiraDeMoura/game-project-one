@@ -147,6 +147,7 @@ io.on("connection", (socket) => {
 	});
 
 	socket.on("world:ready", () => withSession((ro) => ro.notifyReady()));
+	socket.on("world:render-ready", () => withSession((ro) => ro.notifyRenderReady()));
 
 	socket.on("move:to", (payload: { x?: number; y?: number }) => {
 		withSession((ro) => ro.moveTo({ x: Number(payload?.x ?? 0), y: Number(payload?.y ?? 0) }));

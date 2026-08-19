@@ -25,7 +25,15 @@ export function computeDropOffset(instance: VfxInstanceRuntime, elapsedMs: numbe
   const fallMs = instance.spawnOptions.payload?.fallMs;
   const fallHeight = instance.spawnOptions.payload?.fallHeight;
   if (typeof fallMs !== "number" || fallMs <= 0 || typeof fallHeight !== "number") return ZERO;
-  const arriveY = Number(instance.spawnOptions.payload?.arriveY ?? 0);
+  let arriveY = Number(instance.spawnOptions.payload?.arriveY ?? 0);
+  // Eletrocutar (2026-08-19-f, "atinge a CABEÇA, não o chão") — `arriveY`
+  // pode representar uma altura RELATIVA ao tamanho do alvo (Poring baixo
+  // vs. Boss alto), não um offset fixo de mundo. Opt-in
+  // (`payload.arriveYByTarget`), ausente/`false` preserva Fire Lance/Cold
+  // Bolt exatamente como estavam (`arriveY:0` × qualquer escala = 0 de
+  // qualquer forma, mas o flag continua explícito pra nunca mudar
+  // silenciosamente quem já usa isto).
+  if (instance.spawnOptions.payload?.arriveYByTarget === true) arriveY *= instance.targetScale;
   const u = Math.max(0, Math.min(1, elapsedMs / fallMs));
   const eased = u * u * (3 - 2 * u);
   return { x: 0, y: fallHeight * (1 - eased) + arriveY * eased, z: 0 };

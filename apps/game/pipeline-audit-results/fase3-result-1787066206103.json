@@ -1,0 +1,6067 @@
+{
+  "curvaContextos": [
+    {
+      "label": "N=0",
+      "mobCount": 0,
+      "voo": {
+        "t": {
+          "p50": 5856,
+          "p95": 8306,
+          "max": 8572.7,
+          "n": 328
+        },
+        "quadro": {
+          "p50": 164,
+          "p95": 311,
+          "max": 327,
+          "n": 328
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.5,
+          "max": 508.5,
+          "n": 328
+        },
+        "drawCalls": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 328
+        },
+        "triangulos": {
+          "p50": 14898,
+          "p95": 14898,
+          "max": 14898,
+          "n": 328
+        },
+        "geometrias": {
+          "p50": 8,
+          "p95": 8,
+          "max": 8,
+          "n": 328
+        },
+        "programas": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 328
+        },
+        "texturas": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 328
+        },
+        "renderMs": {
+          "p50": 0.6,
+          "p95": 1,
+          "max": 494.6,
+          "n": 328
+        },
+        "gpuMs": {
+          "p50": 1.511,
+          "p95": 3.461,
+          "max": 425.669,
+          "n": 325
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 99.331,
+          "p95": 105.757,
+          "max": 109.235,
+          "n": 328
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 328
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 328
+        },
+        "sceneFilhos": {
+          "p50": 8,
+          "p95": 8,
+          "max": 9,
+          "n": 328
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 328
+        },
+        "objetosRender": {
+          "p50": 8,
+          "p95": 8,
+          "max": 8,
+          "n": 328
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 328
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 328
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 328
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 328
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 328
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 18,
+          "n": 328
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 11.7,
+          "n": 328
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 4,
+          "n": 328
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.2,
+          "max": 0.6,
+          "n": 328
+        },
+        "matrizMs": {
+          "p50": 0,
+          "p95": 0.1,
+          "max": 0.6,
+          "n": 328
+        },
+        "sobraMs": {
+          "p50": 16,
+          "p95": 17,
+          "max": 195.4,
+          "n": 328
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.265,
+          "max": 13.192,
+          "n": 327
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 328
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 30.8,
+          "n": 328
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 328
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 328
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 7134,
+          "lost": false,
+          "clearsTotal": 630,
+          "clearsUltimos3s": 360,
+          "taxaHz": 120
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5402,
+          "lost": false,
+          "clearsTotal": 111,
+          "clearsUltimos3s": 73,
+          "taxaHz": 24.3
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 4811,
+          "lost": false,
+          "clearsTotal": 108,
+          "clearsUltimos3s": 73,
+          "taxaHz": 24.3
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 1253.199999988079,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "ms": 232,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 1571.699999988079,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 11.7,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 1637.3999999761581,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1637.3999999761581,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 1640.699999988079,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 1640.7999999523163,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 2631.899999976158,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 58,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2632.099999964237,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 58,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2634.699999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 58,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2634.7999999523163,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 58,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 3010.399999976158,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 60,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 3022,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 60,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 3023.699999988079,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 60,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 3024.199999988079,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 60,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 3166,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 62,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 3167.099999964237,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 62,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 3168.7999999523163,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 63,
+          "dados": {
+            "delta": 1,
+            "total": 1
+          }
+        },
+        {
+          "t": 3298.599999964237,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 64,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.9,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 3813.7999999523163,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "delta": 8,
+            "total": 8
+          }
+        },
+        {
+          "t": 3813.7999999523163,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "delta": 7,
+            "total": 7
+          }
+        },
+        {
+          "t": 3813.7999999523163,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "delta": 8,
+            "total": 9
+          }
+        },
+        {
+          "t": 3883.599999964237,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "ms": 496,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 3884.5,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 3884.5,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 3889.2999999523163,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 4,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 4104.899999976158,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 68,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 4104.899999976158,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 68,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 4109.399999976158,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 69,
+          "dados": {
+            "ms": 183,
+            "nome": "self"
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=1",
+      "mobCount": 1,
+      "voo": {
+        "t": {
+          "p50": 4850.2,
+          "p95": 7432.1,
+          "max": 7715.5,
+          "n": 346
+        },
+        "quadro": {
+          "p50": 173,
+          "p95": 328,
+          "max": 345,
+          "n": 346
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 16.9,
+          "max": 520.3,
+          "n": 346
+        },
+        "drawCalls": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 346
+        },
+        "triangulos": {
+          "p50": 20832,
+          "p95": 20832,
+          "max": 20832,
+          "n": 346
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 346
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 346
+        },
+        "texturas": {
+          "p50": 10,
+          "p95": 10,
+          "max": 10,
+          "n": 346
+        },
+        "renderMs": {
+          "p50": 0.9,
+          "p95": 1.3,
+          "max": 510.7,
+          "n": 346
+        },
+        "gpuMs": {
+          "p50": 2.94,
+          "p95": 4.081,
+          "max": 48.72,
+          "n": 343
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 117.067,
+          "p95": 123.393,
+          "max": 159.476,
+          "n": 346
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 346
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 346
+        },
+        "sceneFilhos": {
+          "p50": 9,
+          "p95": 9,
+          "max": 10,
+          "n": 346
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 346
+        },
+        "objetosRender": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 346
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 346
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 346
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 346
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 346
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 346
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 18,
+          "n": 346
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 5,
+          "n": 346
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 4.5,
+          "n": 346
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.4,
+          "n": 346
+        },
+        "matrizMs": {
+          "p50": 0.1,
+          "p95": 0.2,
+          "max": 0.3,
+          "n": 346
+        },
+        "sobraMs": {
+          "p50": 15.7,
+          "p95": 16.7,
+          "max": 67.9,
+          "n": 346
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.226,
+          "max": 14.669,
+          "n": 345
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 346
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 24.7,
+          "n": 346
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 346
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 346
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 6930,
+          "lost": false,
+          "clearsTotal": 678,
+          "clearsUltimos3s": 360,
+          "taxaHz": 120
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5526,
+          "lost": false,
+          "clearsTotal": 122,
+          "clearsUltimos3s": 73,
+          "taxaHz": 24.3
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 4965,
+          "lost": false,
+          "clearsTotal": 121,
+          "clearsUltimos3s": 73,
+          "taxaHz": 24.3
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 912.1999999880791,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 947,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 947,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 958.6999999880791,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 959.0999999642372,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1754.800000011921,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1755.0999999642372,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1756.3999999761581,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1756.5,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2110.800000011921,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 2120.699999988079,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 2121.300000011921,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 2122,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 2201.5,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2204.599999964237,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2315.399999976158,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 53,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 4.2,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2842.199999988079,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 54,
+          "dados": {
+            "ms": 512,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 2842.300000011921,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 2842.300000011921,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "delta": 10,
+            "total": 10
+          }
+        },
+        {
+          "t": 2842.300000011921,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "delta": 17,
+            "total": 17
+          }
+        },
+        {
+          "t": 2872.699999988079,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 2872.699999988079,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2877.199999988079,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2933,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 2933,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 3348.699999988079,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 83,
+          "dados": {
+            "delta": 2,
+            "total": 19
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=5",
+      "mobCount": 5,
+      "voo": {
+        "t": {
+          "p50": 4468.6,
+          "p95": 7152,
+          "max": 7435.3,
+          "n": 358
+        },
+        "quadro": {
+          "p50": 179,
+          "p95": 340,
+          "max": 357,
+          "n": 358
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 18,
+          "max": 116.8,
+          "n": 358
+        },
+        "drawCalls": {
+          "p50": 24,
+          "p95": 24,
+          "max": 24,
+          "n": 358
+        },
+        "triangulos": {
+          "p50": 44568,
+          "p95": 44568,
+          "max": 44568,
+          "n": 358
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 358
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 358
+        },
+        "texturas": {
+          "p50": 18,
+          "p95": 18,
+          "max": 18,
+          "n": 358
+        },
+        "renderMs": {
+          "p50": 1.4,
+          "p95": 2,
+          "max": 179.9,
+          "n": 358
+        },
+        "gpuMs": {
+          "p50": 1.161,
+          "p95": 4.522,
+          "max": 44.908,
+          "n": 353
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 103.117,
+          "p95": 120.997,
+          "max": 140.809,
+          "n": 358
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 358
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 358
+        },
+        "sceneFilhos": {
+          "p50": 13,
+          "p95": 13,
+          "max": 14,
+          "n": 358
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 358
+        },
+        "objetosRender": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 358
+        },
+        "cameraId": {
+          "p50": 55,
+          "p95": 55,
+          "max": 55,
+          "n": 358
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 358
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 358
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 358
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 358
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 58,
+          "n": 358
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 5.1,
+          "n": 358
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 5.7,
+          "n": 358
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "animacaoMs": {
+          "p50": 0.3,
+          "p95": 0.5,
+          "max": 0.8,
+          "n": 358
+        },
+        "matrizMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.4,
+          "n": 358
+        },
+        "sobraMs": {
+          "p50": 14.9,
+          "p95": 16.7,
+          "max": 59.2,
+          "n": 358
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.475,
+          "max": 30.507,
+          "n": 357
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 358
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 26.5,
+          "n": 358
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 358
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 358
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 6700,
+          "lost": false,
+          "clearsTotal": 704,
+          "clearsUltimos3s": 360,
+          "taxaHz": 120
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5439,
+          "lost": false,
+          "clearsTotal": 131,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5281,
+          "lost": false,
+          "clearsTotal": 129,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 780.1999999880791,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 5.1,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 892.7999999523163,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 892.8999999761581,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 894.6999999880791,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 894.7999999523163,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1482.199999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1482.2999999523163,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1483.7999999523163,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1483.8999999761581,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1850.699999988079,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 37,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 1860.3999999761581,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 37,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 1861.8999999761581,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 37,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1862.3999999761581,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 37,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 1925.2999999523163,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 39,
+          "dados": {
+            "delta": 4,
+            "total": 4
+          }
+        },
+        {
+          "t": 1931.0999999642372,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 39,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1931.8999999761581,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 39,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2041.199999988079,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 41,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.7,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2194.7999999523163,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 2194.7999999523163,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2199.2999999523163,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.7,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2256.899999976158,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 2256.899999976158,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2435.199999988079,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 2435.199999988079,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "delta": 18,
+            "total": 18
+          }
+        },
+        {
+          "t": 2435.199999988079,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "delta": 15,
+            "total": 19
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=10",
+      "mobCount": 10,
+      "voo": {
+        "t": {
+          "p50": 4548.2,
+          "p95": 7281.4,
+          "max": 7581.3,
+          "n": 366
+        },
+        "quadro": {
+          "p50": 183,
+          "p95": 347,
+          "max": 365,
+          "n": 366
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17,
+          "max": 126.2,
+          "n": 366
+        },
+        "drawCalls": {
+          "p50": 38,
+          "p95": 38,
+          "max": 39,
+          "n": 366
+        },
+        "triangulos": {
+          "p50": 74106,
+          "p95": 74106,
+          "max": 74238,
+          "n": 366
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 366
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 366
+        },
+        "texturas": {
+          "p50": 28,
+          "p95": 28,
+          "max": 28,
+          "n": 366
+        },
+        "renderMs": {
+          "p50": 2,
+          "p95": 2.7,
+          "max": 167.3,
+          "n": 366
+        },
+        "gpuMs": {
+          "p50": 1.417,
+          "p95": 17.924,
+          "max": 80.659,
+          "n": 360
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 111.17,
+          "p95": 122.328,
+          "max": 126.67,
+          "n": 366
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 366
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 366
+        },
+        "sceneFilhos": {
+          "p50": 18,
+          "p95": 18,
+          "max": 19,
+          "n": 366
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 366
+        },
+        "objetosRender": {
+          "p50": 38,
+          "p95": 38,
+          "max": 38,
+          "n": 366
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 366
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 366
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 366
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 366
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 366
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 18,
+          "n": 366
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 19.5,
+          "n": 366
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8.1,
+          "n": 366
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "animacaoMs": {
+          "p50": 0.4,
+          "p95": 0.6,
+          "max": 1.2,
+          "n": 366
+        },
+        "matrizMs": {
+          "p50": 0.2,
+          "p95": 0.3,
+          "max": 3,
+          "n": 366
+        },
+        "sobraMs": {
+          "p50": 14.2,
+          "p95": 16.7,
+          "max": 57.4,
+          "n": 366
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.774,
+          "max": 31.605,
+          "n": 365
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 366
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 23.9,
+          "n": 366
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 366
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 366
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 6809,
+          "lost": false,
+          "clearsTotal": 715,
+          "clearsUltimos3s": 362,
+          "taxaHz": 120.7
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5457,
+          "lost": false,
+          "clearsTotal": 131,
+          "clearsUltimos3s": 75,
+          "taxaHz": 25
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5293,
+          "lost": false,
+          "clearsTotal": 129,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 840.3000000119209,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 19.5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 884.7000000476837,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 884.7000000476837,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 885.6000000238419,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 885.7000000476837,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1619,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1619.1000000238419,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1620.7000000476837,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1620.800000011921,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1988.1000000238419,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 1999.2000000476837,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 2001.5,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 2002,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 2072.7000000476837,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2073.400000035763,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2178.800000011921,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 4.2,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2337.900000035763,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 2337.900000035763,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2342.2000000476837,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2401.400000035763,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 53,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 2401.400000035763,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 53,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2520.400000035763,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 61,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 2520.400000035763,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 61,
+          "dados": {
+            "delta": 28,
+            "total": 28
+          }
+        },
+        {
+          "t": 2520.400000035763,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 61,
+          "dados": {
+            "delta": 19,
+            "total": 19
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=20",
+      "mobCount": 20,
+      "voo": {
+        "t": {
+          "p50": 4939.4,
+          "p95": 7989.4,
+          "max": 8323,
+          "n": 407
+        },
+        "quadro": {
+          "p50": 203,
+          "p95": 386,
+          "max": 406,
+          "n": 407
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "max": 142,
+          "n": 407
+        },
+        "drawCalls": {
+          "p50": 64,
+          "p95": 64,
+          "max": 68,
+          "n": 407
+        },
+        "triangulos": {
+          "p50": 127380,
+          "p95": 127380,
+          "max": 133446,
+          "n": 407
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 407
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 407
+        },
+        "texturas": {
+          "p50": 48,
+          "p95": 48,
+          "max": 48,
+          "n": 407
+        },
+        "renderMs": {
+          "p50": 3,
+          "p95": 3.7,
+          "max": 164,
+          "n": 407
+        },
+        "gpuMs": {
+          "p50": 2.552,
+          "p95": 16.243,
+          "max": 78.19,
+          "n": 403
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 99.732,
+          "p95": 117.253,
+          "max": 123.254,
+          "n": 407
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 407
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 407
+        },
+        "sceneFilhos": {
+          "p50": 28,
+          "p95": 28,
+          "max": 29,
+          "n": 407
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 407
+        },
+        "objetosRender": {
+          "p50": 68,
+          "p95": 68,
+          "max": 68,
+          "n": 407
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 407
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 407
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 407
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 407
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 407
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 25,
+          "n": 407
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 5.4,
+          "n": 407
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 11,
+          "n": 407
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "animacaoMs": {
+          "p50": 0.5,
+          "p95": 0.7,
+          "max": 1.1,
+          "n": 407
+        },
+        "matrizMs": {
+          "p50": 0.3,
+          "p95": 0.4,
+          "max": 1.1,
+          "n": 407
+        },
+        "sobraMs": {
+          "p50": 13.2,
+          "p95": 16.7,
+          "max": 66.7,
+          "n": 407
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 1.346,
+          "max": 18.005,
+          "n": 406
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 407
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 26.1,
+          "n": 407
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 407
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 407
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 7493,
+          "lost": false,
+          "clearsTotal": 752,
+          "clearsUltimos3s": 360,
+          "taxaHz": 120
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5434,
+          "lost": false,
+          "clearsTotal": 129,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5248,
+          "lost": false,
+          "clearsTotal": 128,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 887.3999999761581,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 5.4,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 924.1999999880791,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 924.1999999880791,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 926.2999999523163,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 926.5999999642372,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 2370.599999964237,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 87,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2370.7999999523163,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 87,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2372.199999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 87,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2372.399999976158,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 87,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2746.399999976158,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 89,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 2758.5,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 89,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 2762.5,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 89,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 2763,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 89,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 2841.399999976158,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 91,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2842.2999999523163,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 91,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2946.7999999523163,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 93,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 4,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 3094.399999976158,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 94,
+          "dados": {
+            "ms": 134,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 3128.2999999523163,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 95,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 3128.2999999523163,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 95,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 3132.699999988079,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 95,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 3189.899999976158,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 97,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 3190,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 97,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 3272.699999988079,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 103,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 3272.699999988079,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 103,
+          "dados": {
+            "delta": 48,
+            "total": 48
+          }
+        },
+        {
+          "t": 3272.699999988079,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 103,
+          "dados": {
+            "delta": 19,
+            "total": 19
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=30",
+      "mobCount": 30,
+      "voo": {
+        "t": {
+          "p50": 4585.6,
+          "p95": 7352.5,
+          "max": 7652.3,
+          "n": 369
+        },
+        "quadro": {
+          "p50": 184,
+          "p95": 350,
+          "max": 368,
+          "n": 369
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "max": 153.2,
+          "n": 369
+        },
+        "drawCalls": {
+          "p50": 82,
+          "p95": 82,
+          "max": 87,
+          "n": 369
+        },
+        "triangulos": {
+          "p50": 162984,
+          "p95": 162984,
+          "max": 174022,
+          "n": 369
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 369
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 369
+        },
+        "texturas": {
+          "p50": 68,
+          "p95": 68,
+          "max": 68,
+          "n": 369
+        },
+        "renderMs": {
+          "p50": 4.2,
+          "p95": 5.2,
+          "max": 165.1,
+          "n": 369
+        },
+        "gpuMs": {
+          "p50": 3.102,
+          "p95": 17.111,
+          "max": 94.461,
+          "n": 365
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 114.115,
+          "p95": 128.451,
+          "max": 148.465,
+          "n": 369
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 369
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 369
+        },
+        "sceneFilhos": {
+          "p50": 38,
+          "p95": 38,
+          "max": 39,
+          "n": 369
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 369
+        },
+        "objetosRender": {
+          "p50": 98,
+          "p95": 98,
+          "max": 98,
+          "n": 369
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 369
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 369
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 369
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 369
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 369
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 24,
+          "n": 369
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 5.1,
+          "n": 369
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 13.2,
+          "n": 369
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "animacaoMs": {
+          "p50": 0.8,
+          "p95": 1,
+          "max": 1.4,
+          "n": 369
+        },
+        "matrizMs": {
+          "p50": 0.4,
+          "p95": 0.6,
+          "max": 1.2,
+          "n": 369
+        },
+        "sobraMs": {
+          "p50": 11.7,
+          "p95": 16.6,
+          "max": 65.3,
+          "n": 369
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 1.875,
+          "max": 17.898,
+          "n": 368
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 369
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 22.6,
+          "n": 369
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 369
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 369
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 6866,
+          "lost": false,
+          "clearsTotal": 714,
+          "clearsUltimos3s": 360,
+          "taxaHz": 120
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5449,
+          "lost": false,
+          "clearsTotal": 129,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5250,
+          "lost": false,
+          "clearsTotal": 128,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 848.4000000357628,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 5.1,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 896,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 896,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 898.1000000238419,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 898.3000000119209,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1699.6000000238419,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1699.7000000476837,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1701.2000000476837,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1701.300000011921,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 49,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2062.300000011921,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 2072.7000000476837,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 2076.5,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 2077.600000023842,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 51,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 2156.100000023842,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 53,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2156.800000011921,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 53,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2264.900000035763,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 55,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 4.1,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2424.400000035763,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 56,
+          "dados": {
+            "ms": 146,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 2459.7000000476837,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 2459.7000000476837,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2464,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 57,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2528.100000023842,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 59,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 2528.100000023842,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 59,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2585.300000011921,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 64,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 2585.300000011921,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 64,
+          "dados": {
+            "delta": 68,
+            "total": 68
+          }
+        },
+        {
+          "t": 2585.300000011921,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 64,
+          "dados": {
+            "delta": 19,
+            "total": 19
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=50",
+      "mobCount": 50,
+      "voo": {
+        "t": {
+          "p50": 4567.6,
+          "p95": 7165,
+          "max": 7448.2,
+          "n": 347
+        },
+        "quadro": {
+          "p50": 173,
+          "p95": 329,
+          "max": 346,
+          "n": 347
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 19,
+          "max": 169.6,
+          "n": 347
+        },
+        "drawCalls": {
+          "p50": 114,
+          "p95": 114,
+          "max": 117,
+          "n": 347
+        },
+        "triangulos": {
+          "p50": 228126,
+          "p95": 228126,
+          "max": 237806,
+          "n": 347
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 347
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 347
+        },
+        "texturas": {
+          "p50": 108,
+          "p95": 108,
+          "max": 108,
+          "n": 347
+        },
+        "renderMs": {
+          "p50": 6.1,
+          "p95": 7,
+          "max": 161.7,
+          "n": 347
+        },
+        "gpuMs": {
+          "p50": 3.959,
+          "p95": 19.294,
+          "max": 93.134,
+          "n": 342
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 114.806,
+          "p95": 129.562,
+          "max": 168.836,
+          "n": 347
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 347
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 347
+        },
+        "sceneFilhos": {
+          "p50": 58,
+          "p95": 58,
+          "max": 59,
+          "n": 347
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 347
+        },
+        "objetosRender": {
+          "p50": 158,
+          "p95": 158,
+          "max": 158,
+          "n": 347
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 347
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 347
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 347
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 347
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 347
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 18,
+          "n": 347
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 310.9,
+          "n": 347
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 7.6,
+          "n": 347
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 22.6,
+          "n": 347
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "animacaoMs": {
+          "p50": 1.1,
+          "p95": 1.4,
+          "max": 1.7,
+          "n": 347
+        },
+        "matrizMs": {
+          "p50": 0.5,
+          "p95": 0.7,
+          "max": 1.4,
+          "n": 347
+        },
+        "sobraMs": {
+          "p50": 9.5,
+          "p95": 16.6,
+          "max": 64.3,
+          "n": 347
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 2.974,
+          "max": 22.114,
+          "n": 346
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 347
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 23.9,
+          "n": 347
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 347
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 347
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 6639,
+          "lost": false,
+          "clearsTotal": 684,
+          "clearsUltimos3s": 360,
+          "taxaHz": 120
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5168,
+          "lost": false,
+          "clearsTotal": 125,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5158,
+          "lost": false,
+          "clearsTotal": 124,
+          "clearsUltimos3s": 74,
+          "taxaHz": 24.7
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 870.1999999880791,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 6,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 939.3999999761581,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 939.3999999761581,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 940.3000000119209,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 940.3999999761581,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1503.8999999761581,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 32,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1504.1000000238419,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 32,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1507,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 32,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1507.1000000238419,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 32,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1885.1000000238419,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 1897.199999988079,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 1902.800000011921,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1903.6000000238419,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 35,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 1949.3999999761581,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 37,
+          "dados": {
+            "delta": 4,
+            "total": 4
+          }
+        },
+        {
+          "t": 2077.399999976158,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 38,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2078.600000023842,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 38,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2305.800000011921,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 42,
+          "dados": {
+            "ms": 164,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 2341.199999988079,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.7,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2350.899999976158,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 43,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.9,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2411.600000023842,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 2411.600000023842,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2449.800000011921,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 46,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 2449.800000011921,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 46,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2450,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 2450,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "delta": 108,
+            "total": 108
+          }
+        },
+        {
+          "t": 2450,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 47,
+          "dados": {
+            "delta": 15,
+            "total": 19
+          }
+        }
+      ]
+    },
+    {
+      "label": "N=100",
+      "mobCount": 100,
+      "voo": {
+        "t": {
+          "p50": 4682.5,
+          "p95": 7199.3,
+          "max": 7465.9,
+          "n": 335
+        },
+        "quadro": {
+          "p50": 167,
+          "p95": 318,
+          "max": 334,
+          "n": 335
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 21.4,
+          "max": 253.3,
+          "n": 335
+        },
+        "drawCalls": {
+          "p50": 149,
+          "p95": 149,
+          "max": 150,
+          "n": 335
+        },
+        "triangulos": {
+          "p50": 299202,
+          "p95": 299202,
+          "max": 299334,
+          "n": 335
+        },
+        "geometrias": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 335
+        },
+        "programas": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 335
+        },
+        "texturas": {
+          "p50": 208,
+          "p95": 208,
+          "max": 208,
+          "n": 335
+        },
+        "renderMs": {
+          "p50": 11.6,
+          "p95": 14.1,
+          "max": 241.6,
+          "n": 335
+        },
+        "gpuMs": {
+          "p50": 11.25,
+          "p95": 14.266,
+          "max": 102.224,
+          "n": 331
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 117.011,
+          "p95": 137.447,
+          "max": 176.33,
+          "n": 335
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 335
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 335
+        },
+        "sceneFilhos": {
+          "p50": 108,
+          "p95": 108,
+          "max": 109,
+          "n": 335
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 335
+        },
+        "objetosRender": {
+          "p50": 308,
+          "p95": 308,
+          "max": 308,
+          "n": 335
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 335
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 335
+        },
+        "chunksNoCache": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 335
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 335
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 335
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 18,
+          "n": 335
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 5.7,
+          "n": 335
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 36.1,
+          "n": 335
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "animacaoMs": {
+          "p50": 2.1,
+          "p95": 2.6,
+          "max": 3.3,
+          "n": 335
+        },
+        "matrizMs": {
+          "p50": 1.2,
+          "p95": 1.4,
+          "max": 2.2,
+          "n": 335
+        },
+        "sobraMs": {
+          "p50": 2.9,
+          "p95": 16.8,
+          "max": 89.2,
+          "n": 335
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 5.298,
+          "max": 27.71,
+          "n": 334
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 8,
+          "n": 335
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 22.8,
+          "n": 335
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "chunksVisiveis": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 335
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 335
+        }
+      },
+      "ctxSummary": [
+        {
+          "id": 1,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 6731,
+          "lost": false,
+          "clearsTotal": 669,
+          "clearsUltimos3s": 358,
+          "taxaHz": 119.3
+        },
+        {
+          "id": 2,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5461,
+          "lost": false,
+          "clearsTotal": 123,
+          "clearsUltimos3s": 72,
+          "taxaHz": 24
+        },
+        {
+          "id": 3,
+          "type": "webgl2",
+          "canvas": "300x150",
+          "idadeMs": 5151,
+          "lost": false,
+          "clearsTotal": 123,
+          "clearsUltimos3s": 73,
+          "taxaHz": 24.3
+        }
+      ],
+      "eventosRenderer": [
+        {
+          "t": 887.5,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 5.7,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 930.6999999880791,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "contextos": 1
+          }
+        },
+        {
+          "t": 930.6999999880791,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 931.5999999642372,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 931.6999999880791,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1513.699999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 34,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1513.7999999523163,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 34,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 1515.5,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 34,
+          "dados": {
+            "nome": "hud",
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1515.5999999642372,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 34,
+          "dados": {
+            "nome": "retrato:jogador",
+            "characterKey": "barbarian",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 1898.3999999761581,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 36,
+          "dados": {
+            "montagens": 1
+          }
+        },
+        {
+          "t": 1913.3999999761581,
+          "cat": "renderer",
+          "tipo": "sonda-desligada",
+          "walkId": 0,
+          "quadro": 36,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 0
+          }
+        },
+        {
+          "t": 1923.2999999523163,
+          "cat": "renderer",
+          "tipo": "sonda-remontada",
+          "walkId": 0,
+          "quadro": 36,
+          "dados": {
+            "nome": "jogo",
+            "geracao": 1,
+            "contextos": 1
+          }
+        },
+        {
+          "t": 1923.8999999761581,
+          "cat": "cena",
+          "tipo": "montou",
+          "walkId": 0,
+          "quadro": 36,
+          "dados": {
+            "montagens": 2
+          }
+        },
+        {
+          "t": 2023.5999999642372,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 38,
+          "dados": {
+            "delta": 4,
+            "total": 4
+          }
+        },
+        {
+          "t": 2033.199999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 38,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 2034.199999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 38,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 2157.599999964237,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 40,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 4.3,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2459,
+          "cat": "renderer",
+          "tipo": "tarefa-longa",
+          "walkId": 0,
+          "quadro": 42,
+          "dados": {
+            "ms": 246,
+            "nome": "self"
+          }
+        },
+        {
+          "t": 2463.599999964237,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 42,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 2463.699999988079,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 42,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2468.2999999523163,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 42,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.8,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 2555.899999976158,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 44,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 2555.899999976158,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 44,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 2556.199999988079,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "delta": 11,
+            "total": 11
+          }
+        },
+        {
+          "t": 2556.199999988079,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "delta": 208,
+            "total": 208
+          }
+        },
+        {
+          "t": 2556.199999988079,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 45,
+          "dados": {
+            "delta": 15,
+            "total": 19
+          }
+        }
+      ]
+    }
+  ],
+  "taxaPorContexto": [
+    {
+      "id": 1,
+      "type": "webgl2",
+      "canvas": "300x150",
+      "idadeMs": 12587,
+      "lost": false,
+      "clearsTotal": 1422,
+      "clearsUltimos3s": 360,
+      "taxaHz": 120
+    },
+    {
+      "id": 2,
+      "type": "webgl2",
+      "canvas": "300x150",
+      "idadeMs": 11431,
+      "lost": false,
+      "clearsTotal": 276,
+      "clearsUltimos3s": 73,
+      "taxaHz": 24.3
+    },
+    {
+      "id": 3,
+      "type": "webgl2",
+      "canvas": "300x150",
+      "idadeMs": 11268,
+      "lost": false,
+      "clearsTotal": 275,
+      "clearsUltimos3s": 73,
+      "taxaHz": 24.3
+    }
+  ],
+  "timingCortina": [
+    {
+      "t": 1014.8000000119209,
+      "cat": "renderer",
+      "tipo": "canvas-criado",
+      "quadro": 0,
+      "dados": {
+        "nome": "jogo",
+        "contextos": 1
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 0,
+      "programas": 0
+    },
+    {
+      "t": 1014.8000000119209,
+      "cat": "renderer",
+      "tipo": "renderer-criado",
+      "quadro": 0,
+      "dados": {
+        "nome": "jogo",
+        "geracao": 1,
+        "contextos": 1,
+        "canvasNovo": true
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 0,
+      "programas": 0
+    },
+    {
+      "t": 1607.3999999761581,
+      "cat": "cena",
+      "tipo": "montou-em",
+      "quadro": 34,
+      "dados": {
+        "nome": "hud",
+        "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 16.6,
+      "programas": 0
+    },
+    {
+      "t": 1607.6000000238419,
+      "cat": "cena",
+      "tipo": "montou-em",
+      "quadro": 34,
+      "dados": {
+        "nome": "retrato:jogador",
+        "characterKey": "barbarian",
+        "inteiro": false,
+        "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 16.6,
+      "programas": 0
+    },
+    {
+      "t": 1609.8999999761581,
+      "cat": "cena",
+      "tipo": "montou-em",
+      "quadro": 34,
+      "dados": {
+        "nome": "hud",
+        "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 16.6,
+      "programas": 0
+    },
+    {
+      "t": 1610,
+      "cat": "cena",
+      "tipo": "montou-em",
+      "quadro": 34,
+      "dados": {
+        "nome": "retrato:jogador",
+        "characterKey": "barbarian",
+        "inteiro": false,
+        "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 16.6,
+      "programas": 0
+    },
+    {
+      "t": 1977.300000011921,
+      "cat": "cena",
+      "tipo": "montou",
+      "quadro": 36,
+      "dados": {
+        "montagens": 1
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 10.3,
+      "programas": 0
+    },
+    {
+      "t": 1990.6000000238419,
+      "cat": "cena",
+      "tipo": "montou",
+      "quadro": 36,
+      "dados": {
+        "montagens": 2
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 10.3,
+      "programas": 0
+    },
+    {
+      "t": 2146,
+      "cat": "cena",
+      "tipo": "montou-em",
+      "quadro": 38,
+      "dados": {
+        "nome": "retrato:alvo",
+        "characterKey": "skeleton_minion",
+        "inteiro": false,
+        "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2146.899999976158,
+      "cat": "cena",
+      "tipo": "montou-em",
+      "quadro": 38,
+      "dados": {
+        "nome": "retrato:alvo",
+        "characterKey": "skeleton_minion",
+        "inteiro": false,
+        "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2147.600000023842,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 38,
+      "dados": {
+        "ms": 155,
+        "programas": 5
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2147.600000023842,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 38,
+      "dados": {
+        "ms": 155,
+        "programas": 5
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2147.600000023842,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 38,
+      "dados": {
+        "ms": 155,
+        "programas": 5
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2147.600000023842,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 38,
+      "dados": {
+        "ms": 155,
+        "programas": 5
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2147.699999988079,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 38,
+      "dados": {
+        "ms": 155,
+        "programas": 5
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2147.699999988079,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 38,
+      "dados": {
+        "ms": 155,
+        "programas": 5
+      },
+      "sceneVisivel": 0,
+      "quadroMs": 61.9,
+      "programas": 4
+    },
+    {
+      "t": 2306.399999976158,
+      "cat": "renderer",
+      "tipo": "contexto-criado",
+      "quadro": 43,
+      "dados": {
+        "tipo": "webgl2",
+        "ms": 4.3,
+        "tamanho": "300x150"
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 10.6,
+      "programas": 19
+    },
+    {
+      "t": 2315.199999988079,
+      "cat": "renderer",
+      "tipo": "contexto-criado",
+      "quadro": 43,
+      "dados": {
+        "tipo": "webgl2",
+        "ms": 3.4,
+        "tamanho": "300x150"
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 10.6,
+      "programas": 19
+    },
+    {
+      "t": 2350.100000023842,
+      "cat": "renderer",
+      "tipo": "canvas-criado",
+      "quadro": 45,
+      "dados": {
+        "nome": "retrato:jogador",
+        "contextos": 2
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 10.5,
+      "programas": 19
+    },
+    {
+      "t": 2350.100000023842,
+      "cat": "renderer",
+      "tipo": "renderer-criado",
+      "quadro": 45,
+      "dados": {
+        "nome": "retrato:jogador",
+        "geracao": 1,
+        "contextos": 2,
+        "canvasNovo": true
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 10.5,
+      "programas": 19
+    },
+    {
+      "t": 2382.699999988079,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 46,
+      "dados": {
+        "ms": 33,
+        "programas": 1
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 24.5,
+      "programas": 19
+    },
+    {
+      "t": 2383.100000023842,
+      "cat": "renderer",
+      "tipo": "canvas-criado",
+      "quadro": 46,
+      "dados": {
+        "nome": "retrato:alvo",
+        "contextos": 3
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 24.5,
+      "programas": 19
+    },
+    {
+      "t": 2383.100000023842,
+      "cat": "renderer",
+      "tipo": "renderer-criado",
+      "quadro": 46,
+      "dados": {
+        "nome": "retrato:alvo",
+        "geracao": 1,
+        "contextos": 3,
+        "canvasNovo": true
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 24.5,
+      "programas": 19
+    },
+    {
+      "t": 2386.600000023842,
+      "cat": "cena",
+      "tipo": "shader:compile-entidade",
+      "quadro": 47,
+      "dados": {
+        "ms": 4,
+        "programas": 2
+      },
+      "sceneVisivel": 1,
+      "quadroMs": 28.4,
+      "programas": 19
+    }
+  ]
+}

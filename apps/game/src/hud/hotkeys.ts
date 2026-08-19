@@ -5,6 +5,7 @@ import { useAimStore } from "../net/aimStore";
 import { useSkillWalkStore } from "../net/skillWalkStore";
 import { useSkillTargetStore } from "../net/skillTargetStore";
 import { useAttackStore } from "../net/attackStore";
+import { useAtaqueBasico } from "../net/ataqueBasico";
 import { useWorldStore } from "../net/worldStore";
 import { pararMovimentoDeAcao } from "../net/pararMovimentoDeAcao";
 
@@ -61,8 +62,13 @@ export function useHudHotkeys(): void {
         } else if (useSkillTargetStore.getState().pendente) {
           useSkillTargetStore.getState().parar();
           pararMovimentoDeAcao();
-        } else if (useAttackStore.getState().alvo) {
-          // mesma classe de ordem (perseguir pra bater) — mesma regra
+        } else if (useAttackStore.getState().alvo && !useAtaqueBasico.getState().ativo) {
+          // mesma classe de ordem (perseguir pra bater) — mesma regra.
+          // Com o Ataque Básico LIGADO este `alvo` está quase sempre de pé
+          // (é o próprio modo perseguindo); parar só a perseguição deixaria
+          // a skill acesa sem cancelar nada — aqui ESC pula direto para
+          // "tira o alvo", que já desliga o modo junto (ver
+          // `net/ataqueBasico`, o `subscribe` que trata alvo nulo).
           useAttackStore.getState().parar();
           pararMovimentoDeAcao();
         } else if (useWorldStore.getState().target) useWorldStore.getState().setTarget(null);

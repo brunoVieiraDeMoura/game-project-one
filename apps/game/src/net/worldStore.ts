@@ -107,6 +107,18 @@ export interface NetEntity {
   speed: number;
   hp?: number;
   maxHp?: number;
+  /**
+   * `true` = este gid já recebeu HP de uma fonte AO VIVO (`setHp`, vindo de
+   * `entity:hp`/dano real). NÃO é uma segunda representação do HP — só um
+   * marcador de prioridade: uma vez `true`, nenhum re-announce de spawn
+   * (`STANDENTRY`/`NEWENTRY`/`ACTENTRY`/`MOVEENTRY`, todos passam por
+   * `spawn()`) pode mais escrever `hp`/`maxHp` para este gid, só `setHp`.
+   * Espelha a mesma guarda que já existe no gateway (`session.ts: hpAoVivo`)
+   * — aqui do lado do cliente porque `world.spawn()` reaplica `e.hp`/
+   * `e.maxHp` a cada reannounce, e um reannounce carrega o HP que o rAthena
+   * tinha no SPAWN original (cheio), não o atual.
+   */
+  hpAoVivo?: boolean;
   /** nível do mob — vem junto do nome quando `show_mob_info` está ligado */
   level?: number;
   /**
@@ -1072,31 +1084,45 @@ export const useWorldStore = create<WorldState>((set) => ({
   setSelfSpeed: (speed) => set((s) => ({ self: { ...s.self, speed: speed > 0 ? speed : s.self.speed } })),
 
   spawn: (e) =>
-    set((s) => ({
-      // re-spawn (o replay do gateway ao entrar na cena) não pode duplicar o gid
-      gids: s.entities[e.gid] ? s.gids : [...s.gids, e.gid],
-      entities: {
-        ...s.entities,
-        [e.gid]: {
-          ...e,
-          // spawn pode chegar com a entidade já andando; sem o pacote de
-          // movimento junto, tratamos como parada até o próximo NOTIFY_MOVE.
-          toX: e.x,
-          toY: e.y,
-          movedAt: performance.now(),
-          durationMs: 0,
-          // nome/HP/nível só sobrescrevem se vieram: os pacotes de spawn antigos
-          // não trazem e o ACK_REQNAME chega depois. Um re-spawn (o replay do
-          // gateway ao entrar na cena) não pode apagar o que já se sabe.
-          name: e.name ?? s.entities[e.gid]?.name,
-          // HP negativo = "não sei" no protocolo do rAthena; não pode apagar o
-          // valor que a plaquinha já tinha.
-          hp: e.hp !== undefined && e.hp >= 0 ? e.hp : s.entities[e.gid]?.hp,
-          maxHp: e.maxHp !== undefined && e.maxHp > 0 ? e.maxHp : s.entities[e.gid]?.maxHp,
-          level: e.level ?? s.entities[e.gid]?.level,
+    set((s) => {
+      const existente = s.entities[e.gid];
+      // Uma vez que `setHp` já falou por este gid (HP AO VIVO, de dano real),
+      // nenhum re-announce de spawn pode mais escrever hp/maxHp — o pacote de
+      // entrada carrega o HP que o rAthena tinha no SPAWN original (cheio),
+      // não o atual, e MOVEENTRY/ACTENTRY/STANDENTRY/NEWENTRY reanunciam a
+      // entidade toda vez que ela reentra em área de visão/muda de estado.
+      // Sem esta guarda, um reannounce depois de um hit voltava a barra pro
+      // HP cheio (achado ao vivo, "auditoria barra de vida" 2026-08-19).
+      const hpVivo = existente?.hpAoVivo === true;
+      return {
+        // re-spawn (o replay do gateway ao entrar na cena) não pode duplicar o gid
+        gids: existente ? s.gids : [...s.gids, e.gid],
+        entities: {
+          ...s.entities,
+          [e.gid]: {
+            ...e,
+            // spawn pode chegar com a entidade já andando; sem o pacote de
+            // movimento junto, tratamos como parada até o próximo NOTIFY_MOVE.
+            toX: e.x,
+            toY: e.y,
+            movedAt: performance.now(),
+            durationMs: 0,
+            // nome/nível só sobrescrevem se vieram: os pacotes de spawn antigos
+            // não trazem e o ACK_REQNAME chega depois. Um re-spawn (o replay do
+            // gateway ao entrar na cena) não pode apagar o que já se sabe.
+            name: e.name ?? existente?.name,
+            level: e.level ?? existente?.level,
+            // HP: prioridade é HP AO VIVO > HP de spawn/reannounce (ver `hpVivo`
+            // acima). Só cai no valor do pacote quando o gid AINDA não tem HP
+            // confiável — aí vale a regra de sempre (HP negativo = "não sei",
+            // não pode apagar o que a plaquinha já tinha).
+            hp: hpVivo ? existente!.hp : e.hp !== undefined && e.hp >= 0 ? e.hp : existente?.hp,
+            maxHp: hpVivo ? existente!.maxHp : e.maxHp !== undefined && e.maxHp > 0 ? e.maxHp : existente?.maxHp,
+            hpAoVivo: hpVivo,
+          },
         },
-      },
-    })),
+      };
+    }),
 
   move: (gid, from, to, speed, startTime) =>
     set((s) => {
@@ -1281,7 +1307,12 @@ export const useWorldStore = create<WorldState>((set) => ({
     set((s) => (s.entities[gid] ? { entities: { ...s.entities, [gid]: { ...s.entities[gid]!, level } } } : s)),
 
   setHp: (gid, hp, maxHp) =>
-    set((s) => (s.entities[gid] ? { entities: { ...s.entities, [gid]: { ...s.entities[gid]!, hp, maxHp } } } : s)),
+    set((s) => {
+      if (!s.entities[gid]) return s;
+      // fonte AO VIVO (dano real, `entity:hp`) — a partir daqui `spawn()` para
+      // de poder escrever hp/maxHp deste gid (ver a guarda em `spawn()`).
+      return { entities: { ...s.entities, [gid]: { ...s.entities[gid]!, hp, maxHp, hpAoVivo: true } } };
+    }),
 
   setOption: (gid, opt1) =>
     set((s) => (s.entities[gid] ? { entities: { ...s.entities, [gid]: { ...s.entities[gid]!, opt1 } } } : s)),

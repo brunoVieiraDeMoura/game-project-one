@@ -58,18 +58,18 @@ const {
 
 const BASE = "/assets/audio/combat/mage/skills";
 const COLD_BOLT_CAST = `${BASE}/cold-bolt/cast.mp3`;
-const coldBoltHit = (tier: string) => `${BASE}/cold-bolt/hit-lvl-${tier}.mp3`;
+const COLD_BOLT_HIT = `${BASE}/cold-bolt/hit.mp3`;
 
 const FIRE_BOLT_CAST = `${BASE}/fire-bolt/cast.mp3`;
-const fireBoltHit = (tier: string) => `${BASE}/fire-bolt/hit-lvl-${tier}.mp3`;
+const FIRE_BOLT_HIT = `${BASE}/fire-bolt/hit.mp3`;
 
 const THUNDER_STORM_CAST = `${BASE}/thunder-storm/cast.mp3`;
-const thunderStormHit = (tier: string) => `${BASE}/thunder-storm/hit-lvl-${tier}.mp3`;
+const THUNDER_STORM_HIT = `${BASE}/thunder-storm/hit.mp3`;
 
 const LIGHT_BOLT_CAST = `${BASE}/light-bolt/cast.mp3`;
-const lightBoltHit = (tier: string) => `${BASE}/light-bolt/hit-lvl-${tier}.mp3`;
+const LIGHT_BOLT_HIT = `${BASE}/light-bolt/hit.mp3`;
 
-const soulStrikeHit = (tier: string) => `${BASE}/soul-strike/hit-lvl-${tier}.mp3`;
+const SOUL_STRIKE_HIT = `${BASE}/soul-strike/hit.mp3`;
 
 const COLD_BOLT_ID = 14;
 const FIRE_BOLT_ID = 19;
@@ -271,7 +271,7 @@ describe("aoLiberarCastMultiHit — SÓ skills de ALVO com cast (Cold Bolt/Fire 
     expect(criadas).toHaveLength(0);
     vi.advanceTimersByTime(5000);
     // nenhum hit-lvl-*.mp3 deveria ter tocado sozinho
-    expect(criadas.some((a) => a.src.includes("hit-lvl"))).toBe(false);
+    expect(criadas.some((a) => a.src.includes("hit.mp3"))).toBe(false);
   });
 
   it("Fire Bolt: mesma cadência — só para o loop, nenhum som novo", () => {
@@ -328,7 +328,7 @@ describe("aoConcluirCastDeChao (skill:ground-cast, só Thunder Storm) — só pa
     aoComecarCastMultiHit(THUNDER_STORM_ID);
     aoConcluirCastDeChao(THUNDER_STORM_ID);
     expect(elementoDe(THUNDER_STORM_CAST)!.paused).toBe(true);
-    expect(criadas.some((a) => a.src.includes("hit-lvl"))).toBe(false);
+    expect(criadas.some((a) => a.src.includes("hit.mp3"))).toBe(false);
   });
 
   it("skill fora do lookup: não quebra", () => {
@@ -337,59 +337,61 @@ describe("aoConcluirCastDeChao (skill:ground-cast, só Thunder Storm) — só pa
 });
 
 describe("aoImpactoMultiHit — o som de CADA hit real, chamado do onHit do VFX (nunca de timer)", () => {
-  it("nível 1-2 (1 hit): chamar 1 vez toca hit-lvl-1-2 1 vez", () => {
-    aoImpactoMultiHit(COLD_BOLT_ID, 1);
-    expect(playCallsDe(coldBoltHit("1-2"))).toBe(1);
+  it("1 hit: chamar 1 vez toca hit.mp3 1 vez", () => {
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    expect(playCallsDe(COLD_BOLT_HIT)).toBe(1);
   });
 
-  it("nível 5-6 (3 hits): chamar 3 vezes (uma por onHit real) toca hit-lvl-5-6 3 vezes, nunca 1 vez só", () => {
-    aoImpactoMultiHit(COLD_BOLT_ID, 3);
-    aoImpactoMultiHit(COLD_BOLT_ID, 3);
-    aoImpactoMultiHit(COLD_BOLT_ID, 3);
-    expect(playCallsDe(coldBoltHit("5-6"))).toBe(3);
+  it("3 hits reais: chamar 3 vezes (uma por onHit real) toca hit.mp3 3 vezes, nunca 1 vez só", () => {
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    expect(playCallsDe(COLD_BOLT_HIT)).toBe(3);
   });
 
-  it("nível 9-10 (5 hits): 5 chamadas tocam hit-lvl-9-10 5 vezes", () => {
-    for (let i = 0; i < 5; i++) aoImpactoMultiHit(FIRE_BOLT_ID, 5);
-    expect(playCallsDe(fireBoltHit("9-10"))).toBe(5);
+  it("10 hits reais (nível 10): 10 chamadas tocam hit.mp3 10 vezes", () => {
+    for (let i = 0; i < 10; i++) aoImpactoMultiHit(FIRE_BOLT_ID);
+    expect(playCallsDe(FIRE_BOLT_HIT)).toBe(10);
   });
 
   it("Fire Bolt e Cold Bolt nunca se cruzam — cada um só toca o próprio arquivo", () => {
-    aoImpactoMultiHit(COLD_BOLT_ID, 2);
-    aoImpactoMultiHit(FIRE_BOLT_ID, 2);
-    expect(playCallsDe(coldBoltHit("3-4"))).toBe(1);
-    expect(playCallsDe(fireBoltHit("3-4"))).toBe(1);
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    aoImpactoMultiHit(FIRE_BOLT_ID);
+    expect(playCallsDe(COLD_BOLT_HIT)).toBe(1);
+    expect(playCallsDe(FIRE_BOLT_HIT)).toBe(1);
   });
 
-  it("Thunder Storm: mesma faixa de arquivo que as outras (aoImpactoMultiHit não distingue alvo×chão)", () => {
-    aoImpactoMultiHit(THUNDER_STORM_ID, 4);
-    expect(playCallsDe(thunderStormHit("7-8"))).toBe(1);
+  it("Thunder Storm: mesmo arquivo fixo que as outras (aoImpactoMultiHit não distingue alvo×chão)", () => {
+    aoImpactoMultiHit(THUNDER_STORM_ID);
+    expect(playCallsDe(THUNDER_STORM_HIT)).toBe(1);
   });
 
-  it("Light Bolt: resolve pro próprio arquivo, faixa 1-2", () => {
-    aoImpactoMultiHit(LIGHT_BOLT_ID, 1);
-    expect(playCallsDe(lightBoltHit("1-2"))).toBe(1);
+  it("Light Bolt: resolve pro próprio arquivo", () => {
+    aoImpactoMultiHit(LIGHT_BOLT_ID);
+    expect(playCallsDe(LIGHT_BOLT_HIT)).toBe(1);
   });
 
   it("Soul Strike: resolve pro próprio arquivo mesmo sem cast", () => {
-    aoImpactoMultiHit(SOUL_STRIKE_ID, 5);
-    expect(playCallsDe(soulStrikeHit("9-10"))).toBe(1);
+    aoImpactoMultiHit(SOUL_STRIKE_ID);
+    expect(playCallsDe(SOUL_STRIKE_HIT)).toBe(1);
   });
 
-  it("hits fora de 1-5 (borda) cai na ponta mais próxima, nunca quebra", () => {
-    expect(() => aoImpactoMultiHit(COLD_BOLT_ID, 0)).not.toThrow();
-    expect(playCallsDe(coldBoltHit("1-2"))).toBe(1);
-    expect(() => aoImpactoMultiHit(COLD_BOLT_ID, 99)).not.toThrow();
-    expect(playCallsDe(coldBoltHit("9-10"))).toBe(1);
+  it("chamada rápida seguinte REINICIA o mesmo elemento (playOneShot) — golpe anterior é cortado", () => {
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    const el = elementoDe(COLD_BOLT_HIT)!;
+    el.currentTime = 0.2; // "tocando" quando o próximo golpe chega
+    aoImpactoMultiHit(COLD_BOLT_ID);
+    expect(el.currentTime).toBe(0);
+    expect(el.playCalls).toBe(2);
   });
 
   it("skill fora do lookup: silêncio, não quebra", () => {
-    expect(() => aoImpactoMultiHit(HEAL_ID, 3)).not.toThrow();
+    expect(() => aoImpactoMultiHit(HEAL_ID)).not.toThrow();
     expect(criadas).toHaveLength(0);
   });
 
   it("skill desconhecida do catálogo: silêncio, não quebra", () => {
-    expect(() => aoImpactoMultiHit(999, 3)).not.toThrow();
+    expect(() => aoImpactoMultiHit(999)).not.toThrow();
     expect(criadas).toHaveLength(0);
   });
 });
@@ -399,22 +401,22 @@ describe("fluxo completo — cast + N impactos reais, por skill", () => {
     aoComecarCastMultiHit(COLD_BOLT_ID);
     const loopEl = elementoDe(COLD_BOLT_CAST)!;
     aoLiberarCastMultiHit(COLD_BOLT_ID, true);
-    aoImpactoMultiHit(COLD_BOLT_ID, 1);
+    aoImpactoMultiHit(COLD_BOLT_ID);
     expect(loopEl.paused).toBe(true);
-    expect(playCallsDe(coldBoltHit("1-2"))).toBe(1);
+    expect(playCallsDe(COLD_BOLT_HIT)).toBe(1);
   });
 
-  it("Thunder Storm nível máximo (5 hits AoE): cast, ground-cast, 5 impactos — nunca 5 sons de \"raio descendo\", só 5 impactos", () => {
+  it("Thunder Storm nível máximo (10 hits AoE): cast, ground-cast, 10 impactos — nunca um som só, cada pulso toca o próprio golpe", () => {
     aoComecarCastMultiHit(THUNDER_STORM_ID);
     aoConcluirCastDeChao(THUNDER_STORM_ID);
-    for (let i = 0; i < 5; i++) aoImpactoMultiHit(THUNDER_STORM_ID, 5);
+    for (let i = 0; i < 10; i++) aoImpactoMultiHit(THUNDER_STORM_ID);
     expect(playCallsDe(THUNDER_STORM_CAST)).toBe(1); // loop tocou 1 vez só
-    expect(playCallsDe(thunderStormHit("9-10"))).toBe(5);
+    expect(playCallsDe(THUNDER_STORM_HIT)).toBe(10);
   });
 
-  it("Soul Strike nível 7-8 (4 almas): 4 impactos espirituais, sem cast", () => {
-    for (let i = 0; i < 4; i++) aoImpactoMultiHit(SOUL_STRIKE_ID, 4);
-    expect(playCallsDe(soulStrikeHit("7-8"))).toBe(4);
+  it("Soul Strike nível 8 (4 almas): 4 impactos espirituais, sem cast", () => {
+    for (let i = 0; i < 4; i++) aoImpactoMultiHit(SOUL_STRIKE_ID);
+    expect(playCallsDe(SOUL_STRIKE_HIT)).toBe(4);
   });
 });
 

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { atacar } from "./acoes";
 import { useAttackStore } from "./attackStore";
 import { useWorldStore } from "./worldStore";
+import { pararMovimentoDeAcao } from "./pararMovimentoDeAcao";
 import type { SkillPayload } from "./gateway";
 
 /**
@@ -47,12 +48,25 @@ export const ATAQUE_BASICO: SkillPayload = {
 interface AtaqueBasicoState {
   ativo: boolean;
   alternar: () => void;
+  ativar: () => void;
   desligar: () => void;
+}
+
+/**
+ * O modo pressupõe alvo — não existe "Ataque Básico ligado, batendo em
+ * ninguém". `alternar` (botão da barra) e `ativar` (clique num alvo, ver
+ * `net/acoes.atacar`) passam os dois por aqui: sem `target` no `worldStore`,
+ * ligar é NO-OP, nunca um `ativo: true` órfão que a barra mostraria acesa à
+ * toa.
+ */
+function podeLigar(): boolean {
+  return useWorldStore.getState().target !== null;
 }
 
 export const useAtaqueBasico = create<AtaqueBasicoState>((set) => ({
   ativo: false,
-  alternar: () => set((s) => ({ ativo: !s.ativo })),
+  alternar: () => set((s) => (s.ativo ? { ativo: false } : podeLigar() ? { ativo: true } : s)),
+  ativar: () => set((s) => (s.ativo || !podeLigar() ? s : { ativo: true })),
   desligar: () => set((s) => (s.ativo ? { ativo: false } : s)),
 }));
 
@@ -94,6 +108,11 @@ useWorldStore.subscribe((estado, anterior) => {
   if (estado.target === null) {
     useAtaqueBasico.getState().desligar();
     useAttackStore.getState().parar();
+    // a perseguição pode já ter um `move:to` em voo pro rAthena — sem isto
+    // ele completa o caminho sozinho (`unit.cpp:3259` não persegue, mas
+    // também não pára por conta própria), e o personagem andava até o mob
+    // mesmo depois do alvo ter sumido/sido removido.
+    pararMovimentoDeAcao();
     return;
   }
   baterNoAlvo();

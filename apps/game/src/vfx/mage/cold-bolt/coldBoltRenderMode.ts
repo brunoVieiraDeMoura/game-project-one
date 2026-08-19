@@ -1,45 +1,47 @@
 import { defineVfx, bindSkillVfx, unbindSkillVfx } from "../../core/registry";
-import { COLD_BOLT_IMPACT_GPU_DEF, COLD_BOLT_CAST_GPU_DEF } from "./coldBoltVfxDefGpu";
+import {
+  COLD_BOLT_IMPACT_GPU_DEF,
+  COLD_BOLT_CAST_VFX_ID,
+  coldBoltCastGpuDef,
+  coldBoltProjectileGpuDef,
+  coldBoltImpactBurstGpuDef,
+  type ColdBoltGpuTier,
+} from "./coldBoltVfxDefGpu";
+import { useVfxQuality, getVfxQualityTier } from "../../vfxQualityStore";
 import "./coldBoltDamageDomArt"; // side-effect: registra a arte DOM dos números
 
 /**
- * Flag DOM↔GPU pra Cold Bolt — DIFERENTE do padrão Fire Ball/Oracle
- * (`defineVfx` trocando a MESMA `VfxDefinition`): Cold Bolt não tem
- * `VfxDefinition` nenhuma no Core hoje, o caminho DOM é o dispatcher
- * LEGADO (`vfx/SkillVfx.tsx: IMPACT_VFX.MG_COLDBOLT`), fora do Core
- * inteiramente. "Voltar pro DOM" aqui é `unbindSkillVfx` — sem binding,
- * `resolveSkillVfx("MG_COLDBOLT","impact")` devolve `undefined` de novo e
- * `vfxStore.spawn()` cai no legado sozinho, sem `if` novo em lugar nenhum.
- *
- * `COLD_BOLT_IMPACT_GPU_DEF` é registrada incondicionalmente (só existir no
- * Core não desenha nada sem um binding apontando pra ela) — só o BINDING
- * troca de modo, nunca a definição em si.
- *
- * **GPU é o padrão de produção** — `setColdBoltRenderMode("gpu")` no fim
- * deste arquivo aplica o bind no module-load.
- */
-defineVfx(COLD_BOLT_IMPACT_GPU_DEF);
-defineVfx(COLD_BOLT_CAST_GPU_DEF);
-
-/**
- * Fragmento de gelo caindo: NÃO tem `VfxDefinition`/bind próprio mais
- * (refatoração "Generic Hit VFX", 2026-08-19) — usa o fragmento GENÉRICO
- * compartilhado (`vfx/mage/multiHitShardImpact.ts: GENERIC_HIT_SHARD_ID`),
- * cor derivada do `element` REAL da skill (`Water`, skill_db), disparado
- * direto por `spawnMultiHitShards()` a partir de `net/useWorldEvents.ts`
- * (via `vfx/mage/multiHitRegistry.ts: MULTI_HIT_SHARD_VFX`). Nenhum
- * registro/bind aqui pra isso — é exatamente o ponto: uma skill multi-hit
- * nova não precisa de nada neste arquivo pro fragmento funcionar.
+ * Flag DOM↔GPU + tier de qualidade pra Cold Bolt (reconstrução
+ * 2026-08-19-d) — MESMO padrão de `fire-lance/fireLanceRenderMode.ts`,
+ * ver aquele arquivo pro raciocínio completo (config GLOBAL de qualidade,
+ * override de dev que nunca persiste, cast re-registrado sob 1 id estável
+ * a cada troca de tier). Não duplicado aqui.
  */
 export type ColdBoltRenderMode = "dom" | "gpu";
 
+const ALL_TIERS: readonly ColdBoltGpuTier[] = ["low", "medium", "high"];
+defineVfx(COLD_BOLT_IMPACT_GPU_DEF);
+for (const t of ALL_TIERS) {
+  defineVfx(coldBoltProjectileGpuDef(t));
+  defineVfx(coldBoltImpactBurstGpuDef(t));
+}
+
 let mode: ColdBoltRenderMode = "gpu";
+let devTierOverride: ColdBoltGpuTier | null = null;
+
+export function coldBoltQualityTier(): ColdBoltGpuTier {
+  return devTierOverride ?? getVfxQualityTier();
+}
+
+function applyCastTier(): void {
+  defineVfx(coldBoltCastGpuDef(coldBoltQualityTier()));
+}
 
 export function setColdBoltRenderMode(next: ColdBoltRenderMode): void {
   mode = next;
   if (next === "gpu") {
     bindSkillVfx("MG_COLDBOLT", "impact", COLD_BOLT_IMPACT_GPU_DEF.id);
-    bindSkillVfx("MG_COLDBOLT", "cast", COLD_BOLT_CAST_GPU_DEF.id);
+    bindSkillVfx("MG_COLDBOLT", "cast", COLD_BOLT_CAST_VFX_ID);
   } else {
     unbindSkillVfx("MG_COLDBOLT", "impact");
     unbindSkillVfx("MG_COLDBOLT", "cast");
@@ -50,11 +52,29 @@ export function coldBoltRenderMode(): ColdBoltRenderMode {
   return mode;
 }
 
+export function setColdBoltQualityTier(next: ColdBoltGpuTier): void {
+  devTierOverride = next;
+  applyCastTier();
+}
+
+export function clearColdBoltQualityOverride(): void {
+  devTierOverride = null;
+  applyCastTier();
+}
+
 setColdBoltRenderMode(mode); // aplica o padrão de produção no module-load
+applyCastTier(); // registra o cast pro tier efetivo inicial (config global, default "high")
+
+useVfxQuality.subscribe(() => {
+  if (devTierOverride === null) applyCastTier();
+});
 
 if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as unknown as { __coldBoltRenderBench?: unknown }).__coldBoltRenderBench = {
     set: setColdBoltRenderMode,
     get: coldBoltRenderMode,
+    setTier: setColdBoltQualityTier,
+    getTier: coldBoltQualityTier,
+    clearTierOverride: clearColdBoltQualityOverride,
   };
 }

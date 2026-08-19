@@ -1,0 +1,50 @@
+{
+  "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "errosAteSettle": [],
+  "estabilidadeRecursos": {
+    "antes": {
+      "geometrias": 0,
+      "texturas": 0,
+      "programas": 0
+    },
+    "depois": {
+      "geometrias": 0,
+      "texturas": 0,
+      "programas": 0
+    }
+  },
+  "results": [
+    {
+      "label": "petrify COLD (wait, entidade 2001)",
+      "programsBefore": 0,
+      "programsAfter": 0,
+      "novoPrograma": false,
+      "quadroMsMax": 17,
+      "renderMsMax": 0.3,
+      "gpuMsMax": 0.01,
+      "errosConsole": []
+    },
+    {
+      "label": "petrify WARM (stone, entidade 2001)",
+      "programsBefore": 0,
+      "programsAfter": 0,
+      "novoPrograma": false,
+      "quadroMsMax": 17.8,
+      "renderMsMax": 0.2,
+      "gpuMsMax": 0.008,
+      "errosConsole": []
+    },
+    {
+      "label": "petrify WARM (wait, entidade 2002 nova)",
+      "programsBefore": 0,
+      "programsAfter": 0,
+      "novoPrograma": false,
+      "quadroMsMax": 17.3,
+      "renderMsMax": 0.2,
+      "gpuMsMax": 0.011,
+      "errosConsole": []
+    }
+  ],
+  "totalErrosConsole": 0,
+  "errosConsoleTodos": []
+}

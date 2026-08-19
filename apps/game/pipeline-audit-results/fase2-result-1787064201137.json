@@ -1,0 +1,8497 @@
+{
+  "reproducao": {
+    "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "label": "reprodução N=30",
+    "mobCount": 30,
+    "iso": "",
+    "voo": {
+      "t": {
+        "p50": 10409.3,
+        "p95": 11775.3,
+        "max": 11909.2,
+        "n": 178
+      },
+      "quadro": {
+        "p50": 89,
+        "p95": 169,
+        "max": 177,
+        "n": 178
+      },
+      "walkId": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "trechoSeq": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "tickServidor": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "renderX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "renderZ": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "logicoX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "logicoY": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "movendo": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "destinoX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "destinoY": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "predito": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "causa": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "servidorX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "servidorY": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "filaPredicao": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "pedidoNoAr": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "temDestinoFinal": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "rttMedido": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "dtEntreSnapshots": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "quadroMs": {
+        "p50": 16.7,
+        "p95": 17.6,
+        "max": 35.4,
+        "n": 178
+      },
+      "drawCalls": {
+        "p50": 74,
+        "p95": 74,
+        "max": 74,
+        "n": 178
+      },
+      "triangulos": {
+        "p50": 153218,
+        "p95": 153218,
+        "max": 153218,
+        "n": 178
+      },
+      "geometrias": {
+        "p50": 23,
+        "p95": 23,
+        "max": 23,
+        "n": 178
+      },
+      "programas": {
+        "p50": 42,
+        "p95": 42,
+        "max": 42,
+        "n": 178
+      },
+      "texturas": {
+        "p50": 71,
+        "p95": 71,
+        "max": 71,
+        "n": 178
+      },
+      "renderMs": {
+        "p50": 4.9,
+        "p95": 6.4,
+        "max": 10.6,
+        "n": 178
+      },
+      "gpuMs": {
+        "p50": 6.334,
+        "p95": 16.928,
+        "max": 51.257,
+        "n": 173
+      },
+      "memoriaGpuMb": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "heapMb": {
+        "p50": 118.642,
+        "p95": 131.416,
+        "max": 132.273,
+        "n": 178
+      },
+      "contextosVivos": {
+        "p50": 3,
+        "p95": 3,
+        "max": 3,
+        "n": 178
+      },
+      "rendererId": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 178
+      },
+      "sceneFilhos": {
+        "p50": 39,
+        "p95": 39,
+        "max": 39,
+        "n": 178
+      },
+      "sceneVisivel": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 178
+      },
+      "objetosRender": {
+        "p50": 112,
+        "p95": 112,
+        "max": 112,
+        "n": 178
+      },
+      "cameraId": {
+        "p50": 48,
+        "p95": 48,
+        "max": 48,
+        "n": 178
+      },
+      "cameraOk": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 178
+      },
+      "chunksNoCache": {
+        "p50": 9,
+        "p95": 9,
+        "max": 9,
+        "n": 178
+      },
+      "propsVisiveis": {
+        "p50": 59,
+        "p95": 59,
+        "max": 59,
+        "n": 178
+      },
+      "suspensoes": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 178
+      },
+      "desmontagensCena": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 178
+      },
+      "assetsEmVoo": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "suspensoMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "contextoMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "descarteMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "modeloMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "trocaMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "animacaoMs": {
+        "p50": 0.7,
+        "p95": 1.1,
+        "max": 1.6,
+        "n": 178
+      },
+      "matrizMs": {
+        "p50": 0.4,
+        "p95": 0.7,
+        "max": 3.6,
+        "n": 178
+      },
+      "sobraMs": {
+        "p50": 11,
+        "p95": 12.3,
+        "max": 28.3,
+        "n": 178
+      },
+      "heapDeltaMb": {
+        "p50": 0,
+        "p95": 1.916,
+        "max": 4.393,
+        "n": 178
+      },
+      "chunksConstruidos": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "msDeChunk": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "filaDeChunks": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "chunksVisiveis": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "vfxAtivos": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "vfxHtmlCount": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "vfxDomNodeCount": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "vfxLongTaskCount": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "vfxLongTaskMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      },
+      "vfxMutacoes": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 178
+      }
+    },
+    "cdpDeltaMs": {
+      "ScriptDuration": 1.237,
+      "RecalcStyleDuration": 0,
+      "LayoutDuration": 0,
+      "TaskDuration": 1.302,
+      "JSHeapUsedSize": 11037580
+    },
+    "reactCommitsPerSec": -0.3333333333333333,
+    "glInfo": {
+      "calls": 74,
+      "triangles": 153218,
+      "geometries": 23,
+      "textures": 71,
+      "programs": 42
+    },
+    "sceneStats": {
+      "meshes": 112,
+      "skinnedMeshes": 61,
+      "instancedMeshes": 8,
+      "castShadowCount": 98,
+      "lights": 2
+    },
+    "domNodeCount": 290,
+    "focusState": {
+      "hidden": false,
+      "hasFocus": true
+    },
+    "suspeito": false
+  },
+  "curvaCompleta": [
+    {
+      "label": "completo N=0",
+      "mobCount": 0,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8630.6,
+          "p95": 9980.6,
+          "max": 10114.4,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.3,
+          "max": 17.8,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 40736,
+          "p95": 40736,
+          "max": 40736,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 20,
+          "p95": 20,
+          "max": 20,
+          "n": 180
+        },
+        "programas": {
+          "p50": 32,
+          "p95": 32,
+          "max": 32,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 10,
+          "p95": 10,
+          "max": 10,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 0.9,
+          "p95": 1.3,
+          "max": 1.7,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 2.594,
+          "p95": 4.039,
+          "max": 7.157,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 106.9,
+          "p95": 109.906,
+          "max": 110.171,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 22,
+          "p95": 22,
+          "max": 22,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.5,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0,
+          "p95": 0.1,
+          "max": 0.2,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 15.7,
+          "p95": 16.1,
+          "max": 16.7,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.151,
+          "max": 0.157,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.374,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.441,
+        "JSHeapUsedSize": 7056640
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 19,
+        "triangles": 40736,
+        "geometries": 20,
+        "textures": 10,
+        "programs": 32
+      },
+      "sceneStats": {
+        "meshes": 22,
+        "skinnedMeshes": 1,
+        "instancedMeshes": 8,
+        "castShadowCount": 8,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=1",
+      "mobCount": 1,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8288.6,
+          "p95": 9638.6,
+          "max": 9771,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.4,
+          "max": 18.3,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 22,
+          "p95": 22,
+          "max": 22,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 46670,
+          "p95": 46670,
+          "max": 46670,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 180
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 13,
+          "p95": 13,
+          "max": 13,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 1.3,
+          "p95": 2,
+          "max": 5.2,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 3.179,
+          "p95": 5,
+          "max": 7.381,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 124.903,
+          "p95": 129.842,
+          "max": 130.268,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 10,
+          "p95": 10,
+          "max": 10,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 25,
+          "p95": 25,
+          "max": 25,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 55,
+          "p95": 55,
+          "max": 55,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.4,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0.1,
+          "p95": 0.1,
+          "max": 0.9,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 15.3,
+          "p95": 15.9,
+          "max": 16.8,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.245,
+          "max": 0.369,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.452,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.558,
+        "JSHeapUsedSize": -18997764
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 22,
+        "triangles": 46670,
+        "geometries": 23,
+        "textures": 13,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 25,
+        "skinnedMeshes": 3,
+        "instancedMeshes": 8,
+        "castShadowCount": 11,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=5",
+      "mobCount": 5,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8295.9,
+          "p95": 9645.8,
+          "max": 9779.2,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.5,
+          "max": 18,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 34,
+          "p95": 34,
+          "max": 34,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 70406,
+          "p95": 70406,
+          "max": 70406,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 180
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 21,
+          "p95": 21,
+          "max": 21,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 2.2,
+          "p95": 3,
+          "max": 4.8,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 3.915,
+          "p95": 5.524,
+          "max": 6.621,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 106.084,
+          "p95": 117.399,
+          "max": 118.338,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 14,
+          "p95": 14,
+          "max": 14,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 37,
+          "p95": 37,
+          "max": 37,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.2,
+          "p95": 0.4,
+          "max": 0.7,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 2.7,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 14.2,
+          "p95": 15.2,
+          "max": 15.5,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.533,
+          "max": 0.597,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.637,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.713,
+        "JSHeapUsedSize": -170636
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 34,
+        "triangles": 70406,
+        "geometries": 23,
+        "textures": 21,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 37,
+        "skinnedMeshes": 11,
+        "instancedMeshes": 8,
+        "castShadowCount": 23,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=10",
+      "mobCount": 10,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8504.9,
+          "p95": 9854.7,
+          "max": 9988.1,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "max": 17.7,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 45,
+          "p95": 45,
+          "max": 45,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 94010,
+          "p95": 94010,
+          "max": 94010,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 180
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 31,
+          "p95": 31,
+          "max": 31,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 2.9,
+          "p95": 3.9,
+          "max": 7.1,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 4.074,
+          "p95": 6.427,
+          "max": 7.225,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 113.015,
+          "p95": 121.216,
+          "max": 122.461,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 52,
+          "p95": 52,
+          "max": 52,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.3,
+          "p95": 0.5,
+          "max": 0.6,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0.2,
+          "p95": 0.4,
+          "max": 4.8,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 13.5,
+          "p95": 14.1,
+          "max": 14.5,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.819,
+          "max": 0.852,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.746,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.811,
+        "JSHeapUsedSize": -14715348
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 45,
+        "triangles": 94010,
+        "geometries": 23,
+        "textures": 31,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 52,
+        "skinnedMeshes": 21,
+        "instancedMeshes": 8,
+        "castShadowCount": 38,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=20",
+      "mobCount": 20,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8285,
+          "p95": 9634.5,
+          "max": 9768.2,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.5,
+          "max": 18.6,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 63,
+          "p95": 63,
+          "max": 63,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 129614,
+          "p95": 129614,
+          "max": 129614,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 180
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 51,
+          "p95": 51,
+          "max": 51,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 4,
+          "p95": 4.7,
+          "max": 9.7,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 6.07,
+          "p95": 7.58,
+          "max": 11.958,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 111.504,
+          "p95": 124.104,
+          "max": 125.176,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 29,
+          "p95": 29,
+          "max": 29,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 82,
+          "p95": 82,
+          "max": 82,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.6,
+          "p95": 0.9,
+          "max": 1.5,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0.4,
+          "p95": 0.6,
+          "max": 2.7,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 12.1,
+          "p95": 13.1,
+          "max": 13.3,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 1.364,
+          "max": 1.402,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 1.045,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 1.117,
+        "JSHeapUsedSize": -15726040
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 63,
+        "triangles": 129614,
+        "geometries": 23,
+        "textures": 51,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 82,
+        "skinnedMeshes": 41,
+        "instancedMeshes": 8,
+        "castShadowCount": 68,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=30",
+      "mobCount": 30,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8301.8,
+          "p95": 9652.2,
+          "max": 9785.6,
+          "n": 179
+        },
+        "quadro": {
+          "p50": 89,
+          "p95": 170,
+          "max": 178,
+          "n": 179
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.6,
+          "max": 18.1,
+          "n": 179
+        },
+        "drawCalls": {
+          "p50": 74,
+          "p95": 74,
+          "max": 74,
+          "n": 179
+        },
+        "triangulos": {
+          "p50": 153218,
+          "p95": 153218,
+          "max": 153218,
+          "n": 179
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 179
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 179
+        },
+        "texturas": {
+          "p50": 71,
+          "p95": 71,
+          "max": 71,
+          "n": 179
+        },
+        "renderMs": {
+          "p50": 5,
+          "p95": 6,
+          "max": 7.4,
+          "n": 179
+        },
+        "gpuMs": {
+          "p50": 6.736,
+          "p95": 8.945,
+          "max": 9.775,
+          "n": 179
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 129.618,
+          "p95": 140.245,
+          "max": 140.955,
+          "n": 179
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 179
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 179
+        },
+        "sceneFilhos": {
+          "p50": 39,
+          "p95": 39,
+          "max": 39,
+          "n": 179
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 179
+        },
+        "objetosRender": {
+          "p50": 112,
+          "p95": 112,
+          "max": 112,
+          "n": 179
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 179
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 179
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 179
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 179
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 179
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 179
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "animacaoMs": {
+          "p50": 0.9,
+          "p95": 1.4,
+          "max": 3.9,
+          "n": 179
+        },
+        "matrizMs": {
+          "p50": 0.6,
+          "p95": 1,
+          "max": 2.3,
+          "n": 179
+        },
+        "sobraMs": {
+          "p50": 10.7,
+          "p95": 11.8,
+          "max": 12.6,
+          "n": 179
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 1.8,
+          "max": 1.939,
+          "n": 179
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 179
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 1.305,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 1.382,
+        "JSHeapUsedSize": 4628888
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 74,
+        "triangles": 153218,
+        "geometries": 23,
+        "textures": 71,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 112,
+        "skinnedMeshes": 61,
+        "instancedMeshes": 8,
+        "castShadowCount": 98,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=50",
+      "mobCount": 50,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8346.3,
+          "p95": 9696.5,
+          "max": 9830.3,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.6,
+          "max": 18.1,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 100,
+          "p95": 100,
+          "max": 100,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 206492,
+          "p95": 206492,
+          "max": 206492,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 180
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 111,
+          "p95": 111,
+          "max": 111,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 6.7,
+          "p95": 7.6,
+          "max": 9.6,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 8.536,
+          "p95": 13.393,
+          "max": 14.887,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 168.234,
+          "p95": 180.351,
+          "max": 180.882,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 172,
+          "p95": 172,
+          "max": 172,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 1.2,
+          "p95": 1.8,
+          "max": 4.6,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0.8,
+          "p95": 1.1,
+          "max": 1.7,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 8.7,
+          "p95": 9.9,
+          "max": 10.7,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 2.773,
+          "max": 2.785,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 1.643,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 1.712,
+        "JSHeapUsedSize": -5859632
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 100,
+        "triangles": 206492,
+        "geometries": 23,
+        "textures": 111,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 172,
+        "skinnedMeshes": 101,
+        "instancedMeshes": 8,
+        "castShadowCount": 158,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "completo N=100",
+      "mobCount": 100,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8398,
+          "p95": 9756.7,
+          "max": 9890.4,
+          "n": 178
+        },
+        "quadro": {
+          "p50": 89,
+          "p95": 169,
+          "max": 177,
+          "n": 178
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 20,
+          "max": 25.4,
+          "n": 178
+        },
+        "drawCalls": {
+          "p50": 129,
+          "p95": 129,
+          "max": 129,
+          "n": 178
+        },
+        "triangulos": {
+          "p50": 265700,
+          "p95": 265700,
+          "max": 265700,
+          "n": 178
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 178
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 178
+        },
+        "texturas": {
+          "p50": 203,
+          "p95": 203,
+          "max": 203,
+          "n": 178
+        },
+        "renderMs": {
+          "p50": 13.1,
+          "p95": 15.3,
+          "max": 21.5,
+          "n": 178
+        },
+        "gpuMs": {
+          "p50": 10.394,
+          "p95": 13.26,
+          "max": 17.637,
+          "n": 177
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 142.092,
+          "p95": 157.166,
+          "max": 159.276,
+          "n": 178
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 178
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "sceneFilhos": {
+          "p50": 109,
+          "p95": 109,
+          "max": 109,
+          "n": 178
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "objetosRender": {
+          "p50": 322,
+          "p95": 322,
+          "max": 322,
+          "n": 178
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 178
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 178
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 178
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "animacaoMs": {
+          "p50": 2.1,
+          "p95": 3.7,
+          "max": 5.7,
+          "n": 178
+        },
+        "matrizMs": {
+          "p50": 1.1,
+          "p95": 2.4,
+          "max": 3.6,
+          "n": 178
+        },
+        "sobraMs": {
+          "p50": 1.4,
+          "p95": 3.4,
+          "max": 4.6,
+          "n": 178
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 4.881,
+          "max": 4.917,
+          "n": 178
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 2.931,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 2.995,
+        "JSHeapUsedSize": -7261680
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 129,
+        "triangles": 265700,
+        "geometries": 23,
+        "textures": 203,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 322,
+        "skinnedMeshes": 201,
+        "instancedMeshes": 8,
+        "castShadowCount": 308,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    }
+  ],
+  "curvaEntidade": [
+    {
+      "label": "entidade N=0",
+      "mobCount": 0,
+      "iso": "semTerreno,semProps,semAgua,semCeuFoto,semNevoa,semHorizonte,semImpostorArvore,semVento,semSol,semAmbiente,semParticulas",
+      "voo": {
+        "t": {
+          "p50": 7430.6,
+          "p95": 8780.9,
+          "max": 8914.3,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.4,
+          "max": 17.8,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 5,
+          "p95": 5,
+          "max": 5,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 7534,
+          "p95": 7534,
+          "max": 7534,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 180
+        },
+        "programas": {
+          "p50": 6,
+          "p95": 6,
+          "max": 6,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 0.5,
+          "p95": 0.8,
+          "max": 0.9,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 0.389,
+          "p95": 0.933,
+          "max": 3.285,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 161.73,
+          "p95": 163.647,
+          "max": 163.844,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 6,
+          "p95": 6,
+          "max": 6,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 4,
+          "p95": 4,
+          "max": 4,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 27,
+          "p95": 27,
+          "max": 27,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.4,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0,
+          "p95": 0.1,
+          "max": 0.3,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 16.1,
+          "p95": 16.9,
+          "max": 17.2,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.098,
+          "max": 0.147,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.241,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.327,
+        "JSHeapUsedSize": 4516684
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 5,
+        "triangles": 7534,
+        "geometries": 4,
+        "textures": 3,
+        "programs": 6
+      },
+      "sceneStats": {
+        "meshes": 4,
+        "skinnedMeshes": 1,
+        "instancedMeshes": 0,
+        "castShadowCount": 1,
+        "lights": 1
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "entidade N=1",
+      "mobCount": 1,
+      "iso": "semTerreno,semProps,semAgua,semCeuFoto,semNevoa,semHorizonte,semImpostorArvore,semVento,semSol,semAmbiente,semParticulas",
+      "voo": {
+        "t": {
+          "p50": 7252.7,
+          "p95": 8602.4,
+          "max": 8735,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.4,
+          "max": 17.8,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 8,
+          "p95": 8,
+          "max": 8,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 13468,
+          "p95": 13468,
+          "max": 13468,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 180
+        },
+        "programas": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 6,
+          "p95": 6,
+          "max": 6,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 0.7,
+          "p95": 1.1,
+          "max": 4.5,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 0.475,
+          "p95": 1.063,
+          "max": 3.251,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 110.94,
+          "p95": 113.793,
+          "max": 114.066,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 53,
+          "p95": 53,
+          "max": 53,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.5,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0,
+          "p95": 0.2,
+          "max": 0.4,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 15.8,
+          "p95": 16.5,
+          "max": 17.2,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.148,
+          "max": 0.199,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.288,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.393,
+        "JSHeapUsedSize": -20332464
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 8,
+        "triangles": 13468,
+        "geometries": 7,
+        "textures": 6,
+        "programs": 12
+      },
+      "sceneStats": {
+        "meshes": 7,
+        "skinnedMeshes": 3,
+        "instancedMeshes": 0,
+        "castShadowCount": 4,
+        "lights": 1
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "entidade N=5",
+      "mobCount": 5,
+      "iso": "semTerreno,semProps,semAgua,semCeuFoto,semNevoa,semHorizonte,semImpostorArvore,semVento,semSol,semAmbiente,semParticulas",
+      "voo": {
+        "t": {
+          "p50": 7120.9,
+          "p95": 8470.4,
+          "max": 8604,
+          "n": 177
+        },
+        "quadro": {
+          "p50": 88,
+          "p95": 168,
+          "max": 176,
+          "n": 177
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.8,
+          "max": 36.5,
+          "n": 177
+        },
+        "drawCalls": {
+          "p50": 20,
+          "p95": 20,
+          "max": 20,
+          "n": 177
+        },
+        "triangulos": {
+          "p50": 37204,
+          "p95": 37204,
+          "max": 37204,
+          "n": 177
+        },
+        "geometrias": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 177
+        },
+        "programas": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 177
+        },
+        "texturas": {
+          "p50": 14,
+          "p95": 14,
+          "max": 14,
+          "n": 177
+        },
+        "renderMs": {
+          "p50": 1,
+          "p95": 2,
+          "max": 5.4,
+          "n": 177
+        },
+        "gpuMs": {
+          "p50": 0.684,
+          "p95": 16.437,
+          "max": 33.24,
+          "n": 174
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 99.432,
+          "p95": 105.319,
+          "max": 105.883,
+          "n": 177
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 177
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 177
+        },
+        "sceneFilhos": {
+          "p50": 11,
+          "p95": 11,
+          "max": 11,
+          "n": 177
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 177
+        },
+        "objetosRender": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 177
+        },
+        "cameraId": {
+          "p50": 367,
+          "p95": 367,
+          "max": 367,
+          "n": 177
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 177
+        },
+        "chunksNoCache": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 177
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "animacaoMs": {
+          "p50": 0.3,
+          "p95": 0.6,
+          "max": 1.9,
+          "n": 177
+        },
+        "matrizMs": {
+          "p50": 0.2,
+          "p95": 0.3,
+          "max": 0.4,
+          "n": 177
+        },
+        "sobraMs": {
+          "p50": 15.2,
+          "p95": 16.3,
+          "max": 33.7,
+          "n": 177
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.315,
+          "max": 0.39,
+          "n": 177
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 177
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.401,
+        "RecalcStyleDuration": 0.005,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.515,
+        "JSHeapUsedSize": 13548844
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 17,
+        "triangles": 36928,
+        "geometries": 7,
+        "textures": 14,
+        "programs": 12
+      },
+      "sceneStats": {
+        "meshes": 19,
+        "skinnedMeshes": 11,
+        "instancedMeshes": 0,
+        "castShadowCount": 16,
+        "lights": 1
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "entidade N=10",
+      "mobCount": 10,
+      "iso": "semTerreno,semProps,semAgua,semCeuFoto,semNevoa,semHorizonte,semImpostorArvore,semVento,semSol,semAmbiente,semParticulas",
+      "voo": {
+        "t": {
+          "p50": 7337.6,
+          "p95": 8688.4,
+          "max": 8837.5,
+          "n": 181
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 180,
+          "n": 181
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.7,
+          "max": 22.8,
+          "n": 181
+        },
+        "drawCalls": {
+          "p50": 17,
+          "p95": 17,
+          "max": 17,
+          "n": 181
+        },
+        "triangulos": {
+          "p50": 31270,
+          "p95": 31270,
+          "max": 31270,
+          "n": 181
+        },
+        "geometrias": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 181
+        },
+        "programas": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 181
+        },
+        "texturas": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 181
+        },
+        "renderMs": {
+          "p50": 0.9,
+          "p95": 1.5,
+          "max": 4.2,
+          "n": 181
+        },
+        "gpuMs": {
+          "p50": 0.192,
+          "p95": 0.631,
+          "max": 3.311,
+          "n": 181
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 106.609,
+          "p95": 111.178,
+          "max": 111.622,
+          "n": 181
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 181
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "sceneFilhos": {
+          "p50": 10,
+          "p95": 10,
+          "max": 10,
+          "n": 181
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "objetosRender": {
+          "p50": 16,
+          "p95": 16,
+          "max": 16,
+          "n": 181
+        },
+        "cameraId": {
+          "p50": 55,
+          "p95": 55,
+          "max": 55,
+          "n": 181
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "chunksNoCache": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "animacaoMs": {
+          "p50": 0.3,
+          "p95": 0.6,
+          "max": 1,
+          "n": 181
+        },
+        "matrizMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.6,
+          "n": 181
+        },
+        "sobraMs": {
+          "p50": 15.4,
+          "p95": 16.4,
+          "max": 21.7,
+          "n": 181
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.228,
+          "max": 0.291,
+          "n": 181
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.366,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.441,
+        "JSHeapUsedSize": -14854428
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 17,
+        "triangles": 31270,
+        "geometries": 7,
+        "textures": 12,
+        "programs": 12
+      },
+      "sceneStats": {
+        "meshes": 16,
+        "skinnedMeshes": 9,
+        "instancedMeshes": 0,
+        "castShadowCount": 13,
+        "lights": 1
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "entidade N=20",
+      "mobCount": 20,
+      "iso": "semTerreno,semProps,semAgua,semCeuFoto,semNevoa,semHorizonte,semImpostorArvore,semVento,semSol,semAmbiente,semParticulas",
+      "voo": {
+        "t": {
+          "p50": 6836.6,
+          "p95": 7903.1,
+          "max": 8021.1,
+          "n": 144
+        },
+        "quadro": {
+          "p50": 72,
+          "p95": 136,
+          "max": 143,
+          "n": 144
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "quadroMs": {
+          "p50": 16.6,
+          "p95": 17.5,
+          "max": 29.1,
+          "n": 144
+        },
+        "drawCalls": {
+          "p50": 29,
+          "p95": 29,
+          "max": 29,
+          "n": 144
+        },
+        "triangulos": {
+          "p50": 55006,
+          "p95": 55006,
+          "max": 55006,
+          "n": 144
+        },
+        "geometrias": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 144
+        },
+        "programas": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 144
+        },
+        "texturas": {
+          "p50": 20,
+          "p95": 20,
+          "max": 20,
+          "n": 144
+        },
+        "renderMs": {
+          "p50": 1.4,
+          "p95": 1.9,
+          "max": 3.9,
+          "n": 144
+        },
+        "gpuMs": {
+          "p50": 0.291,
+          "p95": 16.537,
+          "max": 16.72,
+          "n": 141
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 98.242,
+          "p95": 104.13,
+          "max": 104.953,
+          "n": 144
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 144
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 144
+        },
+        "sceneFilhos": {
+          "p50": 15,
+          "p95": 15,
+          "max": 15,
+          "n": 144
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 144
+        },
+        "objetosRender": {
+          "p50": 31,
+          "p95": 31,
+          "max": 31,
+          "n": 144
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 144
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 144
+        },
+        "chunksNoCache": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 144
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "animacaoMs": {
+          "p50": 0.5,
+          "p95": 0.8,
+          "max": 2.6,
+          "n": 144
+        },
+        "matrizMs": {
+          "p50": 0.2,
+          "p95": 0.5,
+          "max": 0.8,
+          "n": 144
+        },
+        "sobraMs": {
+          "p50": 14.7,
+          "p95": 15.8,
+          "max": 27.4,
+          "n": 144
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.376,
+          "max": 0.431,
+          "n": 144
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 144
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.395,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.465,
+        "JSHeapUsedSize": 14159612
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 29,
+        "triangles": 55006,
+        "geometries": 7,
+        "textures": 20,
+        "programs": 12
+      },
+      "sceneStats": {
+        "meshes": 31,
+        "skinnedMeshes": 19,
+        "instancedMeshes": 0,
+        "castShadowCount": 28,
+        "lights": 1
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    {
+      "label": "entidade N=30",
+      "mobCount": 30,
+      "iso": "semTerreno,semProps,semAgua,semCeuFoto,semNevoa,semHorizonte,semImpostorArvore,semVento,semSol,semAmbiente,semParticulas",
+      "voo": {
+        "t": {
+          "p50": 7268.7,
+          "p95": 8601.7,
+          "max": 8735.4,
+          "n": 178
+        },
+        "quadro": {
+          "p50": 89,
+          "p95": 169,
+          "max": 177,
+          "n": 178
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "quadroMs": {
+          "p50": 16.6,
+          "p95": 17.9,
+          "max": 584.2,
+          "n": 178
+        },
+        "drawCalls": {
+          "p50": 23,
+          "p95": 26,
+          "max": 29,
+          "n": 178
+        },
+        "triangulos": {
+          "p50": 43138,
+          "p95": 49770,
+          "max": 55006,
+          "n": 178
+        },
+        "geometrias": {
+          "p50": 7,
+          "p95": 7,
+          "max": 7,
+          "n": 178
+        },
+        "programas": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 178
+        },
+        "texturas": {
+          "p50": 20,
+          "p95": 20,
+          "max": 20,
+          "n": 178
+        },
+        "renderMs": {
+          "p50": 1.1,
+          "p95": 2.3,
+          "max": 87.5,
+          "n": 178
+        },
+        "gpuMs": {
+          "p50": 0.786,
+          "p95": 16.564,
+          "max": 16.795,
+          "n": 174
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 129.132,
+          "p95": 136.284,
+          "max": 169.736,
+          "n": 178
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 178
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "sceneFilhos": {
+          "p50": 15,
+          "p95": 16,
+          "max": 16,
+          "n": 178
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "objetosRender": {
+          "p50": 31,
+          "p95": 31,
+          "max": 31,
+          "n": 178
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 178
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "chunksNoCache": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 178
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 9,
+          "n": 178
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 3.9,
+          "n": 178
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "animacaoMs": {
+          "p50": 0.3,
+          "p95": 0.6,
+          "max": 1,
+          "n": 178
+        },
+        "matrizMs": {
+          "p50": 0.2,
+          "p95": 0.3,
+          "max": 0.8,
+          "n": 178
+        },
+        "sobraMs": {
+          "p50": 15.2,
+          "p95": 16.3,
+          "max": 483.1,
+          "n": 178
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.349,
+          "max": 14.155,
+          "n": 178
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 178
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.482,
+        "RecalcStyleDuration": 0.001,
+        "LayoutDuration": 0.001,
+        "TaskDuration": 0.597,
+        "JSHeapUsedSize": -18342392
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 23,
+        "triangles": 43138,
+        "geometries": 7,
+        "textures": 20,
+        "programs": 12
+      },
+      "sceneStats": {
+        "meshes": 31,
+        "skinnedMeshes": 19,
+        "instancedMeshes": 0,
+        "castShadowCount": 28,
+        "lights": 1
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    }
+  ],
+  "shadowAB": {
+    "shadowOn": {
+      "label": "shadow ON N=30",
+      "mobCount": 30,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8399,
+          "p95": 9748.1,
+          "max": 9899,
+          "n": 181
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 180,
+          "n": 181
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.4,
+          "max": 17.9,
+          "n": 181
+        },
+        "drawCalls": {
+          "p50": 74,
+          "p95": 74,
+          "max": 74,
+          "n": 181
+        },
+        "triangulos": {
+          "p50": 153218,
+          "p95": 153218,
+          "max": 153218,
+          "n": 181
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 181
+        },
+        "programas": {
+          "p50": 42,
+          "p95": 42,
+          "max": 42,
+          "n": 181
+        },
+        "texturas": {
+          "p50": 71,
+          "p95": 71,
+          "max": 71,
+          "n": 181
+        },
+        "renderMs": {
+          "p50": 5.1,
+          "p95": 5.9,
+          "max": 9,
+          "n": 181
+        },
+        "gpuMs": {
+          "p50": 6.627,
+          "p95": 8.526,
+          "max": 10.043,
+          "n": 181
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 128.263,
+          "p95": 139.944,
+          "max": 141.095,
+          "n": 181
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 181
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "sceneFilhos": {
+          "p50": 39,
+          "p95": 39,
+          "max": 39,
+          "n": 181
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "objetosRender": {
+          "p50": 112,
+          "p95": 112,
+          "max": 112,
+          "n": 181
+        },
+        "cameraId": {
+          "p50": 55,
+          "p95": 55,
+          "max": 55,
+          "n": 181
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 181
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 181
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 181
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "animacaoMs": {
+          "p50": 1,
+          "p95": 1.5,
+          "max": 3.1,
+          "n": 181
+        },
+        "matrizMs": {
+          "p50": 0.6,
+          "p95": 0.9,
+          "max": 1.7,
+          "n": 181
+        },
+        "sobraMs": {
+          "p50": 10.6,
+          "p95": 11.6,
+          "max": 12.1,
+          "n": 181
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 1.808,
+          "max": 1.917,
+          "n": 181
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 181
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 1.309,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 1.372,
+        "JSHeapUsedSize": 5407760
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 74,
+        "triangles": 153218,
+        "geometries": 23,
+        "textures": 71,
+        "programs": 42
+      },
+      "sceneStats": {
+        "meshes": 112,
+        "skinnedMeshes": 61,
+        "instancedMeshes": 8,
+        "castShadowCount": 98,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    "shadowOff": {
+      "label": "shadow OFF N=30",
+      "mobCount": 30,
+      "iso": "semSombra",
+      "voo": {
+        "t": {
+          "p50": 8532.7,
+          "p95": 9817.2,
+          "max": 9949.5,
+          "n": 172
+        },
+        "quadro": {
+          "p50": 86,
+          "p95": 163,
+          "max": 171,
+          "n": 172
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 18.6,
+          "max": 131.9,
+          "n": 172
+        },
+        "drawCalls": {
+          "p50": 74,
+          "p95": 74,
+          "max": 74,
+          "n": 172
+        },
+        "triangulos": {
+          "p50": 153218,
+          "p95": 153218,
+          "max": 153218,
+          "n": 172
+        },
+        "geometrias": {
+          "p50": 23,
+          "p95": 23,
+          "max": 23,
+          "n": 172
+        },
+        "programas": {
+          "p50": 34,
+          "p95": 34,
+          "max": 34,
+          "n": 172
+        },
+        "texturas": {
+          "p50": 50,
+          "p95": 50,
+          "max": 50,
+          "n": 172
+        },
+        "renderMs": {
+          "p50": 2.7,
+          "p95": 4.9,
+          "max": 129.1,
+          "n": 172
+        },
+        "gpuMs": {
+          "p50": 2.781,
+          "p95": 4.886,
+          "max": 17.695,
+          "n": 172
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 115.293,
+          "p95": 128.057,
+          "max": 128.956,
+          "n": 172
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 172
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 172
+        },
+        "sceneFilhos": {
+          "p50": 39,
+          "p95": 40,
+          "max": 41,
+          "n": 172
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 172
+        },
+        "objetosRender": {
+          "p50": 112,
+          "p95": 119,
+          "max": 120,
+          "n": 172
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 172
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 172
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 172
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 172
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 172
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 172
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "animacaoMs": {
+          "p50": 0.8,
+          "p95": 1.2,
+          "max": 3,
+          "n": 172
+        },
+        "matrizMs": {
+          "p50": 0.5,
+          "p95": 0.8,
+          "max": 1.6,
+          "n": 172
+        },
+        "sobraMs": {
+          "p50": 13.1,
+          "p95": 14.4,
+          "max": 112.5,
+          "n": 172
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.933,
+          "max": 6.957,
+          "n": 172
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 172
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 1.104,
+        "RecalcStyleDuration": 0.002,
+        "LayoutDuration": 0.002,
+        "TaskDuration": 1.181,
+        "JSHeapUsedSize": 435736
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 74,
+        "triangles": 153218,
+        "geometries": 23,
+        "textures": 50,
+        "programs": 34
+      },
+      "sceneStats": {
+        "meshes": 112,
+        "skinnedMeshes": 61,
+        "instancedMeshes": 8,
+        "castShadowCount": 98,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    }
+  },
+  "propsAB": {
+    "propsOn": {
+      "label": "props ON N=0",
+      "mobCount": 0,
+      "iso": "",
+      "voo": {
+        "t": {
+          "p50": 8268.1,
+          "p95": 9618.5,
+          "max": 9751.2,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.3,
+          "max": 17.8,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 19,
+          "p95": 19,
+          "max": 19,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 40736,
+          "p95": 40736,
+          "max": 40736,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 20,
+          "p95": 20,
+          "max": 20,
+          "n": 180
+        },
+        "programas": {
+          "p50": 32,
+          "p95": 32,
+          "max": 32,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 10,
+          "p95": 10,
+          "max": 10,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 1,
+          "p95": 1.5,
+          "max": 5.4,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 2.642,
+          "p95": 3.901,
+          "max": 4.446,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 102.855,
+          "p95": 170.005,
+          "max": 170.282,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 22,
+          "p95": 22,
+          "max": 22,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 429,
+          "p95": 429,
+          "max": 429,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 59,
+          "p95": 59,
+          "max": 59,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.2,
+          "max": 0.6,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0,
+          "p95": 0.1,
+          "max": 0.2,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 15.5,
+          "p95": 16.2,
+          "max": 16.6,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.152,
+          "max": 0.285,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.405,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.496,
+        "JSHeapUsedSize": -20778324
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 19,
+        "triangles": 40736,
+        "geometries": 20,
+        "textures": 10,
+        "programs": 32
+      },
+      "sceneStats": {
+        "meshes": 22,
+        "skinnedMeshes": 1,
+        "instancedMeshes": 8,
+        "castShadowCount": 8,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    },
+    "propsOff": {
+      "label": "props OFF N=0",
+      "mobCount": 0,
+      "iso": "semProps",
+      "voo": {
+        "t": {
+          "p50": 8286.1,
+          "p95": 9636,
+          "max": 9769.5,
+          "n": 180
+        },
+        "quadro": {
+          "p50": 90,
+          "p95": 171,
+          "max": 179,
+          "n": 180
+        },
+        "walkId": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trechoSeq": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "tickServidor": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "renderX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "renderZ": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "logicoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "movendo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "destinoY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "predito": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "causa": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorX": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "servidorY": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaPredicao": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "pedidoNoAr": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "temDestinoFinal": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "rttMedido": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "dtEntreSnapshots": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "quadroMs": {
+          "p50": 16.7,
+          "p95": 17.4,
+          "max": 17.8,
+          "n": 180
+        },
+        "drawCalls": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 180
+        },
+        "triangulos": {
+          "p50": 24530,
+          "p95": 24530,
+          "max": 24530,
+          "n": 180
+        },
+        "geometrias": {
+          "p50": 12,
+          "p95": 12,
+          "max": 12,
+          "n": 180
+        },
+        "programas": {
+          "p50": 22,
+          "p95": 22,
+          "max": 22,
+          "n": 180
+        },
+        "texturas": {
+          "p50": 8,
+          "p95": 8,
+          "max": 8,
+          "n": 180
+        },
+        "renderMs": {
+          "p50": 0.7,
+          "p95": 1.2,
+          "max": 5.4,
+          "n": 180
+        },
+        "gpuMs": {
+          "p50": 1.476,
+          "p95": 1.566,
+          "max": 1.596,
+          "n": 180
+        },
+        "memoriaGpuMb": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 0
+        },
+        "heapMb": {
+          "p50": 114.754,
+          "p95": 116.913,
+          "max": 117.094,
+          "n": 180
+        },
+        "contextosVivos": {
+          "p50": 3,
+          "p95": 3,
+          "max": 3,
+          "n": 180
+        },
+        "rendererId": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "sceneFilhos": {
+          "p50": 8,
+          "p95": 8,
+          "max": 8,
+          "n": 180
+        },
+        "sceneVisivel": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "objetosRender": {
+          "p50": 14,
+          "p95": 14,
+          "max": 14,
+          "n": 180
+        },
+        "cameraId": {
+          "p50": 232,
+          "p95": 232,
+          "max": 232,
+          "n": 180
+        },
+        "cameraOk": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "chunksNoCache": {
+          "p50": 9,
+          "p95": 9,
+          "max": 9,
+          "n": 180
+        },
+        "propsVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "desmontagensCena": {
+          "p50": 1,
+          "p95": 1,
+          "max": 1,
+          "n": 180
+        },
+        "assetsEmVoo": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "suspensoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "contextoMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "descarteMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "modeloMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "trocaMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "animacaoMs": {
+          "p50": 0.1,
+          "p95": 0.3,
+          "max": 0.4,
+          "n": 180
+        },
+        "matrizMs": {
+          "p50": 0,
+          "p95": 0.1,
+          "max": 0.5,
+          "n": 180
+        },
+        "sobraMs": {
+          "p50": 15.9,
+          "p95": 16.7,
+          "max": 17.1,
+          "n": 180
+        },
+        "heapDeltaMb": {
+          "p50": 0,
+          "p95": 0.109,
+          "max": 0.218,
+          "n": 180
+        },
+        "chunksConstruidos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "msDeChunk": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "filaDeChunks": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "chunksVisiveis": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxAtivos": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxHtmlCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxDomNodeCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskCount": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxLongTaskMs": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        },
+        "vfxMutacoes": {
+          "p50": 0,
+          "p95": 0,
+          "max": 0,
+          "n": 180
+        }
+      },
+      "cdpDeltaMs": {
+        "ScriptDuration": 0.362,
+        "RecalcStyleDuration": 0,
+        "LayoutDuration": 0,
+        "TaskDuration": 0.452,
+        "JSHeapUsedSize": 5120004
+      },
+      "reactCommitsPerSec": -0.3333333333333333,
+      "glInfo": {
+        "calls": 12,
+        "triangles": 24530,
+        "geometries": 12,
+        "textures": 8,
+        "programs": 22
+      },
+      "sceneStats": {
+        "meshes": 14,
+        "skinnedMeshes": 1,
+        "instancedMeshes": 0,
+        "castShadowCount": 1,
+        "lights": 2
+      },
+      "domNodeCount": 290,
+      "focusState": {
+        "hidden": false,
+        "hasFocus": true
+      },
+      "suspeito": false
+    }
+  },
+  "shaderHitch": {
+    "extKHRParallelShaderCompile": true,
+    "primeiroSpawn": {
+      "eventos": [
+        {
+          "t": 3701.400000035763,
+          "cat": "cena",
+          "tipo": "horizon:rebuild",
+          "walkId": 0,
+          "quadro": 1,
+          "dados": {
+            "vertices": 1849,
+            "triangulos": 3528,
+            "ms": 4.9
+          }
+        },
+        {
+          "t": 3706.600000023842,
+          "cat": "cena",
+          "tipo": "horizon:rebuild",
+          "walkId": 0,
+          "quadro": 1,
+          "dados": {
+            "vertices": 1849,
+            "triangulos": 3528,
+            "ms": 5.2
+          }
+        },
+        {
+          "t": 3721,
+          "cat": "cena",
+          "tipo": "cursor:create",
+          "walkId": 0,
+          "quadro": 3,
+          "dados": {
+            "chave": "11,5,1",
+            "raio": 1
+          }
+        },
+        {
+          "t": 3735.800000011921,
+          "cat": "cena",
+          "tipo": "shader:compile-entidade",
+          "walkId": 0,
+          "quadro": 3,
+          "dados": {
+            "ms": 22,
+            "programas": 8
+          }
+        },
+        {
+          "t": 4187.600000023842,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 31,
+          "dados": {
+            "delta": 3,
+            "total": 8
+          }
+        },
+        {
+          "t": 4741.199999988079,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 62,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← commitPassiveMountOnFiber"
+          }
+        },
+        {
+          "t": 4742.300000011921,
+          "cat": "cena",
+          "tipo": "desmontou-em",
+          "walkId": 0,
+          "quadro": 62,
+          "dados": {
+            "nome": "retrato:alvo"
+          }
+        },
+        {
+          "t": 4742.400000035763,
+          "cat": "cena",
+          "tipo": "montou-em",
+          "walkId": 0,
+          "quadro": 62,
+          "dados": {
+            "nome": "retrato:alvo",
+            "characterKey": "skeleton_minion",
+            "inteiro": false,
+            "caminho": "Object.react_stack_bottom_frame ← runWithFiberInDEV ← commitHookEffectListMount ← commitHookPassiveMountEffects ← reconnectPassiveEffects"
+          }
+        },
+        {
+          "t": 4796,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 65,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.5,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 4827.300000011921,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "nome": "retrato:jogador",
+            "contextos": 2
+          }
+        },
+        {
+          "t": 4827.300000011921,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "nome": "retrato:jogador",
+            "geracao": 1,
+            "contextos": 2,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 4831.900000035763,
+          "cat": "renderer",
+          "tipo": "contexto-criado",
+          "walkId": 0,
+          "quadro": 66,
+          "dados": {
+            "tipo": "webgl2",
+            "ms": 3.1,
+            "tamanho": "300x150"
+          }
+        },
+        {
+          "t": 4839.900000035763,
+          "cat": "cena",
+          "tipo": "shader:compile-entidade",
+          "walkId": 0,
+          "quadro": 67,
+          "dados": {
+            "ms": 13,
+            "programas": 1
+          }
+        },
+        {
+          "t": 4868.400000035763,
+          "cat": "renderer",
+          "tipo": "canvas-criado",
+          "walkId": 0,
+          "quadro": 68,
+          "dados": {
+            "nome": "retrato:alvo",
+            "contextos": 3
+          }
+        },
+        {
+          "t": 4868.400000035763,
+          "cat": "renderer",
+          "tipo": "renderer-criado",
+          "walkId": 0,
+          "quadro": 68,
+          "dados": {
+            "nome": "retrato:alvo",
+            "geracao": 1,
+            "contextos": 3,
+            "canvasNovo": true
+          }
+        },
+        {
+          "t": 4870.900000035763,
+          "cat": "cena",
+          "tipo": "shader:compile-entidade",
+          "walkId": 0,
+          "quadro": 69,
+          "dados": {
+            "ms": 3,
+            "programas": 2
+          }
+        },
+        {
+          "t": 5238,
+          "cat": "renderer",
+          "tipo": "geometria",
+          "walkId": 0,
+          "quadro": 92,
+          "dados": {
+            "delta": 3,
+            "total": 7
+          }
+        },
+        {
+          "t": 5238,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 92,
+          "dados": {
+            "delta": 5,
+            "total": 6
+          }
+        },
+        {
+          "t": 5238,
+          "cat": "renderer",
+          "tipo": "shader-compilado",
+          "walkId": 0,
+          "quadro": 92,
+          "dados": {
+            "delta": 4,
+            "total": 12
+          }
+        }
+      ],
+      "quadroDoEvento": {
+        "t": 3720.4,
+        "quadro": 3,
+        "walkId": 0,
+        "trechoSeq": 0,
+        "tickServidor": null,
+        "renderX": 0,
+        "renderZ": 0,
+        "logicoX": 0,
+        "logicoY": 0,
+        "movendo": 0,
+        "destinoX": 0,
+        "destinoY": 0,
+        "predito": 0,
+        "causa": 0,
+        "servidorX": 0,
+        "servidorY": 0,
+        "filaPredicao": 0,
+        "pedidoNoAr": 0,
+        "temDestinoFinal": 0,
+        "rttMedido": null,
+        "dtEntreSnapshots": 0,
+        "quadroMs": 8.5,
+        "drawCalls": 0,
+        "triangulos": 0,
+        "geometrias": 4,
+        "programas": 5,
+        "texturas": 1,
+        "renderMs": 0.1,
+        "gpuMs": 0.004,
+        "memoriaGpuMb": null,
+        "heapMb": 92.7,
+        "contextosVivos": 1,
+        "rendererId": 1,
+        "sceneFilhos": 7,
+        "sceneVisivel": 0,
+        "objetosRender": 0,
+        "cameraId": 429,
+        "cameraOk": 1,
+        "chunksNoCache": 0,
+        "propsVisiveis": 0,
+        "suspensoes": 0,
+        "desmontagensCena": 1,
+        "assetsEmVoo": 0,
+        "suspensoMs": 0,
+        "contextoMs": 0,
+        "descarteMs": 0,
+        "modeloMs": 0,
+        "trocaMs": 0,
+        "animacaoMs": 0,
+        "matrizMs": 0,
+        "sobraMs": 8.4,
+        "heapDeltaMb": 0,
+        "chunksConstruidos": 0,
+        "msDeChunk": 0,
+        "filaDeChunks": 0,
+        "chunksVisiveis": 0,
+        "vfxAtivos": 0,
+        "vfxHtmlCount": 0,
+        "vfxDomNodeCount": 0,
+        "vfxLongTaskCount": 0,
+        "vfxLongTaskMs": 0,
+        "vfxMutacoes": 0
+      },
+      "programasAntes": 5,
+      "programasDepois": 12
+    },
+    "segundoSpawn": {
+      "eventos": [
+        {
+          "t": 5579.600000023842,
+          "cat": "cena",
+          "tipo": "horizon:rebuild",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "vertices": 1849,
+            "triangulos": 3528,
+            "ms": 1.8
+          }
+        },
+        {
+          "t": 5581.5,
+          "cat": "cena",
+          "tipo": "horizon:rebuild",
+          "walkId": 0,
+          "quadro": 0,
+          "dados": {
+            "vertices": 1849,
+            "triangulos": 3528,
+            "ms": 1.9
+          }
+        },
+        {
+          "t": 5588.900000035763,
+          "cat": "cena",
+          "tipo": "cursor:create",
+          "walkId": 0,
+          "quadro": 2,
+          "dados": {
+            "chave": "11,5,1",
+            "raio": 1
+          }
+        },
+        {
+          "t": 5754.800000011921,
+          "cat": "renderer",
+          "tipo": "textura",
+          "walkId": 0,
+          "quadro": 12,
+          "dados": {
+            "delta": -2,
+            "total": 4
+          }
+        }
+      ],
+      "quadroDoEvento": null,
+      "programasAntes": 12,
+      "programasDepois": 12
+    }
+  },
+  "reactIdle": {
+    "label": "react idle N=0",
+    "mobCount": 0,
+    "iso": "",
+    "voo": {
+      "t": {
+        "p50": 9286.6,
+        "p95": 11537.3,
+        "max": 11770.8,
+        "n": 300
+      },
+      "quadro": {
+        "p50": 150,
+        "p95": 285,
+        "max": 299,
+        "n": 300
+      },
+      "walkId": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "trechoSeq": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "tickServidor": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "renderX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "renderZ": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "logicoX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "logicoY": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "movendo": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "destinoX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "destinoY": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "predito": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "causa": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "servidorX": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "servidorY": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "filaPredicao": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "pedidoNoAr": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "temDestinoFinal": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "rttMedido": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "dtEntreSnapshots": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "quadroMs": {
+        "p50": 16.6,
+        "p95": 17.5,
+        "max": 20.8,
+        "n": 300
+      },
+      "drawCalls": {
+        "p50": 19,
+        "p95": 19,
+        "max": 19,
+        "n": 300
+      },
+      "triangulos": {
+        "p50": 40736,
+        "p95": 40736,
+        "max": 40736,
+        "n": 300
+      },
+      "geometrias": {
+        "p50": 20,
+        "p95": 20,
+        "max": 20,
+        "n": 300
+      },
+      "programas": {
+        "p50": 32,
+        "p95": 32,
+        "max": 32,
+        "n": 300
+      },
+      "texturas": {
+        "p50": 10,
+        "p95": 10,
+        "max": 10,
+        "n": 300
+      },
+      "renderMs": {
+        "p50": 1,
+        "p95": 1.4,
+        "max": 4,
+        "n": 300
+      },
+      "gpuMs": {
+        "p50": 2.787,
+        "p95": 4.194,
+        "max": 6.846,
+        "n": 300
+      },
+      "memoriaGpuMb": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "heapMb": {
+        "p50": 142.023,
+        "p95": 147.02,
+        "max": 150.873,
+        "n": 300
+      },
+      "contextosVivos": {
+        "p50": 3,
+        "p95": 3,
+        "max": 3,
+        "n": 300
+      },
+      "rendererId": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 300
+      },
+      "sceneFilhos": {
+        "p50": 9,
+        "p95": 9,
+        "max": 9,
+        "n": 300
+      },
+      "sceneVisivel": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 300
+      },
+      "objetosRender": {
+        "p50": 22,
+        "p95": 22,
+        "max": 22,
+        "n": 300
+      },
+      "cameraId": {
+        "p50": 55,
+        "p95": 55,
+        "max": 55,
+        "n": 300
+      },
+      "cameraOk": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 300
+      },
+      "chunksNoCache": {
+        "p50": 9,
+        "p95": 9,
+        "max": 9,
+        "n": 300
+      },
+      "propsVisiveis": {
+        "p50": 59,
+        "p95": 59,
+        "max": 59,
+        "n": 300
+      },
+      "suspensoes": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 300
+      },
+      "desmontagensCena": {
+        "p50": 1,
+        "p95": 1,
+        "max": 1,
+        "n": 300
+      },
+      "assetsEmVoo": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "suspensoMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "contextoMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "descarteMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "modeloMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "trocaMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "animacaoMs": {
+        "p50": 0.1,
+        "p95": 0.3,
+        "max": 0.5,
+        "n": 300
+      },
+      "matrizMs": {
+        "p50": 0.1,
+        "p95": 0.2,
+        "max": 0.3,
+        "n": 300
+      },
+      "sobraMs": {
+        "p50": 15.5,
+        "p95": 16.4,
+        "max": 19.3,
+        "n": 300
+      },
+      "heapDeltaMb": {
+        "p50": 0,
+        "p95": 0.154,
+        "max": 3.559,
+        "n": 300
+      },
+      "chunksConstruidos": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "msDeChunk": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "filaDeChunks": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "chunksVisiveis": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "vfxAtivos": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "vfxHtmlCount": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "vfxDomNodeCount": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "vfxLongTaskCount": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "vfxLongTaskMs": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      },
+      "vfxMutacoes": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 300
+      }
+    },
+    "cdpDeltaMs": {
+      "ScriptDuration": 0.72,
+      "RecalcStyleDuration": 0,
+      "LayoutDuration": 0,
+      "TaskDuration": 0.88,
+      "JSHeapUsedSize": -27771416
+    },
+    "reactCommitsPerSec": -0.2,
+    "glInfo": {
+      "calls": 19,
+      "triangles": 40736,
+      "geometries": 20,
+      "textures": 10,
+      "programs": 32
+    },
+    "sceneStats": {
+      "meshes": 22,
+      "skinnedMeshes": 1,
+      "instancedMeshes": 8,
+      "castShadowCount": 8,
+      "lights": 2
+    },
+    "domNodeCount": 290,
+    "focusState": {
+      "hidden": false,
+      "hasFocus": true
+    },
+    "suspeito": false
+  }
+}

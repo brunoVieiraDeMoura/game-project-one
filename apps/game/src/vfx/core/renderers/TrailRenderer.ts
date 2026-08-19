@@ -3,6 +3,7 @@ import type { VfxInstanceRuntime } from "../types";
 import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { computeFlightOffset } from "./flightOffset";
 import { computeOrbitOffset } from "./orbitOffset";
+import { computeDropOffset } from "./dropOffset";
 
 /**
  * `renderer:"trail"` — rastro atrás de uma instância em movimento, N slots
@@ -68,10 +69,11 @@ export class TrailRenderer extends InstancedBillboardBase {
     // (mesmo helper genérico que Sprite/Particle usam, ver `flightOffset.ts`).
     const flight = computeFlightOffset(instance, elapsedMs);
     const orbit = computeOrbitOffset(instance, elapsedMs);
+    const drop = computeDropOffset(instance, elapsedMs);
     hist.push({
-      x: instance.position.x + flight.x + orbit.x,
-      y: instance.position.y + flight.y + orbit.y,
-      z: instance.position.z + flight.z + orbit.z,
+      x: instance.position.x + flight.x + orbit.x + drop.x,
+      y: instance.position.y + flight.y + orbit.y + drop.y,
+      z: instance.position.z + flight.z + orbit.z + drop.z,
     });
     if (hist.length > HISTORY_CAP) hist.shift();
     this.writeFromInstance(instance);

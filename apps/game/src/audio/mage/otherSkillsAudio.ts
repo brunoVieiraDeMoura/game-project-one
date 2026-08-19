@@ -10,14 +10,14 @@ import { getSfxVolume, useAudioSettings } from "../audioSettingsStore";
  * estas seis. Três grupos, cada um com o SEU sinal de rede real (nunca um
  * timer chutando "deve ter acabado"):
  *
- *  1. PROJÉTIL DE UM HIT SÓ (Fire Ball/MG_FIREBALL, Frost Diver/MG_FROSTDIVER,
- *     Stone Curse/MG_STONECURSE) — `hits:1` no skill_db, sem faixa de nível
- *     (só existe 1 arquivo de `hit` cada, nunca `_lvl_1_2` etc.). Loop de
- *     `cast` chamado de `skill:casting` (mesmo mecanismo/gate de
+ *  1. PROJÉTIL DE UM HIT SÓ (Fire Ball/MG_FIREBALL, Frost Diver/MG_FROSTDIVER)
+ *     — `hits:1` no skill_db, sem faixa de nível (só existe 1 arquivo de
+ *     `hit` cada, nunca `_lvl_1_2` etc.). Loop de `cast` chamado de
+ *     `skill:casting` (mesmo mecanismo/gate de
  *     `multiHitCastAudio.aoComecarCastMultiHit`, cópia própria do
  *     loop-pool — mesmo desenho de `footsteps.ts`, cada módulo com o seu).
- *     `hit` toca ATRASADO: estas 3 são projéteis com voo visível
- *     (`vfx/mage/{fire-ball,frost-diver,stone-curse}/*VfxDef*.tsx`,
+ *     `hit` toca ATRASADO: estas 2 são projéteis com voo visível
+ *     (`vfx/mage/{fire-ball,frost-diver}/*VfxDef*.tsx`,
  *     `anchor:"caster-to-target"`) e o pacote `skill:cast` chega no INSTANTE
  *     do disparo, não do impacto — tocar `hit` na hora dessincronizaria do
  *     VFX (mesmo motivo que Cold Bolt/Fire Bolt tocam o impacto no `onHit`
@@ -30,11 +30,13 @@ import { getSfxVolume, useAudioSettings } from "../audioSettingsStore";
  *         (`vfx/mage/fire-ball/fireBallVfxDef.tsx: IMPACT_AT_MS`)
  *       - Frost Diver: `TRAIL_MS(520) + 60` = 580ms
  *         (`vfx/mage/frost-diver/{FrostDiverImpact.tsx,frostDiverVfxDefGpu.tsx}`)
- *       - Stone Curse: `BEAM_MS(340) + 40` = 380ms
- *         (`vfx/mage/stone-curse/{StoneCurseImpact.tsx,stoneCurseVfxDefGpu.tsx}`)
  *     Chamado de FORA do `if (souEu)` em `net/useWorldEvents.ts` — o impacto
  *     é ouvido por qualquer caster, mesma regra de
- *     `multiHitCastAudio.aoImpactoMultiHit`.
+ *     `multiHitCastAudio.aoImpactoMultiHit`. Stone Curse SAIU deste grupo
+ *     (pedido 2026-08-19) — ver grupo 4 abaixo, o motivo é que petrificar é
+ *     CONDICIONAL (save do alvo), então "hit sempre toca" estava errado pra
+ *     ela especificamente (Fire Ball/Frost Diver acertam incondicionalmente,
+ *     só petrificar tem chance de falhar).
  *
  *  2. ÁREA DO SERVIDOR COM DURAÇÃO (Fire Wall/MG_FIREWALL): `cast` (whoosh
  *     de ignição) toca UMA VEZ no instante em que o muro aparece de verdade
@@ -71,6 +73,21 @@ import { getSfxVolume, useAudioSettings } from "../audioSettingsStore";
  * (`cupula_fantasma_cast.mp3`, sem `duration`) — toca uma vez em
  * `skill:ground`, mesmo grupo 2 acima, sem loop (não existe arquivo pra
  * loopar, e o VFX real do escudo já é silencioso enquanto ativo).
+ *
+ *  4. PETRIFICAR/STONE CURSE — pedido 2026-08-19: `stoned_cast` toca em loop
+ *     ENQUANTO conjura (mesmo mecanismo de `cast` do grupo 1, reaproveitado
+ *     — `aoComecarCastProjetil`/`aoLiberarCastProjetil`), mas o resultado
+ *     NÃO é "sempre toca depois de um atraso" como Fire Ball/Frost Diver:
+ *     petrificar é CONDICIONAL, o alvo pode salvar contra o status
+ *     (`net/worldStore.ts: NetEntity.opt1` já documentava isto — "nunca
+ *     assumir petrificação só porque um ataque acertou"). `stoned_confirm`
+ *     só toca quando o alvo de VERDADE entra em stonewait
+ *     (`net/entityOption.ts: OPT1_STONEWAIT`, `ZC_STATE_CHANGE` real —
+ *     `aoConfirmarPetrificar`, chamada de `net/useWorldEvents.ts: onOption`
+ *     na TRANSIÇÃO pra esse valor, nunca em reenvio do mesmo opt1). Se o
+ *     save do alvo funcionar (petrificação falha), nenhum som extra toca —
+ *     só o loop de `stoned_cast` que já rodou e parou é ouvido, exatamente
+ *     como pedido.
  */
 
 const BASE = "/assets/audio/combat/mage/skills";
@@ -83,14 +100,20 @@ function aegisFor(skillId: number): string | undefined {
 
 interface ProjectileAudio {
   cast: string;
-  hitDelayMs: number;
-  hit: string;
+  /** ausente = skill deste grupo sem resultado incondicional (hoje só Stone
+   * Curse — ver grupo 4, `aoConfirmarPetrificar`) — `aoImpactoProjetilAtrasado`
+   * vira no-op pra ela, nunca inventa um "hit sempre toca". */
+  hitDelayMs?: number;
+  hit?: string;
 }
 
 const PROJECTILE_AUDIO: Record<string, ProjectileAudio> = {
   MG_FIREBALL: { cast: `${BASE}/fire-ball/cast.mp3`, hitDelayMs: 446, hit: `${BASE}/fire-ball/hit.mp3` },
   MG_FROSTDIVER: { cast: `${BASE}/frost-diver/cast.mp3`, hitDelayMs: 580, hit: `${BASE}/frost-diver/hit.mp3` },
-  MG_STONECURSE: { cast: `${BASE}/stone-curse/cast.mp3`, hitDelayMs: 380, hit: `${BASE}/stone-curse/hit.mp3` },
+  // sem `hit`/`hitDelayMs` de propósito: petrificar é CONDICIONAL, o som de
+  // resultado mora no grupo 4 (`aoConfirmarPetrificar`), gatilhado pelo
+  // status real do alvo, não por um atraso fixo depois do cast.
+  MG_STONECURSE: { cast: `${BASE}/stone-curse/cast.mp3` },
 };
 
 /** loop de `cast` — cópia própria do mesmo desenho de
@@ -98,6 +121,22 @@ const PROJECTILE_AUDIO: Record<string, ProjectileAudio> = {
  * reaproveitado). Só UM cast próprio por vez, mesma garantia. */
 const castLoopPool = new Map<string, HTMLAudioElement>();
 let castLoopTocando: string | null = null;
+/** trava de segurança (pedido 2026-08-19, Stone Curse "loop travado") —
+ * Stone Curse é `no_damage` no skill_db (`ZC.USE_SKILL`, não `NOTIFY_SKILL`)
+ * e o `result` desse pacote pra ela é literalmente o retorno de
+ * `sc_start()` no rAthena: 0 = alvo RESISTIU ao petrificar. O gateway
+ * descarta o pacote inteiro quando `result===0` (`session.ts`, comentário
+ * "0 = falhou") — comportamento certo pra buff que falhou de verdade
+ * (nenhum efeito, nenhum som), mas pra Stone Curse esse mesmo `result`
+ * também cobre "o cast TERMINOU, só que o save funcionou", e aí nenhum
+ * `skill:cast` chega NUNCA: sem este timer, `aoLiberarCastProjetil` nunca é
+ * chamada e o loop de `stoned_cast` toca pra sempre. Teto = a duração REAL
+ * do cast (`skill:casting.durationMs`, `USESKILL_ACK.delayTime` — nunca
+ * chutada) + folga de rede, pra nunca cortar o loop ANTES da liberação de
+ * verdade no caminho feliz (petrificação bem-sucedida, `skill:cast` chega
+ * normalmente e já para o loop antes do timer disparar). */
+const CAST_LOOP_SAFETY_BUFFER_MS = 250;
+let castLoopTimer: ReturnType<typeof setTimeout> | undefined;
 
 function castLoopElementFor(src: string): HTMLAudioElement {
   let el = castLoopPool.get(src);
@@ -110,6 +149,8 @@ function castLoopElementFor(src: string): HTMLAudioElement {
 }
 
 function pararLoopDeCastUnico(): void {
+  clearTimeout(castLoopTimer);
+  castLoopTimer = undefined;
   if (castLoopTocando === null) return;
   const el = castLoopPool.get(castLoopTocando);
   if (el) {
@@ -121,8 +162,10 @@ function pararLoopDeCastUnico(): void {
 
 /** chamar de `skill:casting`, `p.sourceGid === selfGid` — mesmo gate/local
  * de `multiHitCastAudio.aoComecarCastMultiHit`, skill fora do grupo 1: só
- * para um loop anterior pendurado, nenhum som novo. */
-export function aoComecarCastProjetil(skillId: number): void {
+ * para um loop anterior pendurado, nenhum som novo. `durationMs` (o cast
+ * time REAL do pacote, `p.durationMs` de `skill:casting`) arma o teto de
+ * segurança acima — ausente/0 = sem teto (skill sem duração conhecida). */
+export function aoComecarCastProjetil(skillId: number, durationMs = 0): void {
   pararLoopDeCastUnico();
   const audio = PROJECTILE_AUDIO[aegisFor(skillId) ?? ""];
   if (!audio) return;
@@ -133,6 +176,9 @@ export function aoComecarCastProjetil(skillId: number): void {
     /* mesma rede de segurança de sempre */
   });
   castLoopTocando = audio.cast;
+  if (durationMs > 0) {
+    castLoopTimer = setTimeout(pararLoopDeCastUnico, durationMs + CAST_LOOP_SAFETY_BUFFER_MS);
+  }
 }
 
 /** chamar de `skill:cast`, `souEu` decide só se PARA o loop (o loop é
@@ -151,13 +197,15 @@ const impactoTimersPendentes = new Set<ReturnType<typeof setTimeout>>();
 
 /** agenda o som de impacto no MESMO atraso que o VFX Core usa pra disparar
  * a explosão (`hitDelayMs`) — nunca toca na hora, ver docblock do topo pra
- * cada número. Skill fora do grupo 1: silêncio, sem inventar som. */
+ * cada número. Skill fora do grupo 1 OU sem `hit`/`hitDelayMs` (Stone
+ * Curse, condicional — ver grupo 4): silêncio, sem inventar som. */
 export function aoImpactoProjetilAtrasado(skillId: number): void {
   const audio = PROJECTILE_AUDIO[aegisFor(skillId) ?? ""];
-  if (!audio) return;
+  if (!audio?.hit || audio.hitDelayMs === undefined) return;
+  const hit = audio.hit;
   const timer = setTimeout(() => {
     impactoTimersPendentes.delete(timer);
-    playOneShot(audio.hit);
+    playOneShot(hit);
   }, audio.hitDelayMs);
   impactoTimersPendentes.add(timer);
 }
@@ -179,6 +227,18 @@ const GROUND_AREA_AUDIO: Record<string, GroundAreaAudio> = {
  * instância). */
 const durationLoopPool = new Map<string, HTMLAudioElement>();
 const durationLoopPorAegis = new Map<string, string>();
+/** trava de segurança (pedido 2026-08-19, Fire Wall) — timer só ATIVO
+ * quando a skill tem `durationMs` REAL no skill_db (`Duration1`, nunca
+ * chutado). Fire Wall é VÁRIAS células (`skill:ground` chega uma vez por
+ * célula do muro); `skill:ground-gone` também chega por célula, e a
+ * simplificação "1 elemento por SKILL" acima já documenta que a primeira
+ * célula a sumir para o som de TODAS — sem este timer, se a ordem de
+ * chegada dos `ground-gone` deixar a ÚLTIMA célula do muro sumir bem depois
+ * da primeira, o loop reinicia a cada `skill:ground` novo mas só é
+ * garantido parar no evento — este timer é o teto duro: nunca deixa o som
+ * passar da duração de VERDADE da habilidade no terreno, não importa quantos
+ * `ground`/`ground-gone` fora de ordem cheguem. */
+const durationLoopTimerPorAegis = new Map<string, ReturnType<typeof setTimeout>>();
 
 function durationLoopElementFor(src: string): HTMLAudioElement {
   let el = durationLoopPool.get(src);
@@ -190,10 +250,28 @@ function durationLoopElementFor(src: string): HTMLAudioElement {
   return el;
 }
 
+/** para o loop de `duration` de UM aegis — usado tanto por
+ * `aoPararAreaDeChao` (sinal real do servidor) quanto pelo próprio timer de
+ * segurança acima (teto da duração real). Idempotente: chamar duas vezes
+ * (servidor E timer, ordem qualquer) nunca quebra nem duplica parada. */
+function pararLoopDeAreaPorAegis(aegis: string): void {
+  const timer = durationLoopTimerPorAegis.get(aegis);
+  if (timer !== undefined) clearTimeout(timer);
+  durationLoopTimerPorAegis.delete(aegis);
+  const src = durationLoopPorAegis.get(aegis);
+  if (src === undefined) return;
+  const el = durationLoopPool.get(src);
+  if (el) {
+    el.pause();
+    el.currentTime = 0;
+  }
+  durationLoopPorAegis.delete(aegis);
+}
+
 /** chamar de `skill:ground` (área nasceu de verdade no mundo) — toca o
  * whoosh de ignição uma vez (nunca self-gated, ver docblock) e, se a skill
- * tiver `duration`, entra em loop até `aoPararAreaDeChao`. Skill fora do
- * grupo 2: silêncio. */
+ * tiver `duration`, entra em loop até `aoPararAreaDeChao` OU o teto de
+ * `durationMs` real (o que vier primeiro). Skill fora do grupo 2: silêncio. */
 export function aoAparecerAreaDeChao(skillId: number): void {
   const aegis = aegisFor(skillId);
   const audio = aegis !== undefined ? GROUND_AREA_AUDIO[aegis] : undefined;
@@ -207,6 +285,16 @@ export function aoAparecerAreaDeChao(skillId: number): void {
     /* mesma rede de segurança de sempre */
   });
   durationLoopPorAegis.set(aegis!, audio.duration);
+  const timerAnterior = durationLoopTimerPorAegis.get(aegis!);
+  if (timerAnterior !== undefined) clearTimeout(timerAnterior);
+  durationLoopTimerPorAegis.delete(aegis!);
+  const durationMs = useSkillCatalog.getState().byId[skillId]?.durationMs ?? 0;
+  if (durationMs > 0) {
+    durationLoopTimerPorAegis.set(
+      aegis!,
+      setTimeout(() => pararLoopDeAreaPorAegis(aegis!), durationMs),
+    );
+  }
 }
 
 /** chamar de `skill:ground-gone` — para o loop de `duration` desta skill,
@@ -214,14 +302,8 @@ export function aoAparecerAreaDeChao(skillId: number): void {
  * grupo 2: silêncio, não quebra. */
 export function aoPararAreaDeChao(skillId: number): void {
   const aegis = aegisFor(skillId);
-  const src = aegis !== undefined ? durationLoopPorAegis.get(aegis) : undefined;
-  if (src === undefined) return;
-  const el = durationLoopPool.get(src);
-  if (el) {
-    el.pause();
-    el.currentTime = 0;
-  }
-  durationLoopPorAegis.delete(aegis!);
+  if (aegis === undefined) return;
+  pararLoopDeAreaPorAegis(aegis);
 }
 
 // ------------------------------------------------------------- grupo 3
@@ -275,6 +357,25 @@ export function aoIniciarBuffComDuracao(skillId: number, durationMs: number): vo
   buffLoopTimer = setTimeout(pararLoopDeBuff, durationMs);
 }
 
+// ------------------------------------------------------------- grupo 4
+
+const STONE_CURSE_CONFIRM = `${BASE}/stone-curse/confirm.mp3`;
+
+/**
+ * O som de "virou pedra de verdade" — chamar de `net/useWorldEvents.ts:
+ * onOption`, só na TRANSIÇÃO de qualquer alvo pra `OPT1_STONEWAIT`, nunca
+ * num reenvio do mesmo `opt1`. Sem lookup de skillId (o pacote real,
+ * `ZC_STATE_CHANGE`, não carrega qual skill causou a mudança de estado, só o
+ * resultado) e sem gate de `souEu`/aegis — QUALQUER petrificação real, de
+ * qualquer caster, mesma regra "ouvido por quem estiver perto" do resto do
+ * arquivo. Se o alvo salvar contra o status, esta função nunca é chamada —
+ * nenhum som extra toca, exatamente o pedido ("caso contrário não dê play
+ * em mais nada").
+ */
+export function aoConfirmarPetrificar(): void {
+  playOneShot(STONE_CURSE_CONFIRM);
+}
+
 // ------------------------------------------------------------- comum
 
 useAudioSettings.subscribe(() => {
@@ -303,6 +404,8 @@ export function pararAoDesconectar(): void {
     el.currentTime = 0;
   }
   durationLoopPorAegis.clear();
+  for (const timer of durationLoopTimerPorAegis.values()) clearTimeout(timer);
+  durationLoopTimerPorAegis.clear();
   pararLoopDeBuff();
   for (const timer of impactoTimersPendentes) clearTimeout(timer);
   impactoTimersPendentes.clear();

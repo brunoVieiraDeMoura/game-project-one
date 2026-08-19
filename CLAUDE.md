@@ -231,8 +231,13 @@ raciocínio completo.
   implementação — é para isso que ele serve: comparar duas maneiras de escrever
   a mesma coisa com número, em vez de escolher no olho.
 - Skills do projeto em `.claude/skills/`: skill-map-format,
-  skill-legacy-import, skill-r3f-conventions, skill-network-protocol —
-  ler antes de mexer nas áreas correspondentes.
+  skill-legacy-import, skill-r3f-conventions, skill-network-protocol,
+  skill-vfx-authoring — ler antes de mexer nas áreas correspondentes.
+  `skill-vfx-authoring` é o checklist pra VFX de skill nova (GPU por
+  padrão, DOM só pra número/texto, âncora/multi-hit/crítico via
+  mecanismo compartilhado) — ler antes de criar `<skill>VfxDefGpu.tsx`
+  ou `<skill>RenderMode.ts` novo, pra nenhuma skill futura voltar a
+  nascer em DOM.
 - UI admin: primitivos em `apps/admin/components/ui.tsx`; módulos seguem o
   padrão do Itens (tabela paginada + busca + form completo).
 

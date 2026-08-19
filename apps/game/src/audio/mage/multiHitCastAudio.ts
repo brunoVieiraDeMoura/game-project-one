@@ -1,7 +1,6 @@
 import { useSkillCatalog } from "../../net/skillCatalog";
 import { playOneShot } from "../oneShotPool";
 import { getSfxVolume, useAudioSettings } from "../audioSettingsStore";
-import { hitsToLevelTierLabel } from "../../vfx/mage/multiHitShared";
 
 /**
  * SFX das skills "N hits com VFX próprio, dano em cascata" (Cold Bolt, Fire
@@ -19,27 +18,29 @@ import { hitsToLevelTierLabel } from "../../vfx/mage/multiHitShared";
  *     `aoConcluirCastDeChao`; Soul Strike não tem arquivo de cast nenhum no
  *     SFX — sem inventar som que não existe).
  *
- *  2. IMPACTO — vem do VFX (`aoImpactoMultiHit`, chamado do PRIMEIRO `onHit`
- *     de `ColdBoltImpact`/`FireLanceImpact`/`ThunderStormImpact`/
+ *  2. IMPACTO — vem do VFX (`aoImpactoMultiHit`, chamado de CADA `onHit`
+ *     real de `ColdBoltImpact`/`FireLanceImpact`/`ThunderStormImpact`/
  *     `LightBoltImpact`/`SoulStrikeImpact`, ligado em `vfx/SkillVfx.tsx`),
  *     NUNCA de um timer que assume que o hit aconteceu. As "N estalactites/
  *     lanças/pulsos/descargas/almas" SEMPRE foram uma cascata client-side
  *     dividindo um dano total que o servidor já mandou pronto (mesmo
  *     documentado desde a Cold Bolt) — o `onHit` é o evento mais real que
- *     existe pra "a sequência de impacto começou AGORA", pra QUALQUER uma
+ *     existe pra "este hit da sequência aconteceu AGORA", pra QUALQUER uma
  *     das cinco (inclusive Thunder Storm: sua AoE também é UM dano total
  *     repartido em pulsos visuais, não N pacotes de rede separados). Por
  *     isso um único `aoImpactoMultiHit` serve as cinco sem distinguir
  *     alvo×chão — a diferença categoria só importa pro estágio 1.
  *
- * O arquivo de IMPACTO em si vem da FAIXA de nível (`hitsToLevelTierLabel`,
- * mesma tabela de `getSkillProjectileCount` — nunca duplicada aqui), mas
- * `hits` só ESCOLHE o arquivo — cada `*_hit_lvl_*.mp3` já É a sequência
- * sonora INTEIRA daquela faixa, tocada UMA VEZ só (nível 5-6 → 3 hits reais
- * no VFX → `hit-lvl-5-6.mp3` toca 1 vez, nunca 3). O VFX ainda dispara
- * `onHit` uma vez por estalactite/lança/pulso/descarga/alma — é só o
- * ÁUDIO que não repete por hit; a dedupe (só o 1º `onHit` conta) mora em
- * `vfx/SkillVfx.tsx: VfxNode`, ver comentário lá.
+ * O arquivo de IMPACTO é UM SÓ por skill (pedido 2026-08-19: cada
+ * `<skill>_hit.mp3` é o estalo de UM golpe, não uma faixa pré-montada pro
+ * nível) — `aoImpactoMultiHit` toca esse arquivo em CADA `onHit` real (nunca
+ * dedupado mais — a dedupe "só o 1º onHit conta" saiu de
+ * `vfx/SkillVfx.tsx: VfxNode`). `playOneShot` REAPROVEITA o mesmo `<audio>`
+ * por `src` e reinicia do zero a cada chamada — pra uma skill de N hits em
+ * stagger curto (ex. Cold Bolt nível 10 → 10 hits), isso já dá exatamente o
+ * efeito pedido sem nenhum código novo: os N-1 primeiros se cortam uns aos
+ * outros (tocam "rápido"), e só o ÚLTIMO chega ao fim sem ser interrompido
+ * por um próximo `onHit` — toca inteiro.
  *
  * Nunca por id — o id de uma constante MG_* já divergiu de projeto pra
  * projeto no rAthena; o nome Aegis é o que não muda (mesma razão que cada
@@ -48,39 +49,34 @@ import { hitsToLevelTierLabel } from "../../vfx/mage/multiHitShared";
  */
 interface CastAudio {
   /** ausente = skill sem loop de conjuração no SFX (hoje só Soul Strike —
-   * `SFX/classes/mage/combat_skills_cast/soul/` só tem `hit_lvl_*`) */
+   * `SFX/classes/mage/combat_skills_cast/soul/` só tem `hit`) */
   cast?: string;
-  /** som de impacto pra a FAIXA de `hits` reais (1-5) — nunca um arquivo
-   * fixo, sempre resolvido pela tabela compartilhada */
-  hit: (hits: number) => string;
-}
-
-function hitPath(skillFolder: string, hits: number): string {
-  return `/assets/audio/combat/mage/skills/${skillFolder}/hit-lvl-${hitsToLevelTierLabel(hits)}.mp3`;
+  /** som de UM golpe — arquivo fixo, tocado uma vez por `onHit` real (nunca
+   * mais uma faixa por nível) */
+  hit: string;
 }
 
 const CAST_AUDIO: Record<string, CastAudio> = {
   MG_COLDBOLT: {
     cast: "/assets/audio/combat/mage/skills/cold-bolt/cast.mp3",
-    hit: (hits) => hitPath("cold-bolt", hits),
+    hit: "/assets/audio/combat/mage/skills/cold-bolt/hit.mp3",
   },
   MG_FIREBOLT: {
     cast: "/assets/audio/combat/mage/skills/fire-bolt/cast.mp3",
-    hit: (hits) => hitPath("fire-bolt", hits),
+    hit: "/assets/audio/combat/mage/skills/fire-bolt/hit.mp3",
   },
   MG_THUNDERSTORM: {
     cast: "/assets/audio/combat/mage/skills/thunder-storm/cast.mp3",
-    hit: (hits) => hitPath("thunder-storm", hits),
+    hit: "/assets/audio/combat/mage/skills/thunder-storm/hit.mp3",
   },
   MG_LIGHTNINGBOLT: {
     cast: "/assets/audio/combat/mage/skills/light-bolt/cast.mp3",
-    hit: (hits) => hitPath("light-bolt", hits),
+    hit: "/assets/audio/combat/mage/skills/light-bolt/hit.mp3",
   },
-  // sem `cast`: o SFX real não tem arquivo de conjuração pra esta skill (só
-  // `hit_lvl_*` em `combat_skills_cast/soul/`) — nunca inventar um loop que
-  // não existe.
+  // sem `cast`: o SFX real não tem arquivo de conjuração pra esta skill —
+  // nunca inventar um loop que não existe.
   MG_SOULSTRIKE: {
-    hit: (hits) => hitPath("soul-strike", hits),
+    hit: "/assets/audio/combat/mage/skills/soul-strike/hit.mp3",
   },
 };
 
@@ -189,25 +185,19 @@ export function aoConcluirCastDeChao(_skillId: number): void {
 }
 
 /**
- * O som da sequência de impacto — chamar UMA VEZ por execução da skill, no
- * PRIMEIRO `onHit` real de `ColdBoltImpact`/`FireLanceImpact`/
- * `ThunderStormImpact`/`LightBoltImpact`/`SoulStrikeImpact` (o gate "só o
- * primeiro conta" mora em `vfx/SkillVfx.tsx: VfxNode.impactAudioTocado`,
- * uma ref por `effect.id` — cada instância de VFX É uma execução).
- *
- * `hits` escolhe QUAL ARQUIVO (a faixa 1-2/3-4/5-6/7-8/9-10 via
- * `hitsToLevelTierLabel`), nunca quantas vezes tocar: cada
- * `*_hit_lvl_*.mp3` já É a sequência sonora INTEIRA daquela faixa (nível
- * 5-6 → 3 hits reais no VFX → UM arquivo `hit-lvl-5-6.mp3`, tocado UMA vez
- * — não o mesmo som 3 vezes seguidas). Esta função em si é só "toca este
- * arquivo" — não tem estado, não deduplica sozinha; é essencial que quem
- * CHAMA (`SkillVfx.tsx`) só chame uma vez por conjuração. Skill fora do
- * lookup: silêncio, sem inventar som.
+ * O estalo de UM golpe — chamar de CADA `onHit` real de
+ * `ColdBoltImpact`/`FireLanceImpact`/`ThunderStormImpact`/
+ * `LightBoltImpact`/`SoulStrikeImpact` (`vfx/SkillVfx.tsx`, sem gate/dedupe
+ * nenhum — a skill inteira já dispara `onHit` uma vez por estalactite/
+ * lança/pulso/descarga/alma de verdade, e cada uma toca o MESMO arquivo).
+ * `playOneShot` reinicia o mesmo `<audio>` a cada chamada — golpes em
+ * stagger curto se cortam uns aos outros, só o último toca inteiro, ver
+ * docblock do topo. Skill fora do lookup: silêncio, sem inventar som.
  */
-export function aoImpactoMultiHit(skillId: number, hits: number): void {
+export function aoImpactoMultiHit(skillId: number): void {
   const audio = audioFor(skillId);
   if (!audio) return;
-  playOneShot(audio.hit(hits));
+  playOneShot(audio.hit);
 }
 
 /**

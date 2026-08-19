@@ -1,31 +1,48 @@
 import { defineVfx, bindSkillVfx, unbindSkillVfx } from "../../core/registry";
-import { LIGHT_BOLT_IMPACT_GPU_DEF } from "./lightBoltVfxDefGpu";
+import {
+  LIGHT_BOLT_IMPACT_GPU_DEF,
+  lightBoltProjectileGpuDef,
+  lightBoltImpactBurstGpuDef,
+  LIGHT_BOLT_FRAME_COUNT,
+  type LightBoltGpuTier,
+} from "./lightBoltVfxDefGpu";
+import { getVfxQualityTier } from "../../vfxQualityStore";
 import "./lightBoltDamageDomArt"; // side-effect: registra a arte DOM dos números
 
 /**
- * Flag DOM↔GPU pra Light Bolt — MESMO padrão bind/unbind de
- * `cold-bolt/coldBoltRenderMode.ts`.
+ * Flag DOM↔GPU + tier de qualidade pra Eletrocutar/Light Bolt (reconstrução
+ * 2026-08-19-f) — MESMO padrão de `fire-lance/fireLanceRenderMode.ts`/
+ * `cold-bolt/coldBoltRenderMode.ts` (ver aquele arquivo pro raciocínio
+ * completo, não duplicado aqui) pro IMPACT (projétil+burst, 3 tiers,
+ * registrados de uma vez, driver escolhe o id por chamada).
  *
- * **Achado real, corrigido 2026-08-19** (auditoria "GPU é o padrão pra
- * todo VFX de gameplay"): este arquivo AFIRMAVA em comentário que o cast
- * já era compartilhado com Thunder Storm (`thunder_storm_cast`) "sem
- * precisar de nada aqui" — falso. Só `MG_THUNDERSTORM:cast` tinha
- * `bindSkillVfx` de verdade (`thunderStormVfxDef.tsx:326`); Light Bolt
- * nunca teve o PRÓPRIO bind pra esse id, então `resolveSkillVfx
- * ("MG_LIGHTNINGBOLT","cast")` sempre voltou `undefined` e o cast de
- * Light Bolt SEMPRE caiu no legado DOM (`vfx/SkillVfx.tsx: CAST_VFX.
- * MG_LIGHTNINGBOLT → ThunderStormCastElectric`), apesar do que o
- * comentário dizia. Corrigido: bind próprio pro MESMO id compartilhado
- * (a definição continua uma só, registrada em `thunderStormRenderMode.
- * ts`; só faltava este arquivo apontar pra ela).
- *
- * **GPU é o padrão de produção** — aplicado no module-load abaixo.
+ * O CAST é DIFERENTE das outras duas skills: continua 100% compartilhado
+ * com Thunder Storm (`thunder_storm_cast`, `bindSkillVfx` de sempre) —
+ * Eletrocutar NUNCA teve identidade de cast própria (a "nuvem elétrica na
+ * ponta do cajado" já É a mesma de Thunder Storm por design desde a
+ * migração original) e este pedido não pediu pra mudar isso, só o IMPACT
+ * (queda + acerto na cabeça). Sem `applyCastTier`/re-registro nenhum aqui
+ * por causa disso.
  */
-defineVfx(LIGHT_BOLT_IMPACT_GPU_DEF);
-
 export type LightBoltRenderMode = "dom" | "gpu";
 
+const ALL_TIERS: readonly LightBoltGpuTier[] = ["low", "medium", "high"];
+defineVfx(LIGHT_BOLT_IMPACT_GPU_DEF);
+for (const t of ALL_TIERS) {
+  // 1 definição por tier×quadro do atlas (2026-08-19-r) — o driver
+  // (`lightBoltMultiHit.ts`) sorteia qual quadro tocar por HIT, tudo
+  // pré-computado aqui no module-load (nenhum custo de runtime além de
+  // escolher um índice).
+  for (let f = 0; f < LIGHT_BOLT_FRAME_COUNT; f++) defineVfx(lightBoltProjectileGpuDef(t, f));
+  defineVfx(lightBoltImpactBurstGpuDef(t));
+}
+
 let mode: LightBoltRenderMode = "gpu";
+let devTierOverride: LightBoltGpuTier | null = null;
+
+export function lightBoltQualityTier(): LightBoltGpuTier {
+  return devTierOverride ?? getVfxQualityTier();
+}
 
 export function setLightBoltRenderMode(next: LightBoltRenderMode): void {
   mode = next;
@@ -42,11 +59,22 @@ export function lightBoltRenderMode(): LightBoltRenderMode {
   return mode;
 }
 
+export function setLightBoltQualityTier(next: LightBoltGpuTier): void {
+  devTierOverride = next;
+}
+
+export function clearLightBoltQualityOverride(): void {
+  devTierOverride = null;
+}
+
 setLightBoltRenderMode(mode); // aplica o padrão de produção no module-load
 
 if (import.meta.env.DEV && typeof window !== "undefined") {
   (window as unknown as { __lightBoltRenderBench?: unknown }).__lightBoltRenderBench = {
     set: setLightBoltRenderMode,
     get: lightBoltRenderMode,
+    setTier: setLightBoltQualityTier,
+    getTier: lightBoltQualityTier,
+    clearTierOverride: clearLightBoltQualityOverride,
   };
 }

@@ -4,7 +4,6 @@ import * as THREE from "three";
 import type { CellLattice, TerrainQuery } from "@ragnarok/engine-core";
 import { usePlayStore } from "./playStore";
 import { useCombatStore } from "../combat/combatStore";
-import { useCursorStore } from "../ui/cursorStore";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 import { isolado } from "../core/diagnostics/isolamento";
 import {
@@ -13,8 +12,6 @@ import {
   baseDoPropClicado,
   moldarMarcador,
   nearestHit,
-  topmostXZ,
-  type Hit,
 } from "./pickGround";
 
 /**
@@ -163,8 +160,6 @@ export function GroundInteract({
   const cursor = useRef<THREE.Mesh>(null);
   const hoverLocal = useRef<{ x: number; z: number } | null>(null);
   const hover = hoverRef ?? hoverLocal;
-  /** estado anterior da passagem, para só avisar o cursor na TROCA */
-  const bloqueadoAntes = useRef(false);
   /**
    * Em que célula o marcador foi MOLDADO pela última vez.
    *
@@ -183,13 +178,6 @@ export function GroundInteract({
   const cliqueEm = useRef(Number.NEGATIVE_INFINITY);
   const marcadorFrames = useMarcadorFrames();
 
-  // sair da cena com o ponteiro sobre bloqueio deixaria o cursor preso
-  useEffect(
-    () => () => {
-      if (bloqueadoAntes.current) useCursorStore.getState().pedir("block", false);
-    },
-    [],
-  );
   const scene = useThree((s) => s.scene);
   // raycaster próprio: o do R3F é reconfigurado a cada evento
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -286,22 +274,40 @@ export function GroundInteract({
     const hitsChao = terreno ? raycaster.intersectObject(terreno, true).filter((h) => h.distance < e.distance) : [];
     const maisProximoProp = nearestHit(hitsProp);
     const maisProximoChao = nearestHit(hitsChao);
+    // o chão de verdade por trás do prop — ou o plano y=0, se não achou terreno
+    const alvoChao = maisProximoChao
+      ? { x: maisProximoChao.point.x, z: maisProximoChao.point.z }
+      : { x: e.point.x, z: e.point.z };
 
     /**
-     * Prop na frente de tudo: o alvo é o PÉ dele, não o ponto de impacto.
+     * Prop na frente de tudo: o alvo é o PÉ dele, não o ponto de impacto — mas
+     * só quando o clique de fato MIRA a árvore, não quando ela só estava no
+     * caminho de um alvo mais longe.
      *
      * Mirar a copa de uma árvore escalada 5× acertava a folhagem a metros do
      * tronco, e o marcador saltava para uma célula que não tem relação com onde
      * se quer ir — "o square buga o direcionamento". A base do prop (a origem do
-     * objeto, que é onde ele encosta no chão) é o alvo que faz sentido, e daí o
-     * `snapAndavel` acha a célula livre ao lado.
+     * objeto, que é onde ele encosta no chão) é o alvo que faz sentido ALI.
+     *
+     * Só que dentro de floresta a copa de uma árvore qualquer cobre o raio
+     * inteiro até um alvo bem mais longe (célula atrás dela, onde o jogador
+     * queria ir de verdade) — sem este segundo teste, TODO clique que passasse
+     * perto de uma copa virava "andar até esta árvore", mesmo mirando bem
+     * depois dela ("queria ir pra trás da copa"). A regra: a base só vale se o
+     * chão de verdade (mais longe, na mesma direção) está PERTO dela — senão o
+     * prop só estava na frente por acaso e o clique vale para o chão.
      */
     if (maisProximoProp && (!maisProximoChao || maisProximoProp.distance <= maisProximoChao.distance)) {
       const pe = baseDoPropClicado(maisProximoProp, props);
-      if (pe) return pe;
+      if (pe) {
+        const dx = alvoChao.x - pe.x;
+        const dz = alvoChao.z - pe.z;
+        // 3 células cobre folgado a copa de qualquer árvore do catálogo
+        const raioAceito = cellSize * 3;
+        if (dx * dx + dz * dz <= raioAceito * raioAceito) return pe;
+      }
     }
-    const candidatos: Hit[] = [...hitsProp, ...hitsChao];
-    return topmostXZ(candidatos, { x: e.point.x, z: e.point.z });
+    return alvoChao;
   };
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -388,7 +394,6 @@ export function GroundInteract({
       return;
     }
     const center = snap(h.x, h.z);
-    const walkable = terrain.isWalkable(center.x, center.z);
     c.visible = true;
     // O marcador fica na ORIGEM e desenha em coordenada de mundo: cada vértice é
     // amostrado no terreno, então ele veste o relevo em vez de flutuar.
@@ -405,22 +410,6 @@ export function GroundInteract({
         chave,
         raio: markerRadius,
       });
-    }
-
-    /**
-     * Quem avisa que a célula é intransponível é o CURSOR (`block_area`), não a
-     * cor do marcador: o marcador está no chão, longe de onde o olho está, e o
-     * cursor fica exatamente onde o jogador olha. A arte do marcador continua
-     * como veio, porque ela diz só ONDE o mouse está.
-     *
-     * O pedido é CONTADO, então só se avisa na TROCA — mandar todo quadro
-     * somaria sessenta pedidos por segundo e o cursor nunca mais sairia do
-     * bloqueado.
-     */
-    const bloqueado = !walkable;
-    if (bloqueado !== bloqueadoAntes.current) {
-      bloqueadoAntes.current = bloqueado;
-      useCursorStore.getState().pedir("block", bloqueado);
     }
 
     /**

@@ -151,6 +151,27 @@ export function LoadingRing({ size = 34 }: { size?: number }) {
   );
 }
 
+/**
+ * Bloco pulsando — placeholder de TEXTO ainda não chegado (nome do alvo
+ * antes da resposta do REQNAME/catálogo). Mesma receita de `LoadingRing`
+ * (opacidade por `requestAnimationFrame`, sem `@keyframes` — o projeto é
+ * 100% inline). Nunca usar para esconder um id/aegis: o campo deve ficar
+ * `undefined` até o nome de verdade chegar, isto só cobre a espera.
+ */
+export function Skeleton({ width, height, radius = 4 }: { width: number | string; height: number; radius?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const passo = (t: number) => {
+      if (ref.current) ref.current.style.opacity = String(0.35 + 0.25 * Math.sin(t / 260));
+      raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <div ref={ref} style={{ width, height, borderRadius: radius, background: BOOK.wood, flex: "none" }} />;
+}
+
 export function IconSquare({
   seed,
   standard,

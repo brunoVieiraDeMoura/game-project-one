@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CHAT_ART, CHAT_ART_SIZE, FRAME_SCALE } from "../ui/chatFrame";
 
 /** largura padrão: a do chat, onde a arte foi medida */
@@ -69,7 +69,13 @@ export function ChatScrollbar({
     setPos({ topo, altura, rolavel: true });
   }, [alvo]);
 
-  useEffect(() => {
+  // `useLayoutEffect`, não `useEffect`: a primeira medição precisa terminar
+  // ANTES do navegador pintar o quadro. Com `useEffect` a barra nascia com
+  // `rolavel:false` (largura 0), o grid ao lado (`flex:1 1 auto`) preenchia
+  // o vão todo nesse primeiro quadro, e só no seguinte a medição chegava e
+  // encolhia o grid pra abrir espaço pra ela — os slots pulavam alguns px
+  // pra esquerda toda vez que a janela (re)montava (Alt+E fecha/abre).
+  useLayoutEffect(() => {
     const el = alvo.current;
     if (!el) return;
     medir();
@@ -150,7 +156,6 @@ export function ChatScrollbar({
         alignItems: "center",
         width: escondida ? 0 : LARGURA,
         overflow: "hidden",
-        transition: "width 120ms ease-out",
       }}
     >
       {seta(true)}

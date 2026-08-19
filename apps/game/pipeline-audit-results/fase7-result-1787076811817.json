@@ -1,0 +1,72 @@
+{
+  "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "errosAteSettle": [],
+  "diag": {
+    "world": {
+      "mapName": "pipeline-audit-f7",
+      "x": 10,
+      "y": 10,
+      "dir": 0,
+      "gid": 777,
+      "char": null
+    },
+    "sceneChildren": 8,
+    "childNames": [
+      "HemisphereLight",
+      "Object3D",
+      "DirectionalLight",
+      "editor-terrain",
+      "horizonte",
+      "map-props",
+      "Group",
+      "Group"
+    ],
+    "bodyText": "Knight\nHP\n400 / 400\nSP\n150 / 150\n50\nLVL\npipeline-audit-f7\n15:13\n2\nMISSÕES\nO Cerco dos Lobos\nDerrotar lobos no campo norte\n6/10\nA Ponte de Veridia\npronta para entregar\nContrabando de Sal\nSeguir o carroceiro sem ser visto\n0/3\nGeral\nGlobal\nParty\nBem-vindo ao mundo.\n1\n2\n3\n4\n5\n6\n7\n8\n9\n1 / 3\nXP (Status)\n0"
+  },
+  "estabilidadeRecursos": {
+    "antes": {
+      "geometrias": 6,
+      "texturas": 7,
+      "programas": 9
+    },
+    "depois": {
+      "geometrias": 6,
+      "texturas": 7,
+      "programas": 9
+    }
+  },
+  "results": [
+    {
+      "label": "petrify COLD (wait, entidade 2001)",
+      "programsBefore": 9,
+      "programsAfter": 9,
+      "novoPrograma": false,
+      "quadroMsMax": 17.5,
+      "renderMsMax": 0.9,
+      "gpuMsMax": 2.904,
+      "errosConsole": []
+    },
+    {
+      "label": "petrify WARM (stone, entidade 2001)",
+      "programsBefore": 9,
+      "programsAfter": 9,
+      "novoPrograma": false,
+      "quadroMsMax": 17.9,
+      "renderMsMax": 1,
+      "gpuMsMax": 4.727,
+      "errosConsole": []
+    },
+    {
+      "label": "petrify WARM (wait, entidade 2002 nova)",
+      "programsBefore": 9,
+      "programsAfter": 9,
+      "novoPrograma": false,
+      "quadroMsMax": 17.8,
+      "renderMsMax": 1.9,
+      "gpuMsMax": 3.464,
+      "errosConsole": []
+    }
+  ],
+  "totalErrosConsole": 0,
+  "errosConsoleTodos": []
+}

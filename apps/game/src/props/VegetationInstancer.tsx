@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import type { GameMap, MapProp } from "@ragnarok/map-format";
 import { propCategory, propUrl } from "./registry";
 import { compartilharTexturas } from "../gltfTexturas";
-import { windCategoryFor, windMaterialFor } from "./wind";
+import { windCategoryFor, windMaterialFor, resolveWindProfile } from "./wind";
+import { treeMaterialFor } from "./treeRevealMaterial";
+import { REVEAL_CONFIG, createRevealState, tickRevealFade, type RevealState, type RevealCandidate } from "./vegetationReveal";
 import { registrarInstancias } from "./instancedPropRegistry";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 import { isolado } from "../core/diagnostics/isolamento";
@@ -109,6 +111,14 @@ const SEM_SOMBRA_PROPRIA = new Set(["grass", "flower", "plant"]);
 const CATEGORIAS_RASTEIRAS = new Set(["grass", "flower", "plant"]);
 
 /**
+ * Categorias que recebem REVELAÇÃO (fade de proximidade/corredor + copa) —
+ * ver `vegetationReveal.ts`/`treeRevealMaterial.ts`. Só árvore por ora: são
+ * as únicas com copa alta o bastante para esconder o personagem, e o
+ * `canopyWeight` do shader só faz sentido para uma malha com tronco+copa.
+ */
+const CATEGORIAS_COM_REVELACAO = new Set(["tree", "tree_bare"]);
+
+/**
  * DENSIDADE ADAPTATIVA DE VEGETAÇÃO RASTEIRA (`render-tecnic.txt` seção
  * 22.7/22.8, item 3 da fila de prioridade da seção 26): antes desta Fase, o
  * corte de grama/flor/planta era BINÁRIO — 100% de densidade até
@@ -196,6 +206,41 @@ export interface InstanciaVegetacao {
 }
 
 /**
+ * Cone de visão HORIZONTAL (câmera→personagem), pura — mesmo padrão de
+ * `vegetationReveal.ts: computeTargetFade` (sem `THREE.*`, testável sem
+ * `<Canvas>`). NÃO usada ainda em nenhum caminho de renderização — só
+ * benchmark, enquanto o custo de aplicar isto ao `InstancedMesh` não está
+ * medido (ver `VegetationInstancer.cone.perf.test.ts`).
+ *
+ * Direção do cone reaproveita o MESMO vetor câmera→personagem que o corredor
+ * de revelação já calcula — nenhum dado novo (azimute de câmera, FOV real)
+ * precisa entrar no sistema. É um teste GROSSEIRO de propósito (plano
+ * horizontal, sem pitch/aspecto) — a única pergunta que precisa responder é
+ * "esta árvore está claramente atrás/de lado da câmera", não um frustum
+ * exato: o hardware já recorta triângulo fora do frustum de qualquer jeito
+ * (ver o docblock do benchmark sobre o que isto ganha e o que NÃO ganha).
+ */
+export interface ConeDeVisao {
+  camX: number;
+  camZ: number;
+  /** direção NORMALIZADA câmera→personagem */
+  dirX: number;
+  dirZ: number;
+  /** cos(meio-ângulo) — folga generosa acima do FOV real, nunca exata */
+  cosMeioAngulo: number;
+}
+
+export function dentroDoConeDeVisao(inst: { x: number; z: number }, cone: ConeDeVisao): boolean {
+  const dx = inst.x - cone.camX;
+  const dz = inst.z - cone.camZ;
+  const d2 = dx * dx + dz * dz;
+  if (d2 < 1e-6) return true; // exatamente na câmera — sem direção definida, não descarta
+  const inv = 1 / Math.sqrt(d2);
+  const cosAngulo = dx * inv * cone.dirX + dz * inv * cone.dirZ;
+  return cosAngulo >= cone.cosMeioAngulo;
+}
+
+/**
  * Decide QUAIS instâncias de uma espécie desenham neste `center` — pura,
  * testável sem `<Canvas>` (mesmo padrão de `TreeImpostors.resolverInstancias
  * Visiveis`). O `useEffect` de `CamadaDeEspecie` só escreve o resultado nos
@@ -263,12 +308,12 @@ export function especiesDoMapa(props: readonly MapProp[]): { assetId: string; ur
   return out.sort((a, b) => a.assetId.localeCompare(b.assetId));
 }
 
-interface ParteEspecie {
+export interface ParteEspecie {
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
 }
 
-interface GltfMinimoComCena {
+export interface GltfMinimoComCena {
   scene: THREE.Object3D;
   parser?: unknown;
 }
@@ -277,10 +322,14 @@ interface GltfMinimoComCena {
  * Extrai, de UMA vez por espécie, cada sub-malha (geometria + material) com a
  * transform local do nó já cozida na geometria — cacheado por URL (o mesmo
  * `.gltf` nunca precisa ser rebakeado, mesmo que o mapa troque e volte).
+ *
+ * Exportado: `props/grass/GrassPatch.tsx` reaproveita esta mesma extração
+ * (mesmo cache por URL) pra grama procedural — nunca duplicar o bake do
+ * glTF entre os dois sistemas de instancing.
  */
 const cacheDePartes = new Map<string, ParteEspecie[]>();
 
-function bakeSpeciesParts(url: string, gltf: GltfMinimoComCena): ParteEspecie[] {
+export function bakeSpeciesParts(url: string, gltf: GltfMinimoComCena): ParteEspecie[] {
   const cache = cacheDePartes.get(url);
   if (cache) return cache;
   // ANTES de qualquer leitura de geometria — mesma ordem que PropInstance usa
@@ -317,12 +366,15 @@ function CamadaDeEspecie({
   center,
   radius,
   radiusRasteira,
+  playerPos,
 }: {
   camada: CamadaInstanciada;
   center: { x: number; z: number };
   radius: number;
   /** raio (já pronto, de `play/worldVisibility.ts`) pras categorias rasteiras — grama/flor/planta */
   radiusRasteira: number;
+  /** posição do personagem (ref, lido só dentro de `useFrame` — nunca dispara re-render) — só usado por categorias com revelação */
+  playerPos?: RefObject<THREE.Vector3>;
 }) {
   const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const primeira = useRef(true);
@@ -330,6 +382,37 @@ function CamadaDeEspecie({
   const raioEfetivo = CATEGORIAS_RASTEIRAS.has(camada.category) ? radiusRasteira : radius;
 
   const rasteira = CATEGORIAS_RASTEIRAS.has(camada.category);
+  const temRevelacao = CATEGORIAS_COM_REVELACAO.has(camada.category) && !!playerPos && !isolado("semRevelacaoArvore");
+
+  // REVELAÇÃO (ver vegetationReveal.ts): estado persistente (nunca recriado
+  // por quadro) + o buffer de GPU que `advanceAndUpload` escreve direto —
+  // ele É o `.array` de todo `InstancedBufferAttribute` desta camada
+  // (compartilhado por referência entre as N sub-malhas/partes).
+  const revealState = useRef<RevealState | null>(null);
+  const fadeArray = useRef<Float32Array | null>(null);
+  const fadeAttrs = useRef<THREE.InstancedBufferAttribute[]>([]);
+  // slot→posição de mundo dos ativos AGORA — construído pela MESMA passada
+  // que já escreve `instanceMatrix` abaixo (zero custo extra de iteração);
+  // é o "candidatos dos chunks/instâncias próximas" do pedido: nunca a
+  // espécie inteira do mapa, só quem já está desenhando no raio de detalhe.
+  const candidatosRef = useRef<RevealCandidate[]>([]);
+
+  useEffect(() => {
+    if (!temRevelacao) return;
+    const cap = camada.instancias.length;
+    const arr = new Float32Array(cap);
+    fadeArray.current = arr;
+    revealState.current = createRevealState(cap);
+    const attrs: THREE.InstancedBufferAttribute[] = [];
+    for (const parte of camada.partes) {
+      const attr = new THREE.InstancedBufferAttribute(arr, 1);
+      attr.setUsage(THREE.DynamicDrawUsage);
+      parte.geometry.setAttribute("instanceFade", attr);
+      attrs.push(attr);
+    }
+    fadeAttrs.current = attrs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camada, temRevelacao]);
 
   useEffect(() => {
     const meshes = refs.current;
@@ -338,13 +421,16 @@ function CamadaDeEspecie({
     // `<Canvas>`. Aqui só sobra escrever o resultado nos buffers de GPU.
     const visiveis = instanciasVisiveisNaCamada(camada.instancias, center, raioEfetivo, rasteira);
     const ativos: MapProp[] = [];
+    const candidatos: RevealCandidate[] = [];
     let n = 0;
     for (const inst of visiveis) {
       _m.compose(inst.position, inst.quaternion, inst.scale);
       for (const mesh of meshes) mesh?.setMatrixAt(n, _m);
       ativos.push(inst.prop);
+      if (temRevelacao) candidatos.push({ slot: n, x: inst.position.x, z: inst.position.z });
       n++;
     }
+    candidatosRef.current = candidatos;
     for (const mesh of meshes) {
       if (!mesh) continue;
       mesh.count = n;
@@ -362,7 +448,42 @@ function CamadaDeEspecie({
       primeira.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camada, center.x, center.z, raioEfetivo]);
+  }, [camada, center.x, center.z, raioEfetivo, temRevelacao]);
+
+  // baixa frequência por dentro (ver tickRevealFade/REVEAL_CONFIG.updateHz) —
+  // o `useFrame` roda todo quadro só pra chamar uma função que, na maior
+  // parte deles, faz só o lerp barato de `trackedSlots` (tipicamente
+  // dezenas). NUNCA itera `camada.instancias` inteira.
+  //
+  // Upload PARCIAL (3º tuning — desempenho): `tickRevealFade` devolve o
+  // intervalo de slots tocado neste quadro; `addUpdateRange` sobe só esses
+  // bytes pra GPU em vez do buffer inteiro da espécie (`needsUpdate=true`
+  // sozinho reenviaria a capacidade inteira, mesmo com 2 slots mudando numa
+  // espécie de 300).
+  useFrame((state, dt) => {
+    if (!temRevelacao) return;
+    const rs = revealState.current;
+    const arr = fadeArray.current;
+    const player = playerPos?.current;
+    if (!rs || !arr || !player) return;
+    const r = tickRevealFade(
+      rs,
+      dt,
+      () => candidatosRef.current,
+      { x: player.x, z: player.z },
+      { x: state.camera.position.x, z: state.camera.position.z },
+      arr,
+      REVEAL_CONFIG,
+    );
+    if (r.changed) {
+      const count = r.maxSlot - r.minSlot + 1;
+      for (const attr of fadeAttrs.current) {
+        attr.clearUpdateRanges();
+        attr.addUpdateRange(r.minSlot, count);
+        attr.needsUpdate = true;
+      }
+    }
+  });
 
   return (
     <>
@@ -392,6 +513,7 @@ export function VegetationInstancer({
   center,
   radius,
   radiusRasteira,
+  playerPos,
   aoPrecompilar,
 }: {
   map: GameMap;
@@ -400,6 +522,12 @@ export function VegetationInstancer({
   /** raio (já pronto, de `play/worldVisibility.ts`) pras categorias rasteiras — grama/flor/planta */
   radiusRasteira: number;
   /**
+   * Posição do personagem — habilita a REVELAÇÃO de árvore/árvore-seca perto
+   * dele ou no corredor câmera→personagem (`vegetationReveal.ts`). Ausente =
+   * comportamento de sempre (corte binário por raio, sem fade nenhum).
+   */
+  playerPos?: RefObject<THREE.Vector3>;
+  /**
    * Chamado quando a fila de precompile (uma espécie por quadro, ver o
    * efeito abaixo) esvazia — ou já na hora, se não há nenhuma espécie
    * instanciável no mapa. `PlayView.tsx` usa isto pra `gameReady` não
@@ -407,6 +535,9 @@ export function VegetationInstancer({
    */
   aoPrecompilar?: () => void;
 }) {
+  // sistema de grama PROCEDURAL (props/grass/) foi removido (pesado demais) —
+  // `map.props` de categoria "grass" agora renderiza normal por aqui, como
+  // qualquer outra categoria instanciável, sem filtro nenhum.
   const porEspecie = useMemo(() => agruparPorEspecie(map.props), [map]);
   const especies = useMemo(() => especiesDoMapa(map.props), [map]);
   const urls = useMemo(() => especies.map((e) => e.url), [especies]);
@@ -427,10 +558,25 @@ export function VegetationInstancer({
       const partesCruas = bakeSpeciesParts(especies[i]!.url, gltf);
       const category = propCategory(assetId) ?? "";
       const windCat = windCategoryFor(category);
-      const partes = partesCruas.map((p) => ({
-        geometry: p.geometry,
-        material: windCat && !isolado("semVento") ? windMaterialFor(p.material, p.geometry, assetId, windCat) : p.material,
-      }));
+      const temRevelacao = CATEGORIAS_COM_REVELACAO.has(category);
+      const partes = partesCruas.map((p) => {
+        if (temRevelacao && windCat) {
+          // vento + revelação no MESMO onBeforeCompile (treeRevealMaterial.ts)
+          // — `semVento` zera a amplitude em vez de trocar de material, pra
+          // não acoplar a isolação de vento à disponibilidade do fade
+          const profile = resolveWindProfile(assetId, windCat);
+          const efetivo = isolado("semVento") ? { ...profile, amp: 0, gustAmp: 0 } : profile;
+          // casca/galho (Bark_*) não segue a curva por altura — ver o
+          // docblock de `uIsBark` em treeRevealMaterial.ts (bug real:
+          // galho alto virando silhueta transparente contra o céu)
+          const isBark = /bark|tronco|trunk/i.test(p.material.name ?? "");
+          return { geometry: p.geometry, material: treeMaterialFor(p.material, p.geometry, assetId, efetivo, isBark) };
+        }
+        return {
+          geometry: p.geometry,
+          material: windCat && !isolado("semVento") ? windMaterialFor(p.material, p.geometry, assetId, windCat) : p.material,
+        };
+      });
       out.push({ assetId, category, instancias, partes });
     }
     return out;
@@ -540,7 +686,7 @@ export function VegetationInstancer({
   return (
     <>
       {camadas.map((camada) => (
-        <CamadaDeEspecie key={camada.assetId} camada={camada} center={center} radius={radius} radiusRasteira={radiusRasteira} />
+        <CamadaDeEspecie key={camada.assetId} camada={camada} center={center} radius={radius} radiusRasteira={radiusRasteira} playerPos={playerPos} />
       ))}
     </>
   );

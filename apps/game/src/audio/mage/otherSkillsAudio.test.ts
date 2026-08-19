@@ -55,6 +55,7 @@ const {
   aoAparecerAreaDeChao,
   aoPararAreaDeChao,
   aoIniciarBuffComDuracao,
+  aoConfirmarPetrificar,
   __resetForTests: resetLoop,
 } = await import("./otherSkillsAudio");
 
@@ -64,7 +65,8 @@ const FIREBALL_CAST = `${BASE}/fire-ball/cast.mp3`;
 const FIREBALL_HIT = `${BASE}/fire-ball/hit.mp3`;
 const FROSTDIVER_CAST = `${BASE}/frost-diver/cast.mp3`;
 const FROSTDIVER_HIT = `${BASE}/frost-diver/hit.mp3`;
-const STONECURSE_HIT = `${BASE}/stone-curse/hit.mp3`;
+const STONECURSE_CAST = `${BASE}/stone-curse/cast.mp3`;
+const STONECURSE_CONFIRM = `${BASE}/stone-curse/confirm.mp3`;
 
 const FIREWALL_CAST = `${BASE}/fire-wall/cast.mp3`;
 const FIREWALL_DURATION = `${BASE}/fire-wall/duration.mp3`;
@@ -124,7 +126,7 @@ beforeEach(() => {
       [FIREBALL_ID]: skill(FIREBALL_ID, "MG_FIREBALL"),
       [FROSTDIVER_ID]: skill(FROSTDIVER_ID, "MG_FROSTDIVER"),
       [STONECURSE_ID]: skill(STONECURSE_ID, "MG_STONECURSE"),
-      [FIREWALL_ID]: skill(FIREWALL_ID, "MG_FIREWALL"),
+      [FIREWALL_ID]: skill(FIREWALL_ID, "MG_FIREWALL", { durationMs: 6000 }),
       [SAFETYWALL_ID]: skill(SAFETYWALL_ID, "MG_SAFETYWALL"),
       [SIGHT_ID]: skill(SIGHT_ID, "MG_SIGHT"),
       [HEAL_ID]: skill(HEAL_ID, "AL_HEAL"),
@@ -136,11 +138,47 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("grupo 1 — Fire Ball/Frost Diver/Stone Curse: cast em loop", () => {
+describe("grupo 1 — Fire Ball/Frost Diver/Stone Curse: cast em loop (Stone Curse compartilha o loop, mas NÃO tem hit atrasado — ver grupo 4)", () => {
   it("Fire Ball: toca cast.mp3 em loop", () => {
     aoComecarCastProjetil(FIREBALL_ID);
     expect(tocou(FIREBALL_CAST)).toBe(true);
     expect(elementoDe(FIREBALL_CAST)!.loop).toBe(true);
+  });
+
+  it("Stone Curse: toca cast.mp3 (stoned_cast) em loop, mesmo mecanismo", () => {
+    aoComecarCastProjetil(STONECURSE_ID);
+    expect(tocou(STONECURSE_CAST)).toBe(true);
+    expect(elementoDe(STONECURSE_CAST)!.loop).toBe(true);
+  });
+
+  it("Stone Curse: aoLiberarCastProjetil(souEu=true) para o loop assim que a conjuração acaba", () => {
+    aoComecarCastProjetil(STONECURSE_ID);
+    aoLiberarCastProjetil(STONECURSE_ID, true);
+    expect(elementoDe(STONECURSE_CAST)!.paused).toBe(true);
+  });
+
+  it("Stone Curse: teto de segurança por durationMs para o loop mesmo sem skill:cast NENHUM (alvo resistiu ao petrificar — pacote descartado no gateway)", () => {
+    aoComecarCastProjetil(STONECURSE_ID, 1000); // durationMs real do skill:casting
+    vi.advanceTimersByTime(1000 + 249);
+    expect(elementoDe(STONECURSE_CAST)!.paused).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(elementoDe(STONECURSE_CAST)!.paused).toBe(true);
+  });
+
+  it("Stone Curse: caminho feliz (skill:cast chega antes do teto) não corta o loop cedo nem duplica a parada", () => {
+    aoComecarCastProjetil(STONECURSE_ID, 1000);
+    vi.advanceTimersByTime(500);
+    aoLiberarCastProjetil(STONECURSE_ID, true); // save funcionou, skill:cast chegou normal
+    expect(elementoDe(STONECURSE_CAST)!.paused).toBe(true);
+    const pauseCallsAntes = elementoDe(STONECURSE_CAST)!.pauseCalls;
+    vi.advanceTimersByTime(1000); // resto do teto original, se ainda existisse
+    expect(elementoDe(STONECURSE_CAST)!.pauseCalls).toBe(pauseCallsAntes); // timer não disparou de novo
+  });
+
+  it("sem durationMs (0/ausente): sem teto — comportamento antigo preservado pra quem não passa o argumento", () => {
+    aoComecarCastProjetil(FIREBALL_ID);
+    vi.advanceTimersByTime(60_000);
+    expect(elementoDe(FIREBALL_CAST)!.paused).toBe(false);
   });
 
   it("skill fora do grupo (Heal): não toca nada", () => {
@@ -186,12 +224,10 @@ describe("grupo 1 — impacto atrasado", () => {
     expect(tocou(FROSTDIVER_HIT)).toBe(true);
   });
 
-  it("Stone Curse: atraso de 380ms (BEAM_MS + 40)", () => {
+  it("Stone Curse: NÃO agenda hit nenhum (condicional — grupo 4 decide se toca)", () => {
     aoImpactoProjetilAtrasado(STONECURSE_ID);
-    vi.advanceTimersByTime(379);
-    expect(tocou(STONECURSE_HIT)).toBe(false);
-    vi.advanceTimersByTime(1);
-    expect(tocou(STONECURSE_HIT)).toBe(true);
+    vi.advanceTimersByTime(5000);
+    expect(criadas).toHaveLength(0);
   });
 
   it("N chamadas tocam N vezes, cada uma no seu próprio atraso — nunca duplica dentro de UMA chamada", () => {
@@ -204,6 +240,17 @@ describe("grupo 1 — impacto atrasado", () => {
   it("skill fora do grupo: não agenda nada", () => {
     aoImpactoProjetilAtrasado(HEAL_ID);
     vi.advanceTimersByTime(5000);
+    expect(criadas).toHaveLength(0);
+  });
+});
+
+describe("grupo 4 — Petrificar: confirm só quando a skill funciona de verdade", () => {
+  it("aoConfirmarPetrificar toca stoned_confirm.mp3", () => {
+    aoConfirmarPetrificar();
+    expect(tocou(STONECURSE_CONFIRM)).toBe(true);
+  });
+
+  it("nunca chamada nenhuma = nenhum som (o CALLER decide, via transição real de opt1 — testado em useWorldEvents)", () => {
     expect(criadas).toHaveLength(0);
   });
 });
@@ -243,6 +290,34 @@ describe("grupo 2 — Fire Wall/Ghost Dome: área do servidor", () => {
     aoAparecerAreaDeChao(FIREWALL_ID);
     aoAparecerAreaDeChao(FIREWALL_ID);
     expect(playCallsDe(FIREWALL_CAST)).toBe(2);
+  });
+
+  it("Fire Wall: teto de durationMs REAL para o loop mesmo sem skill:ground-gone nenhum (célula perdida)", () => {
+    aoAparecerAreaDeChao(FIREWALL_ID); // durationMs=6000 no setup
+    vi.advanceTimersByTime(5999);
+    expect(elementoDe(FIREWALL_DURATION)!.paused).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(elementoDe(FIREWALL_DURATION)!.paused).toBe(true);
+  });
+
+  it("Fire Wall: ground-gone antes do teto para cedo e CANCELA o timer (não tenta parar de novo depois)", () => {
+    aoAparecerAreaDeChao(FIREWALL_ID);
+    vi.advanceTimersByTime(1000);
+    aoPararAreaDeChao(FIREWALL_ID);
+    expect(elementoDe(FIREWALL_DURATION)!.paused).toBe(true);
+    const pauseCallsAntes = elementoDe(FIREWALL_DURATION)!.pauseCalls;
+    vi.advanceTimersByTime(5000); // resto do durationMs original
+    expect(elementoDe(FIREWALL_DURATION)!.pauseCalls).toBe(pauseCallsAntes); // timer não disparou de novo
+  });
+
+  it("Fire Wall: novo skill:ground reinicia o teto de duração (não herda o timer do anterior)", () => {
+    aoAparecerAreaDeChao(FIREWALL_ID);
+    vi.advanceTimersByTime(5000);
+    aoAparecerAreaDeChao(FIREWALL_ID); // célula nova do MESMO muro — timer reinicia
+    vi.advanceTimersByTime(5000); // 10000 desde o 1º, só 5000 desde o 2º
+    expect(elementoDe(FIREWALL_DURATION)!.paused).toBe(false);
+    vi.advanceTimersByTime(1000); // completa os 6000 do 2º
+    expect(elementoDe(FIREWALL_DURATION)!.paused).toBe(true);
   });
 });
 

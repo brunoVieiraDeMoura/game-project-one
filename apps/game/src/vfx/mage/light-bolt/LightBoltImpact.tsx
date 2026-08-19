@@ -25,7 +25,9 @@ import { multiHitTotalMs } from "../multiHitShared";
 // teto REAL do skill_db (Lv10→10), não mais um chute de 5 (auditoria
 // "count real" 2026-08-19).
 export const LIGHT_BOLT_MAX_HITS = 10;
-export const LIGHT_BOLT_STAGGER_MS = 260;
+/** pedido 2026-08-19 (sincronizar velocidade da animação/áudio): era 260,
+ * mesma razão de `ColdBoltImpact.ICICLE_STAGGER_MS`. */
+export const LIGHT_BOLT_STAGGER_MS = 170;
 export const LIGHT_BOLT_DAMAGE_NUMBER_MS = 1000;
 export const LIGHT_BOLT_TOTAL_VISIBLE_MS = 1500;
 /** duração total que o efeito precisa ficar vivo no `vfxStore` PARA `hits`

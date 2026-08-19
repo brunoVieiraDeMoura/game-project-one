@@ -1,6 +1,6 @@
 import { defineVfx, bindSkillVfx, unbindSkillVfx } from "../../core/registry";
 import { FROST_DIVER_IMPACT_GPU_DEF } from "./frostDiverVfxDefGpu";
-import { COLD_BOLT_CAST_GPU_DEF } from "../cold-bolt/coldBoltVfxDefGpu";
+import { COLD_BOLT_CAST_VFX_ID } from "../cold-bolt/coldBoltVfxDefGpu";
 
 /**
  * Flag DOM↔GPU pra Frost Diver — MESMO padrão bind/unbind de Cold Bolt.
@@ -23,7 +23,7 @@ export function setFrostDiverRenderMode(next: FrostDiverRenderMode): void {
   mode = next;
   if (next === "gpu") {
     bindSkillVfx("MG_FROSTDIVER", "impact", FROST_DIVER_IMPACT_GPU_DEF.id);
-    bindSkillVfx("MG_FROSTDIVER", "cast", COLD_BOLT_CAST_GPU_DEF.id);
+    bindSkillVfx("MG_FROSTDIVER", "cast", COLD_BOLT_CAST_VFX_ID);
   } else {
     unbindSkillVfx("MG_FROSTDIVER", "impact");
     unbindSkillVfx("MG_FROSTDIVER", "cast");

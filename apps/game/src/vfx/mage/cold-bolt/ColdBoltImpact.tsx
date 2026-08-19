@@ -51,8 +51,14 @@ import { createSeededRng } from "../../core/particleMath";
 // teto REAL do skill_db (`rathena/db/re/skill_db.yml: HitCount`, Lv10→10),
 // não mais um chute de 5 (achado da auditoria "count real" 2026-08-19).
 export const ICICLE_MAX_HITS = 10;
-/** ms entre o início de uma estalactite e a próxima */
-export const ICICLE_STAGGER_MS = 200;
+/** ms entre o início de uma estalactite e a próxima — pedido 2026-08-19
+ * (sincronizar velocidade da animação/áudio): era 200, cascata mais rápida
+ * agora que o áudio de impacto toca em CADA hit real (`aoImpactoMultiHit`,
+ * `audio/mage/multiHitCastAudio.ts`) — stagger menor = barragem mais
+ * rápida nos dois lados, sem precisar mexer em `ICICLE_FALL_MS` (a queda de
+ * CADA estalactite continua com a mesma duração/leitura, só a cadência
+ * entre elas encurtou). */
+export const ICICLE_STAGGER_MS = 130;
 /** ms de queda de UMA estalactite, cabeça → corpo */
 export const ICICLE_FALL_MS = 560;
 /** fração da queda em que ela "chega" (dano/flash/spikes/aro) — o resto da

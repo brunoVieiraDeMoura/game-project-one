@@ -1,0 +1,46 @@
+{
+  "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "gids": [
+    1001,
+    1002
+  ],
+  "glowChaoAlvoNota": "NÃO TESTADO — GlowChao(alvo) só monta dentro de net/NetEntity.tsx, que só roda com sessão online real; bench offline não alcança esse componente sem fingir sessão inteira (fora de escopo desta fase).",
+  "results": [
+    {
+      "label": "alvo COLD (1º select, entidade A)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17,
+      "renderMsMax": 12,
+      "gpuMsMax": 16.439
+    },
+    {
+      "label": "alvo WARM (2º select, entidade B, mesma cor/material)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17,
+      "renderMsMax": 1.7,
+      "gpuMsMax": 16.006
+    },
+    {
+      "label": "mira COLD (1ª vez abrindo mira de área)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 16.9,
+      "renderMsMax": 1.7,
+      "gpuMsMax": 16.47
+    },
+    {
+      "label": "mira WARM (cancela + reabre, skill diferente mesmo modo)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17.3,
+      "renderMsMax": 3,
+      "gpuMsMax": 16.455
+    }
+  ]
+}

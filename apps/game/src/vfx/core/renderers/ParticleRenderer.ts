@@ -23,13 +23,43 @@ interface ParticleSpec {
   seed: number;
 }
 
-function buildParticles(seed: number, count: number, radius: number): ParticleSpec[] {
+/**
+ * `delayBaseMs`/`delayMaxMs`/`durBaseMs`/`durJitterMs` — configuráveis via
+ * `payload.burstDelayBaseMs`/`burstDelayMaxMs`/`burstDurBaseMs`/
+ * `burstDurJitterMs` (Fire Lance impact, reconstrução 2026-08-19-b).
+ * Defaults (0/2200/1200/1000) são EXATAMENTE o comportamento antigo — quem
+ * não passa os 4 campos (Oracle, Fire Wall, todo o resto) nunca muda. Achado
+ * documentado em `multiHitShardImpact.ts` (auditoria "Generic Hit VFX"): o
+ * default antigo (`delayMs` até 2200ms, pensado pra nuvem de área de vida
+ * longa) deixava a maioria das partículas de um efeito curto (~200-400ms)
+ * NUNCA nascer (`elapsedMs >= spec.delayMs` falso a vida toda) — daí o
+ * fragmento genérico ter evitado `particle` inteiramente. Um burst de
+ * impacto passa `delayBaseMs` perto do instante de pouso + `delayMaxMs`
+ * pequeno (jitter curto) + `durBaseMs`/`durJitterMs` curtos, pra nascer e
+ * morrer dentro da janela real de vida da instância.
+ */
+function buildParticles(
+  seed: number,
+  count: number,
+  radius: number,
+  delayBaseMs = 0,
+  delayMaxMs = 2200,
+  durBaseMs = 1200,
+  durJitterMs = 1000,
+): ParticleSpec[] {
   const out: ParticleSpec[] = [];
   const rnd = createSeededRng(seed);
   for (let i = 0; i < count; i++) {
     const angle = rnd() * Math.PI * 2;
     const r = 0.25 + rnd() ** 1.8 * Math.max(0.1, radius - 0.25);
-    out.push({ dx: Math.cos(angle) * r, dz: Math.sin(angle) * r, dy: 0.1, delayMs: rnd() * 2200, durMs: 1200 + rnd() * 1000, seed: rnd() });
+    out.push({
+      dx: Math.cos(angle) * r,
+      dz: Math.sin(angle) * r,
+      dy: 0.1,
+      delayMs: delayBaseMs + rnd() * delayMaxMs,
+      durMs: durBaseMs + rnd() * durJitterMs,
+      seed: rnd(),
+    });
   }
   return out;
 }
@@ -60,7 +90,12 @@ export class ParticleRenderer extends InstancedBillboardBase {
   onInstanceCreate(instance: VfxInstanceRuntime): void {
     const count = Number(instance.spawnOptions.payload?.particleCount ?? DEFAULT_PARTICLE_COUNT);
     const radius = Number(instance.spawnOptions.payload?.radius ?? 1);
-    const specs = buildParticles(instance.instanceId * 7919 + 1, count, radius);
+    const payload = instance.spawnOptions.payload;
+    const delayBaseMs = Number(payload?.burstDelayBaseMs ?? 0);
+    const delayMaxMs = Number(payload?.burstDelayMaxMs ?? 2200);
+    const durBaseMs = Number(payload?.burstDurBaseMs ?? 1200);
+    const durJitterMs = Number(payload?.burstDurJitterMs ?? 1000);
+    const specs = buildParticles(instance.instanceId * 7919 + 1, count, radius, delayBaseMs, delayMaxMs, durBaseMs, durJitterMs);
     const indices = specs.map(() => this.acquireSlot().index);
     this.slots.set(instance.instanceId, { indices, specs });
     this.trySyncAtlas(instance.def);

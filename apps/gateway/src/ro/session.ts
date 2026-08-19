@@ -240,6 +240,29 @@ export class RoSession extends EventEmitter {
 	 */
 	private readonly entities = new Map<number, EntitySnapshot>();
 	/**
+	 * gids cujo HP já veio de uma fonte AO VIVO (`NOTIFY_MONSTER_HP`/
+	 * `HP_INFO_TINY`, disparada a cada golpe de verdade).
+	 *
+	 * Existe só para resolver uma corrida com o REQNAME: `queryName` dispara no
+	 * spawn e `entity:info` dispara a cada clique de ataque (`acoes.ts:
+	 * atacar`), e a string `PName` do ACK_REQNAME* é um retrato do HP tirado no
+	 * instante em que o rAthena PROCESSOU aquele pedido — que pode ser ANTES do
+	 * golpe que o próprio clique disparou (cliente manda REQNAME e depois
+	 * ATTACK na mesma ordem, mas as DUAS respostas viajam de volta pela mesma
+	 * conexão e a do REQNAME pode chegar depois se ficar atrás de outro pacote
+	 * na fila de saída do char-server). Resultado sem esta guarda: o HP real
+	 * (500/1000, do HP_INFO_TINY) chega primeiro e é sobrescrito de volta pelo
+	 * retrato velho (1000/1000) do REQNAME que só chegou depois — a barra sobe
+	 * de novo com o número certo já mostrado antes.
+	 *
+	 * Uma vez que a fonte ao vivo falou pela primeira vez, ela vira a ÚNICA
+	 * dona do HP daquele gid — o bloco do REQNAME continua atualizando nome/
+	 * nível (não corridos, o rAthena não muda nível de mob em combate), só para
+	 * de escrever HP. Nenhuma segunda lógica de cálculo: é a mesma leitura de
+	 * `pkt.hp`/`pkt.maxhp` de sempre, só ganhando prioridade sobre a mais velha.
+	 */
+	private readonly hpAoVivo = new Set<number>();
+	/**
 	 * Lista de amigos, guilda e ignorados.
 	 *
 	 * A de amigos chega em `pc_authok` (pc.cpp:2252), ou seja, ANTES do
@@ -596,6 +619,7 @@ export class RoSession extends EventEmitter {
 			conn.hook(PACKET.ZC.NPCACK_MAPMOVE, (pkt: any) => {
 				// mapa novo, mundo novo: o que estava em volta ficou para trás
 				this.entities.clear();
+				this.hpAoVivo.clear();
 				const destino = normalizeMapName(pkt.mapName);
 				const mesmoMapa = destino === mapName;
 				mapName = destino;
@@ -785,6 +809,7 @@ export class RoSession extends EventEmitter {
 
 		conn.hook(PACKET.ZC.NOTIFY_VANISH, (pkt: any) => {
 			this.entities.delete(pkt.GID);
+			this.hpAoVivo.delete(pkt.GID);
 			this.emit("entity-vanish", { gid: pkt.GID, reason: pkt.type });
 		});
 
@@ -809,7 +834,10 @@ export class RoSession extends EventEmitter {
 				if (!info) return;
 
 				const hp = info.match(/HP:\s*(\d+)\s*\/\s*(\d+)/i);
-				if (hp) {
+				// uma vez que `hpAoVivo` já falou por este gid, o retrato do REQNAME
+				// pode estar atrasado/velho (ver o porquê no campo `hpAoVivo`) —
+				// nome/nível continuam valendo, só o HP para de vir por aqui.
+				if (hp && !this.hpAoVivo.has(gid)) {
 					if (known) {
 						known.hp = Number(hp[1]);
 						known.maxHp = Number(hp[2]);
@@ -847,6 +875,9 @@ export class RoSession extends EventEmitter {
 						known.hp = pkt.hp;
 						known.maxHp = pkt.maxhp;
 					}
+					// a partir daqui esta é a ÚNICA fonte de HP pra este gid — o
+					// retrato do REQNAME (bloco ACK_REQNAME* acima) para de escrever
+					this.hpAoVivo.add(gid);
 					this.emit("entity-hp", { gid, hp: pkt.hp, maxHp: pkt.maxhp });
 				});
 			}
@@ -1677,6 +1708,28 @@ export class RoSession extends EventEmitter {
 		// Alt+Z; o custo é um pacote de 2 bytes cada.
 		this.requestGuildMembers();
 		this.requestIgnoreList();
+	}
+
+	/**
+	 * Avisa o rAthena de verdade que a cena 3D (React/R3F) já montou -
+	 * DISTINTO de `notifyReady()` acima, que já dispara bem antes disso (a
+	 * sessão entrando no mapa, não a cena renderizada). É o sinal que faz o
+	 * servidor trocar a proteção-teto de carregamento
+	 * (`mob_aggro_immune_load_cap_time`) pela contagem real de 10s
+	 * (`mob_aggro_immune_time`, `pc_setmobaggroimmunity_ready` em pc.cpp).
+	 *
+	 * Pacote customizado deste projeto (não existe no protocolo RO real):
+	 * opcode cru 0x0AE1, só o cabeçalho de 2 bytes, sem corpo - registrado em
+	 * `clif_packetdb.hpp`/`clif_parse_WorldRenderReady` no rAthena. Não passa
+	 * pelo gerador de pacotes de `packages/ro-protocol` (não vale a pena
+	 * estender o codec inteiro por um único pacote sem corpo) - montado à
+	 * mão, mesmo formato que `RoConnection.send()` espera de qualquer pacote
+	 * (`{ build: () => { buffer } }`).
+	 */
+	notifyRenderReady(): void {
+		const buffer = new ArrayBuffer(2);
+		new DataView(buffer).setUint16(0, 0x0ae1, true);
+		this.map?.send({ build: () => ({ buffer }) });
 	}
 
 	/**

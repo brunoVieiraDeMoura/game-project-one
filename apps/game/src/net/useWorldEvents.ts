@@ -20,12 +20,24 @@ import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart
 import { vozDeAtaque, vozDeConjuracao, vozDeDano } from "../audio/combatVoice";
 import { efeitoDeAtaqueBasico, efeitoDeSkill } from "../audio/combatWeapon";
 import { aoComecarCastMultiHit, aoConcluirCastDeChao, aoLiberarCastMultiHit } from "../audio/mage/multiHitCastAudio";
+import {
+  aoComecarCastProjetil,
+  aoLiberarCastProjetil,
+  aoImpactoProjetilAtrasado,
+  aoAparecerAreaDeChao,
+  aoPararAreaDeChao,
+  aoIniciarBuffComDuracao,
+  aoConfirmarPetrificar,
+} from "../audio/mage/otherSkillsAudio";
+import { OPT1_STONEWAIT } from "./entityOption";
 import { aoAparecerItemNoChao, aoGanharItem, registrarMorteDeMonstro } from "../audio/itemSfx";
 import { pegandoItem } from "./pickupStore";
 import { amostrarRelogio, zerarRelogioDoServidor } from "./relogioDoServidor";
 import { clearEquipPending, settleStatusWatch, alcanceDaArma } from "./equipmentStore";
 import { useCardStore } from "./cardStore";
 import { useSkillCatalog } from "./skillCatalog";
+import { useItemCatalog } from "./itemCatalog";
+import { useMonsterCatalog } from "./monsterCatalog";
 import {
   useStatusStore,
   SELF_TRACKED_BUFF_SKILLS,
@@ -36,9 +48,16 @@ import {
 } from "./statusStore";
 import { MULTI_HIT_DURATION_MS, MULTI_HIT_SHARD_VFX } from "../vfx/mage/multiHitRegistry";
 import { spawnMultiHitShards, shardColorForElement } from "../vfx/mage/multiHitShardImpact";
+import { spawnFireLanceHits } from "../vfx/mage/fire-lance/fireLanceMultiHit";
+import { fireLanceQualityTier } from "../vfx/mage/fire-lance/fireLanceRenderMode";
+import { spawnColdBoltHits } from "../vfx/mage/cold-bolt/coldBoltMultiHit";
+import { coldBoltQualityTier } from "../vfx/mage/cold-bolt/coldBoltRenderMode";
+import { spawnLightBoltHits } from "../vfx/mage/light-bolt/lightBoltMultiHit";
+import { lightBoltQualityTier } from "../vfx/mage/light-bolt/lightBoltRenderMode";
 import { IMPACT_VFX_DURATION_MS, BUFF_VFX_AEGIS } from "../vfx/mage/vfxDurationOverrides";
 import { getSkillProjectileCount } from "../vfx/mage/multiHitShared";
 import { classifyHit } from "../vfx/core/hitVfxResolver";
+import { spawnCombatHitVfx, spawnCombatHitImpacts } from "../vfx/combat/combatHitVfx";
 
 /** EFST_POSTDELAY — `tools/legacy-migration/output/efst.json:48` ("46":
  * "EFST_POSTDELAY"), tabela testada (âncoras do enum C real). Ver uso em
@@ -80,6 +99,28 @@ function testarSkillMultiHit(aegis: string, gid: number, dano: number, nivel: nu
 }
 
 /**
+ * `__testarFireBall(gid, dano)` / `__testarFrostDiver(gid, dano)` no
+ * console — auditoria "origem do DOM real /play" (2026-08-19): as duas
+ * únicas skills desta lista de 7 sem helper de teste ainda (não são
+ * multi-hit, então `testarSkillMultiHit` não serve — número vai pelo
+ * `damageFeed` genérico, não por cascata própria). Mesmo espírito dos 5
+ * helpers acima: `kind:"impact"` direto no `vfxStore`, sem depender de
+ * rede/gateway.
+ */
+function testarSkillHitUnico(aegis: string, gid: number, dano: number): void {
+  const skillId = Object.values(useSkillCatalog.getState().byId).find((s) => s.aegisName === aegis)?.id ?? 17;
+  useSkillCatalog.getState().ensure([skillId]);
+  useVfxStore.getState().spawn({
+    kind: "impact",
+    skillId,
+    gid,
+    sourceGid: useWorldStore.getState().selfGid,
+    expiresAt: performance.now() + 4000,
+  });
+  useDamageFeed.getState().push({ gid, value: dano, crit: false, miss: false, onSelf: false, skill: true });
+}
+
+/**
  * TEMP DEBUG (investigação "Ghost Dome não aparece") — `window.__debugGhostDome()`
  * no console. Spawna uma unidade de área DE VERDADE (mesmo `vfxStore.spawn`
  * que `onSkillGround` chama pra um `skill:ground` real) na célula do
@@ -95,7 +136,6 @@ function debugGhostDome(): void {
   const self = useWorldStore.getState().self;
   const cell = { x: Math.round(self.x), y: Math.round(self.y) };
   const unitGid = -Math.floor(Math.random() * 1_000_000) - 1; // negativo: nunca colide com gid real do servidor
-  console.info("[DEBUG GHOST DOME] spawning", { skillId, cell, unitGid });
   useVfxStore.getState().spawn({
     kind: "area",
     skillId,
@@ -103,7 +143,6 @@ function debugGhostDome(): void {
     unitGid,
     expiresAt: Number.POSITIVE_INFINITY,
   });
-  console.info("[DEBUG GHOST DOME] spawned — chame window.__debugGhostDomeGone() pra remover");
 }
 
 if (import.meta.env.DEV && typeof window !== "undefined") {
@@ -113,6 +152,8 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
     __testarThunderStorm?: (gid: number, dano?: number, nivel?: number) => void;
     __testarLightBolt?: (gid: number, dano?: number, nivel?: number) => void;
     __testarSoulStrike?: (gid: number, dano?: number, nivel?: number) => void;
+    __testarFireBall?: (gid: number, dano?: number) => void;
+    __testarFrostDiver?: (gid: number, dano?: number) => void;
     __debugGhostDome?: () => void;
   };
   w.__testarColdBolt = (gid, dano = 5000, nivel = 10) => testarSkillMultiHit(AEGIS_COLD_BOLT, gid, dano, nivel);
@@ -120,6 +161,8 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
   w.__testarThunderStorm = (gid, dano = 5000, nivel = 10) => testarSkillMultiHit("MG_THUNDERSTORM", gid, dano, nivel);
   w.__testarLightBolt = (gid, dano = 5000, nivel = 10) => testarSkillMultiHit("MG_LIGHTNINGBOLT", gid, dano, nivel);
   w.__testarSoulStrike = (gid, dano = 5000, nivel = 10) => testarSkillMultiHit("MG_SOULSTRIKE", gid, dano, nivel);
+  w.__testarFireBall = (gid, dano = 5000) => testarSkillHitUnico("MG_FIREBALL", gid, dano);
+  w.__testarFrostDiver = (gid, dano = 5000) => testarSkillHitUnico("MG_FROSTDIVER", gid, dano);
   w.__debugGhostDome = debugGhostDome;
 }
 
@@ -152,6 +195,11 @@ export function useWorldEvents(): void {
       // de "vistos por último" em pacote nenhum — quem lembra é o navegador, e
       // só de gente (mob e NPC não entram).
       if (e.kind === "player" && e.name) useFriendStore.getState().verJogador(e.name, "cena");
+      // Pré-carrega o catálogo da ESPÉCIE (nome/nível/elemento/raça/tamanho),
+      // não só do gid individual: a primeira instância de cada mobId visto
+      // no mapa já busca por todos — mirar outro mob da mesma espécie depois
+      // (Poring → Lunatic → Poring) reaproveita, `ensure` é idempotente.
+      if (e.kind === "mob") useMonsterCatalog.getState().ensure([e.job]);
     };
 
     const onMove = (p: {
@@ -207,6 +255,10 @@ export function useWorldEvents(): void {
       // action 9 (esquiva) e dano 0 = "Miss". O rAthena decide; aqui só se
       // escolhe a cor e o texto.
       const selfGid = useWorldStore.getState().selfGid;
+      // MESMO byte real que `onSkillCast` usa (`e_damage_type`) — calculado
+      // uma vez, reusado pelo áudio/número/VFX abaixo (auditoria "Combat
+      // Hit VFX genérico" 2026-08-19).
+      const crit = damageKind(p.action).crit;
       /**
        * O personagem batendo é a ÚNICA prova de que o ataque entrou.
        *
@@ -231,7 +283,7 @@ export function useWorldEvents(): void {
          */
         if (!pegandoItem(performance.now())) {
           vozDeAtaque();
-          efeitoDeAtaqueBasico(p.damage, damageKind(p.action).crit);
+          efeitoDeAtaqueBasico(p.damage, crit);
         }
       }
       // e o contrário: quem bate em VOCÊ vira prioridade da assistência de mira
@@ -280,11 +332,30 @@ export function useWorldEvents(): void {
       useDamageFeed.getState().push({
         gid: p.targetGid,
         value: p.damage,
-        crit: damageKind(p.action).crit,
+        crit,
         miss: p.damage === 0,
         onSelf: p.targetGid === selfGid,
         skill: false,
       });
+      /**
+       * Combat Hit VFX genérico (auditoria "fechar Normal/Single/Critical",
+       * 2026-08-19) — NORMAL/SINGLE_HIT/CRITICAL/MULTI_HIT/MULTI_HIT_
+       * CRITICAL do ataque básico, via `hitVfxResolver.classifyHit` (MESMO
+       * `count`/`action` reais que decidem áudio/número acima, nunca um
+       * segundo cálculo). Ataque básico NÃO tem `skillId`/elemento — cor
+       * cai no neutro (`shardColorForElement(undefined)`), nunca inventado.
+       * Gate igual ao resto: só em hit de verdade (`p.damage>0`), "Miss"
+       * continua só o texto de sempre.
+       */
+      if (p.damage > 0) {
+        const classification = classifyHit(p.count, 1, crit);
+        const color = shardColorForElement(undefined);
+        if (classification.multiplicity === "single") {
+          spawnCombatHitVfx({ targetGid: p.targetGid, color, critical: crit });
+        } else {
+          spawnCombatHitImpacts({ targetGid: p.targetGid, hits: classification.hits, color, critical: crit });
+        }
+      }
     };
     const onName = (p: { gid: number; name: string }) => useWorldStore.getState().rename(p.gid, p.name);
     const onLevel = (p: { gid: number; level: number }) => useWorldStore.getState().setLevel(p.gid, p.level);
@@ -297,7 +368,20 @@ export function useWorldEvents(): void {
       // pseudo-ids de body-state antes de aplicar o novo — só um por vez é
       // possível, então trocar de estado (ex.: petrificando → petrificado)
       // precisa apagar o antigo primeiro.
+      //
+      // Petrificar (`aoConfirmarPetrificar`, `audio/mage/otherSkillsAudio`)
+      // é CONDICIONAL — o alvo pode salvar contra o status (mesmo docblock
+      // de `worldStore.ts: NetEntity.opt1`: "nunca assumir petrificação só
+      // porque um ataque acertou") — por isso o som de confirmação só toca
+      // na TRANSIÇÃO de verdade pra `OPT1_STONEWAIT`, lida ANTES de
+      // `setOption` sobrescrever o valor anterior; um reenvio do MESMO
+      // `opt1` (ex. outro pacote de estado chegando por outro motivo) nunca
+      // dispara o som de novo.
+      const opt1Anterior = useWorldStore.getState().entities[p.gid]?.opt1;
       useWorldStore.getState().setOption(p.gid, p.opt1);
+      if (p.opt1 === OPT1_STONEWAIT && opt1Anterior !== OPT1_STONEWAIT) {
+        aoConfirmarPetrificar();
+      }
 
       for (const v of BODY_STATE_LOCKING_VALUES) useStatusStore.getState().end(p.gid, bodyStateEfstId(v));
       // `(BODY_STATE_LOCKING_VALUES as readonly number[]).includes`, não
@@ -373,13 +457,6 @@ export function useWorldEvents(): void {
     // `statusStore.setDuration` correlacionar com a entrada certa
     // independente de qual dos dois pacotes chegou primeiro.
     const onStatusDuration = (p: { gid: number; bodyState: number; healthState: number; durationMs: number }) => {
-      // DEV TEMP — prova SERVER→GATEWAY→CLIENT (auditoria "contador de
-      // duração" 2026-08-14). Remover depois dos testes.
-      if (import.meta.env.DEV) {
-        console.info(
-          `[DURATION][CLIENT] target=${p.gid} bodyState=${p.bodyState} healthState=${p.healthState} duration=${p.durationMs}`,
-        );
-      }
       // 0 = "nenhum" nos dois campos (mesma convenção de OPT1_NONE/OPT2_NONE) —
       // bodyState tem prioridade porque nenhum dos 10 status suportados seta os dois.
       const efstId = p.bodyState !== 0 ? bodyStateEfstId(p.bodyState) : p.healthState !== 0 ? healthStateEfstId(p.healthState) : undefined;
@@ -451,7 +528,16 @@ export function useWorldEvents(): void {
       if (p.name === "speed") useWorldStore.getState().setSelfSpeed(p.value);
     };
     const onStatus = (p: Record<string, number>) => usePlayerStore.getState().applyStatus(p);
-    const onInvList = (p: InventoryItemPayload[]) => usePlayerStore.getState().setInventory(p);
+    const onInvList = (p: InventoryItemPayload[]) => {
+      usePlayerStore.getState().setInventory(p);
+      // Pré-carrega o catálogo de nomes/metadados ASSIM QUE a lista chega do
+      // rAthena — não quando o Alt+E (ou o Alt+Q, que lê o mesmo catálogo para
+      // os equipados) monta pela primeira vez. `ensure` já deduplica contra o
+      // que estiver pendente/conhecido, então este pedido e o que o
+      // InventoryWindow/StatusWindow ainda disparam no próprio `useEffect`
+      // não batem duas vezes na API — o segundo só confirma que já tem tudo.
+      useItemCatalog.getState().ensure(p.map((it) => it.itemId));
+    };
     const onInvAdd = (p: InventoryItemPayload) => {
       usePlayerStore.getState().addItem(p);
       // e o aviso no alto da tela: sem ele, pegar coisa do chão não tinha
@@ -489,7 +575,20 @@ export function useWorldEvents(): void {
       useCardStore.getState().aplicarResultado(p);
     };
 
-    const onSkills = (p: SkillPayload[]) => usePlayerStore.getState().setSkills(p);
+    const onSkills = (p: SkillPayload[]) => {
+      usePlayerStore.getState().setSkills(p);
+      // Mesma ideia do `onInvList`: pré-carrega o skill_db (nome, tipo de
+      // alvo, custo/alcance/recarga por nível) assim que o ZC.SKILLINFO_LIST
+      // chega, para o Alt+S e a SkillBar acharem o catálogo já quente. `niveis`
+      // vai junto para os campos `perLevel` resolverem no nível que o
+      // personagem TEM, não no 1 — sem isto o primeiro `ensure` a chegar
+      // (este) travaria o catálogo no nível 1 para sempre, e o que o
+      // `SkillsWindow` pede depois (com o nível certo) não reconsultaria a API,
+      // porque `ensure` só busca o que falta.
+      const niveis: Record<number, number> = {};
+      for (const sk of p) niveis[sk.id] = sk.level;
+      useSkillCatalog.getState().ensure(p.map((sk) => sk.id), niveis);
+    };
     const onHotkeys = (p: HotkeySlotPayload[]) => useSkillBar.getState().hydrateFromServer(p);
 
     // VFX: 600ms é a duração dos efeitos pontuais (impacto/buff); área vive
@@ -546,6 +645,12 @@ export function useWorldEvents(): void {
        * no mesmo teste: `skill:ground-cast` chegou com `sourceGid === selfGid`).
        */
       aoLiberarCastMultiHit(p.skillId, souEu);
+      // Fire Ball/Frost Diver/Stone Curse: mesma liberação de loop, grupo
+      // próprio (`audio/mage/otherSkillsAudio`); o impacto delas é atrasado
+      // pro instante em que o VFX explode, nunca na liberação — QUALQUER
+      // caster, mesmo motivo do multi-hit acima.
+      aoLiberarCastProjetil(p.skillId, souEu);
+      aoImpactoProjetilAtrasado(p.skillId);
       // e é a deixa da animação de LIBERAÇÃO — o tiro/gesto final da magia
       marcarCastRelease(p.sourceGid, performance.now());
       // idem pra UI (barra de skill do MOB na `TargetFrame`) — mesmo `gid`,
@@ -580,6 +685,12 @@ export function useWorldEvents(): void {
       // buff, não o flash genérico — mesmo `durationMs` que o rAthena aplicou.
       const isCustomBuffVfx = p.kind === "buff" && aegis !== undefined && BUFF_VFX_AEGIS.has(aegis);
       const buffDurationMs = isCustomBuffVfx ? useSkillCatalog.getState().byId[p.skillId]?.durationMs || EFFECT_MS : EFFECT_MS;
+      // Oráculo/Sight: loop de duration próprio, SÓ o buff do PRÓPRIO
+      // personagem (`souEu`) — mesma duração real que já anima o VFX acima,
+      // nunca um número novo. Ver `audio/mage/otherSkillsAudio` grupo 3.
+      if (souEu && isCustomBuffVfx) {
+        aoIniciarBuffComDuracao(p.skillId, buffDurationMs);
+      }
       /**
        * Crítico — MESMO byte real (`action`/`e_damage_type`) que
        * `onAction` já usa; movido pra antes de `hits` porque a
@@ -700,6 +811,50 @@ export function useWorldEvents(): void {
           critical: crit,
         });
       }
+      /**
+       * Fire Lance (reconstrução 2026-08-19-b) — SAIU do fragmento
+       * genérico acima (removida de `MULTI_HIT_SHARD_VFX`), tem driver
+       * PRÓPRIO agora (`fire-lance/fireLanceMultiHit.ts:
+       * spawnFireLanceHits`) — mesmo gate (`p.kind==="target"`,
+       * `p.damage>0`) e mesmo `hits` real, só a composição visual (losango
+       * grande+stretch+trail+burst dedicado, 3 tiers) e o timing de queda
+       * (`FIRE_LANCE_FALL_MS`) são próprios da skill.
+       */
+      if (isMultiHit && aegis === "MG_FIREBOLT" && p.kind === "target" && p.damage > 0) {
+        spawnFireLanceHits({ targetGid: p.targetGid, hits, critical: crit, tier: fireLanceQualityTier() });
+      }
+      /**
+       * Cold Bolt (reconstrução 2026-08-19-d) — MESMO tratamento de Fire
+       * Lance: saiu do fragmento genérico, driver PRÓPRIO
+       * (`cold-bolt/coldBoltMultiHit.ts: spawnColdBoltHits`).
+       */
+      if (isMultiHit && aegis === "MG_COLDBOLT" && p.kind === "target" && p.damage > 0) {
+        spawnColdBoltHits({ targetGid: p.targetGid, hits, critical: crit, tier: coldBoltQualityTier() });
+      }
+      /**
+       * Eletrocutar/Light Bolt (reconstrução 2026-08-19-f) — MESMO
+       * tratamento: driver PRÓPRIO (`light-bolt/lightBoltMultiHit.ts:
+       * spawnLightBoltHits`), nunca teve fragmento genérico (a composição
+       * antiga era `beam` de pé, própria desde sempre — só o driver por
+       * hit é novo).
+       */
+      if (isMultiHit && aegis === "MG_LIGHTNINGBOLT" && p.kind === "target" && p.damage > 0) {
+        spawnLightBoltHits({ targetGid: p.targetGid, hits, critical: crit, tier: lightBoltQualityTier() });
+      }
+      /**
+       * Tempestade de Raios/Thunder Storm (2026-08-19-t: "faz o mesmo
+       * efeito pra Tempestade de Raios, ela é AoE mas é basicamente a
+       * mesma habilidade") — MESMO driver de Eletrocutar
+       * (`spawnLightBoltHits`), nenhum novo. Correto porque o servidor já
+       * entrega a AoE como N eventos de alvo independentes (este bloco
+       * roda uma vez POR MOB atingido), cada um com seu próprio `hits`
+       * (pulsos) — exatamente a forma que Eletrocutar já consome com 1
+       * alvo só. `thunderStormVfxDefGpu.tsx: THUNDER_STORM_IMPACT_GPU_DEF`
+       * ficou só com os NÚMEROS (`dom`), o raio real vem daqui.
+       */
+      if (isMultiHit && aegis === "MG_THUNDERSTORM" && p.kind === "target" && p.damage > 0) {
+        spawnLightBoltHits({ targetGid: p.targetGid, hits, critical: crit, tier: lightBoltQualityTier() });
+      }
       // Miss (`damage === 0`) continua pelo `damageFeed` de sempre MESMO
       // nessas skills — `*Impact` só desenha número pra dano > 0
       // (`splitDamage` não faz sentido pra "errou"), então sem isto um hit
@@ -716,14 +871,29 @@ export function useWorldEvents(): void {
       }
     };
 
-    const onSkillCasting = (p: { skillId: number; sourceGid: number; x: number; y: number; durationMs: number }) => {
+    const onSkillCasting = (p: {
+      skillId: number;
+      sourceGid: number;
+      targetGid: number;
+      x: number;
+      y: number;
+      durationMs: number;
+    }) => {
       // barra de conjuração é só do PRÓPRIO personagem; a dos outros já vira
       // efeito na cena
       if (p.sourceGid === useWorldStore.getState().selfGid) {
-        useCastStore.getState().comecar(p.skillId, p.durationMs || 0);
+        // 0 = skill de chão/AOE (unit_skilluse_pos no servidor não tem
+        // entidade nenhuma); `NetPlayer` só gira o personagem para o alvo
+        // quando este campo existe
+        useCastStore.getState().comecar(p.skillId, p.durationMs || 0, p.targetGid > 0 ? p.targetGid : undefined);
         // Cold Bolt/Fire Lance/Thunder Storm: som de "carregando a magia",
         // ver `audio/mage/multiHitCastAudio`
         aoComecarCastMultiHit(p.skillId);
+        // Fire Ball/Frost Diver/Stone Curse: mesmo loop de "carregando",
+        // grupo próprio — ver `audio/mage/otherSkillsAudio`. `durationMs`
+        // real arma o teto de segurança do loop (Stone Curse: `skill:cast`
+        // nunca chega quando o alvo resiste, ver docblock lá).
+        aoComecarCastProjetil(p.skillId, p.durationMs || 0);
       }
       // a animação de conjuração vale para QUALQUER caster, não só o próprio
       // personagem — é ela que faz o gesto de "carregando a magia" na cena
@@ -772,8 +942,6 @@ export function useWorldEvents(): void {
     };
 
     const onSkillGround = (p: { gid: number; x: number; y: number; skillId: number }) => {
-      // TEMP DEBUG
-      console.info("[CLIENT VFX IN] skill:ground", p);
       useVfxStore.getState().spawn({
         kind: "area",
         skillId: p.skillId,
@@ -782,9 +950,20 @@ export function useWorldEvents(): void {
         // área não expira sozinha: quem tira é o ZC.SKILL_DISAPPEAR
         expiresAt: Number.POSITIVE_INFINITY,
       });
+      // Fire Wall/Ghost Dome: whoosh de ignição + loop de duration (se
+      // houver) — a área nasceu de verdade no mundo agora, mesmo instante do
+      // VFX acima. Ver `audio/mage/otherSkillsAudio` grupo 2.
+      aoAparecerAreaDeChao(p.skillId);
     };
 
-    const onSkillGroundGone = (p: { gid: number }) => useVfxStore.getState().removeUnit(p.gid);
+    const onSkillGroundGone = (p: { gid: number }) => {
+      // precisa do `skillId` da área que está sumindo pra parar o loop de
+      // duration certo (`skill:ground-gone` só manda o `gid` da unidade de
+      // chão) — busca no próprio efeito ANTES de `removeUnit` apagá-lo.
+      const skillId = useVfxStore.getState().effects.find((e) => e.unitGid === p.gid)?.skillId;
+      if (skillId !== undefined) aoPararAreaDeChao(skillId);
+      useVfxStore.getState().removeUnit(p.gid);
+    };
 
     const onGroundItem = (p: {
       gid: number;
@@ -859,6 +1038,14 @@ export function useWorldEvents(): void {
       useWorldStore.getState().setSelfCell(enter.x, enter.y);
     }
     socket.emit("world:ready");
+    // ESTE ponto (montagem deste efeito, listeners já assinados) é o real
+    // "a cena renderizou" - `world:ready` acima é reenvio de cache, o
+    // primeiro já foi mandado por useGatewayEvents no instante em que a
+    // sessão entra no mapa, bem antes da cena 3D existir. `world:render-ready`
+    // é o sinal que o rAthena de verdade usa pra trocar a proteção-teto de
+    // carregamento de agro pela contagem real de 10s (mob_aggro_immune_time
+    // - ver RoSession.notifyRenderReady no gateway).
+    socket.emit("world:render-ready");
 
     return () => {
       socket.off("skill:list", onSkills);

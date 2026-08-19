@@ -54,3 +54,6 @@ boss_spawn_delay: 1
 // quer trocar arma/flecha em pleno combate sem perder o slot de munição, então
 // os dois equipamentos ficam INDEPENDENTES: desequipar um nunca mexe no outro.
 ammo_unequip: no
+
+// ---- mob_aggro_immune ---------------------------------------------------
+mob_aggro_immune_time: 30000

@@ -97,23 +97,30 @@ export function shardColorForElement(element: string | undefined): string {
 
 const pendingShardTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
-export interface SpawnMultiHitShardsOptions {
+export interface SpawnHitImpactsOptions {
+  /** qual `VfxDefinition` tocar N vezes — generalização (auditoria "Combat
+   * Hit VFX genérico" 2026-08-19): a mecânica de stagger/freeze/posição-
+   * explícita é a mesma pra QUALQUER def de impacto reutilizável, só o
+   * `vfxId` muda (`GENERIC_HIT_SHARD_ID` pro losango de Cold Bolt/Fire
+   * Lance, `COMBAT_HIT_VFX_ID`/`vfx/combat/combatHitVfx.ts` pro flash
+   * genérico de ataque físico multi-hit). */
+  vfxId: string;
   targetGid: number;
   /** quantidade REAL de hits do cast — quem decide isso é `useWorldEvents.
    * ts`/o servidor, nunca este módulo (pedido explícito: "o VFX não deve
    * controlar a quantidade de hits"). */
   hits: number;
-  /** intervalo entre hits — MESMA constante que a cascata de números já
-   * usa (`ICICLE_STAGGER_MS`/`FIRE_LANCE_STAGGER_MS`), pra o fragmento e o
-   * número landarem juntos. */
+  /** intervalo entre hits. */
   staggerMs: number;
-  /** cor do elemento — `shardColorForElement(skillInfo.element)`, dado
-   * real, resolvido por quem chama (`net/useWorldEvents.ts`). */
   color: string;
-  /** hit crítico — mesmo flag (`damageKind(p.action).crit`) que já decide
-   * a cor do número; aqui só cresce o fragmento (`CRITICAL_SCALE_
-   * MULTIPLIER`), nenhum mecanismo novo. */
+  /** hit crítico — mesmo flag (`damageKind(p.action).crit`); aqui só
+   * cresce o impacto (`criticalScaleFor`), nenhum mecanismo novo. */
   critical?: boolean;
+  /** rotação fixa do sprite (ex.: 45° = diamante pro losango) — ausente =
+   * sem rotação, o flash genérico de combate não precisa de nenhuma. */
+  rotation?: number;
+  /** teto de instâncias VISUAIS — default `VISUAL_SHARD_CAP` (20). */
+  visualCap?: number;
 }
 
 /**
@@ -123,13 +130,13 @@ export interface SpawnMultiHitShardsOptions {
  * congela igual todo o resto); os hits SEGUINTES reusam essa MESMA
  * posição já resolvida, passada explicitamente (`opts.position`, sem
  * `targetGid`) — nunca fazem uma segunda consulta ao `worldStore`. Isso é
- * mais forte que só `freezeAnchorAfterMs`: um fragmento agendado pra
- * daqui a 400ms nem TENTA olhar o alvo de novo, então não importa se o
- * mob já morreu/sumiu/foi reusado por um respawn entre o hit 1 e o hit 5
- * — todos pousam no MESMO lugar onde o hit 1 pousou (correto: o servidor
- * já resolveu o dano da sequência inteira num único instante).
+ * mais forte que só `freezeAnchorAfterMs`: um impacto agendado pra daqui
+ * a 400ms nem TENTA olhar o alvo de novo, então não importa se o mob já
+ * morreu/sumiu/foi reusado por um respawn entre o hit 1 e o hit N — todos
+ * pousam no MESMO lugar onde o hit 1 pousou (correto: o servidor já
+ * resolveu o dano da sequência inteira num único instante).
  */
-export function spawnMultiHitShards(opts: SpawnMultiHitShardsOptions): void {
+export function spawnHitImpacts(opts: SpawnHitImpactsOptions): void {
   // REAL COMBAT COUNT — nunca alterado, é exatamente o que o servidor
   // mandou (`p.count`). Usado só pra decidir quantos `play()` ACONTECEM
   // dentro do teto visual abaixo; o valor em si não é reescrito em
@@ -146,11 +153,12 @@ export function spawnMultiHitShards(opts: SpawnMultiHitShardsOptions): void {
   // que qualquer coisa já medida (mesmo espírito de `PARTICLES_PER_
   // SKILL_CONFIRMED_SAFE` em `vfx/core/budget.ts`: margem sobre dado
   // real, não limite descoberto quebrando).
-  const visualHits = Math.min(realHits, VISUAL_SHARD_CAP);
+  const visualHits = Math.min(realHits, opts.visualCap ?? VISUAL_SHARD_CAP);
 
   const scale = criticalScaleFor(opts.critical === true);
+  const rotation = opts.rotation ?? 0;
   const payload = { color: opts.color };
-  const first = vfxManager.play(GENERIC_HIT_SHARD_ID, { targetGid: opts.targetGid, rotation: SHARD_ROTATION, scale, payload });
+  const first = vfxManager.play(opts.vfxId, { targetGid: opts.targetGid, rotation, scale, payload });
   if (!first) return;
   const instance = vfxManager.getInstance(first.instanceId);
   if (!instance) return;
@@ -159,10 +167,25 @@ export function spawnMultiHitShards(opts: SpawnMultiHitShardsOptions): void {
   for (let i = 1; i < visualHits; i++) {
     const timeoutId = setTimeout(() => {
       pendingShardTimeouts.delete(timeoutId);
-      vfxManager.play(GENERIC_HIT_SHARD_ID, { position, rotation: SHARD_ROTATION, scale, payload });
+      vfxManager.play(opts.vfxId, { position, rotation, scale, payload });
     }, i * opts.staggerMs);
     pendingShardTimeouts.add(timeoutId);
   }
+}
+
+export interface SpawnMultiHitShardsOptions {
+  targetGid: number;
+  hits: number;
+  staggerMs: number;
+  color: string;
+  critical?: boolean;
+}
+
+/** Cold Bolt/Fire Lance especificamente — wrapper fino sobre `spawnHitImpacts`
+ * fixando `vfxId:GENERIC_HIT_SHARD_ID` + `rotation:SHARD_ROTATION` (o
+ * losango), contrato/comportamento IDÊNTICO ao de antes da generalização. */
+export function spawnMultiHitShards(opts: SpawnMultiHitShardsOptions): void {
+  spawnHitImpacts({ vfxId: GENERIC_HIT_SHARD_ID, rotation: SHARD_ROTATION, ...opts });
 }
 
 /** sessão/mapa trocou — mesmo gatilho que `migratedVfxBridge.

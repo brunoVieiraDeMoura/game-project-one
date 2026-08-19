@@ -1,0 +1,63 @@
+{
+  "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "errosAteSettle": [],
+  "diag": {
+    "world": {
+      "mapName": "pipeline-audit-f7",
+      "x": 10,
+      "y": 10,
+      "dir": 0,
+      "gid": 777,
+      "char": null
+    },
+    "sceneChildren": 0,
+    "childNames": [],
+    "bodyText": "preview vazio — volte ao editor e clique Play"
+  },
+  "estabilidadeRecursos": {
+    "antes": {
+      "geometrias": 0,
+      "texturas": 0,
+      "programas": 0
+    },
+    "depois": {
+      "geometrias": 0,
+      "texturas": 0,
+      "programas": 0
+    }
+  },
+  "results": [
+    {
+      "label": "petrify COLD (wait, entidade 2001)",
+      "programsBefore": 0,
+      "programsAfter": 0,
+      "novoPrograma": false,
+      "quadroMsMax": 17.5,
+      "renderMsMax": 0.4,
+      "gpuMsMax": 0.021,
+      "errosConsole": []
+    },
+    {
+      "label": "petrify WARM (stone, entidade 2001)",
+      "programsBefore": 0,
+      "programsAfter": 0,
+      "novoPrograma": false,
+      "quadroMsMax": 18.3,
+      "renderMsMax": 0.4,
+      "gpuMsMax": 0.003,
+      "errosConsole": []
+    },
+    {
+      "label": "petrify WARM (wait, entidade 2002 nova)",
+      "programsBefore": 0,
+      "programsAfter": 0,
+      "novoPrograma": false,
+      "quadroMsMax": 17.5,
+      "renderMsMax": 0.4,
+      "gpuMsMax": 0.003,
+      "errosConsole": []
+    }
+  ],
+  "totalErrosConsole": 0,
+  "errosConsoleTodos": []
+}

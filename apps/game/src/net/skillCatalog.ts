@@ -99,22 +99,9 @@ export const useSkillCatalog = create<CatalogState>((set, get) => ({
     if (missing.length === 0) return;
     for (const id of missing) pending.add(id);
 
-    // instrumentação temporária (auditoria "glitch ~30s" 2026-08-14) — só
-    // DEV, mesma ideia de `net/itemCatalog.ensure`.
-    const t0 = import.meta.env.DEV ? performance.now() : 0;
-    if (import.meta.env.DEV) {
-      console.info(`[SKILL_DATA] request iniciado ids=[${missing.join(",")}] source=API t=${Math.round(t0)}ms`);
-    }
-
     fetch(`${API_URL}/skills/by-id?ids=${missing.join(",")}`)
       .then((r) => (r.ok ? r.json() : { skills: [] }))
       .then((data: { skills: Array<Record<string, unknown>> }) => {
-        if (import.meta.env.DEV) {
-          const dt = Math.round(performance.now() - t0);
-          console.info(
-            `[SKILL_DATA] request concluído ids=[${missing.join(",")}] source=API registros=${data.skills?.length ?? 0} tempoRespostaMs=${dt}`,
-          );
-        }
         set((s) => {
           const byId = { ...s.byId };
           for (const cru of data.skills ?? []) {

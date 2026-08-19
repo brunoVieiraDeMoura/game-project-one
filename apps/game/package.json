@@ -14,7 +14,10 @@
     "props:measure": "node scripts/measure-props.mjs",
     "terrain:textures": "node scripts/make-terrain-textures.mjs",
     "chars:knight-mixamo": "node scripts/prep-knight-mixamo.mjs",
-    "vfx:benchmark": "tsx scripts/vfxBenchmark.ts"
+    "vfx:benchmark": "tsx scripts/vfxBenchmark.ts",
+    "vfx:benchmark:firelance": "tsx scripts/vfxBenchmarkFireLance.ts",
+    "vfx:benchmark:coldbolt": "tsx scripts/vfxBenchmarkColdBolt.ts",
+    "vfx:benchmark:lightbolt": "tsx scripts/vfxBenchmarkLightBolt.ts"
   },
   "dependencies": {
     "@ragnarok/engine-core": "workspace:*",

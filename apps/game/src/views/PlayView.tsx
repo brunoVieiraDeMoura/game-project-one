@@ -78,7 +78,6 @@ import { GroundItems, useGroundItems } from "../net/GroundItems";
 import { MapAmbience } from "../audio/mapAmbience";
 import { preloadAssets } from "../assets";
 import { preloadPropsDoMapa, urlsDoMapa } from "../props/registry";
-import { assetsEmVoo } from "../core/diagnostics/assetProbe";
 
 preloadAssets();
 
@@ -163,15 +162,6 @@ const TETO_PRECARGA_MS = 3000;
  * segurar o jogador pra sempre.
  */
 const TETO_ASSETS_MS = 8000;
-/**
- * Intervalo do LOG de diagnóstico enquanto a fase `cena` está presa.
- *
- * NÃO é um teto que libera a cortina — ver o comentário no efeito que usa
- * esta constante. É só de quanto em quanto tempo repetir o aviso, para um
- * carregamento preso aparecer no console em vez de silenciar depois do
- * primeiro aviso.
- */
-const TETO_DIAGNOSTICO_CENA_MS = 5000;
 const SUN_DISTANCE = 140; // mesma escala do editor (EditorScene) — só a direção muda
 /** fator de compensação de luminância da troca `ambientLight`→`hemisphereLight`
  * (ver comentário no JSX abaixo). 1.7 ainda deixava o lado sem sol escuro
@@ -293,13 +283,6 @@ function AquecerCena({ aoTerminar }: { aoTerminar: () => void }) {
     // `aoTerminar` desmonta este componente, mas só no próximo render do React —
     // sem a trava, os quadros no meio do caminho chamariam de novo
     avisado.current = true;
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.info(
-        `[play] cena aquecida em ${Math.round(decorrido)} ms, ` +
-          `${programas} shaders${passo.porTeto ? " (por teto de tempo)" : ""}`,
-      );
-    }
     aoTerminar();
   });
 
@@ -397,10 +380,6 @@ function EsperaAssetsDoMapa({ urls, set }: { urls: string[]; set: (v: boolean) =
 function SinalizaCenaPronta({ set }: { set: (v: boolean) => void }) {
   useEffect(() => {
     set(true);
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.info("[GAME_LOAD] cena montada (Suspense da <Scene> resolvido)");
-    }
     return () => set(false);
   }, [set]);
   return null;
@@ -1134,6 +1113,7 @@ function Scene({
                 center={center}
                 radius={PROP_RADIUS}
                 radiusRasteira={visao.vegetacaoRasteira}
+                playerPos={playerPos}
                 aoPrecompilar={aoPrecompilarVegetacao}
               />
             </Suspense>
@@ -1601,10 +1581,6 @@ export function PlayView() {
     // protege contra qualquer ordem de commit em que o desmonte ainda não
     // tenha corrido antes do primeiro render do mapa novo.
     setCenaMontada(false);
-    if (import.meta.env.DEV && mapId) {
-      // eslint-disable-next-line no-console
-      console.info(`[GAME_LOAD] T1 mapId mudou para "${mapId}" t=${Math.round(performance.now())}ms`);
-    }
   }, [mapId]);
   useEffect(() => {
     if (!esperaPreCarga) return;
@@ -1722,60 +1698,6 @@ export function PlayView() {
    */
   const aquecendo = !construindo && !aguardandoCena && Boolean(map) && cenaMontada && !gameReady;
   const carregando = construindo || aguardandoCena || aquecendo;
-
-  /**
-   * INSTRUMENTAÇÃO — `[GAME_LOAD]`, uma linha por TRANSIÇÃO de fase, nunca por
-   * quadro. `cargaT0` marca o início da carga DESTE mapa (reseta por warp);
-   * cada fase loga o tempo decorrido desde ali, então um carregamento de 50 s
-   * aparece como "qual fase ficou 48,7 s" em vez de só "demorou".
-   */
-  const fase: "mapa" | "terreno" | "assets" | "cena" | "aquecendo" | "pronto" = carregandoMapa
-    ? "mapa"
-    : carregandoTerreno
-      ? "terreno"
-      : carregandoAssets
-        ? "assets"
-        : aguardandoCena
-          ? "cena"
-          : aquecendo
-            ? "aquecendo"
-            : "pronto";
-  const cargaT0 = useRef(performance.now());
-  useEffect(() => {
-    cargaT0.current = performance.now();
-  }, [mapId]);
-  useEffect(() => {
-    if (!map && fase !== "mapa") return; // sem mapa e sem sessão local: nada carregando ainda
-    const ms = Math.round(performance.now() - cargaT0.current);
-    // eslint-disable-next-line no-console
-    console.info(`[GAME_LOAD] map=${mapId || "(nenhum)"} fase=${fase} +${ms}ms`);
-  }, [fase, mapId, map]);
-  /**
-   * TIMEOUT DE DIAGNÓSTICO — NUNCA de decisão.
-   *
-   * Diferente de `assetsExpiraram`/`precargaExpirou` (que liberam a cortina
-   * por segurança), este `setInterval` não seta NENHUM estado que destrave a
-   * fase `aguardandoCena` — declarar `GAME_READY` com a cena ainda suspensa é
-   * exatamente o bug que este arquivo inteiro existe para corrigir. Ele só
-   * imprime, repetidamente, o que está bloqueando — via `assetsEmVoo()`
-   * (`core/diagnostics/assetProbe`, instalado em DEV) — para um carregamento
-   * preso ter uma resposta objetiva em vez de "está lento".
-   */
-  useEffect(() => {
-    if (!aguardandoCena) return;
-    const t = setInterval(() => {
-      const presos = assetsEmVoo();
-      const ms = Math.round(performance.now() - cargaT0.current);
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[GAME_LOAD] preso em fase=cena há ${ms}ms (map=${mapId}). ` +
-          (presos.length > 0
-            ? `assets em voo: ${presos.map((a) => `${a.url} (${Math.round(a.desde)}ms)`).join(", ")}`
-            : "nenhum asset em voo — a suspensão não é de download (checar Suspense de <Scene>: céu, TreeImpostors, terrainQuery)."),
-      );
-    }, TETO_DIAGNOSTICO_CENA_MS);
-    return () => clearInterval(t);
-  }, [aguardandoCena, mapId]);
 
   // Sem sessão e sem modo local pedido: manda para o login em vez de desenhar
   // um mundo que não é de ninguém.

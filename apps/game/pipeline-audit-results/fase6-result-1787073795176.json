@@ -1,0 +1,72 @@
+{
+  "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "gids": [
+    1001,
+    1002
+  ],
+  "glowChaoAlvoNota": "NÃO TESTADO — GlowChao(alvo) só monta dentro de net/NetEntity.tsx, que só roda com sessão online real; bench offline não alcança esse componente sem fingir sessão inteira (fora de escopo desta fase).",
+  "diagAimPreview": {
+    "mirando": {
+      "id": 90501,
+      "level": 1,
+      "name": "Teste F6 A",
+      "mode": "ground"
+    },
+    "catalogEntry": {
+      "id": 90501,
+      "aegisName": "F6_TESTE_A",
+      "name": "Teste F6 A",
+      "hitType": "normal",
+      "target": "enemy",
+      "areaRadius": 2,
+      "maxLevel": 1,
+      "type": "damage",
+      "element": "weapon",
+      "spCost": 0,
+      "range": 9,
+      "cooldownMs": 0,
+      "durationMs": 0,
+      "duration2Ms": 0
+    },
+    "raioEfetivo": 9,
+    "showSkillArea": true
+  },
+  "results": [
+    {
+      "label": "alvo COLD (1º select, entidade A)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17.1,
+      "renderMsMax": 5.3,
+      "gpuMsMax": 18.63
+    },
+    {
+      "label": "alvo WARM (2º select, entidade B, mesma cor/material)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17.3,
+      "renderMsMax": 1.8,
+      "gpuMsMax": 17.051
+    },
+    {
+      "label": "mira COLD (1ª vez abrindo mira de área)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17.2,
+      "renderMsMax": 1.9,
+      "gpuMsMax": 16.986
+    },
+    {
+      "label": "mira WARM (cancela + reabre, skill diferente mesmo modo)",
+      "programsBefore": 19,
+      "programsAfter": 19,
+      "novoPrograma": false,
+      "quadroMsMax": 17.2,
+      "renderMsMax": 3.3,
+      "gpuMsMax": 17.023
+    }
+  ]
+}

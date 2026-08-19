@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
 import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
@@ -165,6 +165,14 @@ export function InventoryWindow() {
    * DOM para descobrir que ela voltou a ser necessária.
    */
   const rolavel = useRef<HTMLDivElement>(null);
+
+  // Trocar de aba é uma lista NOVA (outra categoria, outra contagem) — a
+  // rolagem da aba anterior não tem por que valer aqui. `useLayoutEffect`
+  // (não `useEffect`) zera ANTES do quadro pintar, senão a barra aparecia um
+  // instante na posição velha antes de saltar pro topo.
+  useLayoutEffect(() => {
+    if (rolavel.current) rolavel.current.scrollTop = 0;
+  }, [cat]);
 
   return (
     <div style={{ position: "relative", width: BAG_WIDTH, height: (BAG_WIDTH * BAG_PLATE.h) / BAG_PLATE.w }}>

@@ -1,5 +1,5 @@
-import { icicleTotalMs, ICICLE_STAGGER_MS } from "./cold-bolt/ColdBoltImpact";
-import { fireLanceTotalMs, FIRE_LANCE_STAGGER_MS } from "./fire-lance/FireLanceImpact";
+import { icicleTotalMs } from "./cold-bolt/ColdBoltImpact";
+import { fireLanceTotalMs } from "./fire-lance/FireLanceImpact";
 import { thunderStormTotalMs } from "./multiHitShared";
 import { lightBoltTotalMs } from "./light-bolt/LightBoltImpact";
 import { soulStrikeTotalMs } from "./soul-strike/SoulStrikeImpact";
@@ -49,19 +49,21 @@ export const MULTI_HIT_DURATION_MS: Record<string, (hits: number) => number> = {
  * cascata de números já usa (`ICICLE_STAGGER_MS`/`FIRE_LANCE_STAGGER_MS`)
  * — fragmento e número pousam juntos.
  *
- * **Decisão deliberada de escopo**: só Cold Bolt/Fire Lance, mesmo o
- * mecanismo agora sendo genérico o bastante pra qualquer skill. Thunder
- * Storm/Light Bolt/Soul Strike JÁ são GPU (composições próprias — flash+
- * faíscas radiais, `beam`, enxame voador) e continuam assim de propósito:
- * forçar "raio"/"orbe espiritual" a cair como o MESMO losango de gelo
- * seria exatamente a "identidade de skill substituída por efeito
- * genérico" que foi pedido explicitamente pra NUNCA fazer — "reutilizar a
- * infraestrutura" (position-freeze, budget, renderers) não é o mesmo que
- * "reutilizar a receita visual". Uma skill nova sem identidade própria
- * ainda definida pode entrar aqui livremente — é exatamente o caso que
- * este mecanismo existe pra cobrir sem precisar de um `NewSkillVfx.tsx`.
+ * **Registro HOJE VAZIO** — Thunder Storm/Light Bolt/Soul Strike JÁ são GPU
+ * (composições próprias — flash+faíscas radiais, `beam`, enxame voador) e
+ * continuam assim de propósito: forçar "raio"/"orbe espiritual" a cair como
+ * o MESMO losango genérico seria exatamente a "identidade de skill
+ * substituída por efeito genérico" que foi pedido explicitamente pra NUNCA
+ * fazer — "reutilizar a infraestrutura" (position-freeze, budget,
+ * renderers) não é o mesmo que "reutilizar a receita visual". Fire Lance
+ * (`MG_FIREBOLT`, 2026-08-19-b) e Cold Bolt (`MG_COLDBOLT`, 2026-08-19-d)
+ * SAÍRAM daqui — as duas ganharam identidade própria o bastante (losango
+ * GRANDE com stretch, trail, burst dedicado, 3 tiers) pra virar composição
+ * dedicada (`fire-lance/fireLanceVfxDefGpu.tsx`+`fireLanceMultiHit.ts`,
+ * `cold-bolt/coldBoltVfxDefGpu.tsx`+`coldBoltMultiHit.ts`, chamadas direto
+ * de `useWorldEvents.ts`, fora deste mecanismo genérico). Uma skill nova
+ * sem identidade própria ainda definida pode entrar aqui livremente — é
+ * exatamente o caso que este mecanismo existe pra cobrir sem precisar de
+ * um `NewSkillVfx.tsx`.
  */
-export const MULTI_HIT_SHARD_VFX: Record<string, { staggerMs: number }> = {
-  MG_COLDBOLT: { staggerMs: ICICLE_STAGGER_MS },
-  MG_FIREBOLT: { staggerMs: FIRE_LANCE_STAGGER_MS },
-};
+export const MULTI_HIT_SHARD_VFX: Record<string, { staggerMs: number }> = {};

@@ -752,8 +752,11 @@ function Fita({
   const arte = SK_MARK_ART[cor % SK_MARK_ART.length] ?? SK_MARK_ART[0]!;
   const nativo = SK_MARK_TIP[cor % SK_MARK_TIP.length] ?? SK_MARK_TIP[0];
   const h = altura;
-  // a ponta guarda a proporção dela: esticada, o bico em V deforma
-  const larguraPonta = (h * nativo.w) / nativo.h;
+  // a ponta guarda a proporção dela: esticada, o bico em V deforma.
+  // Arredondado pra px inteiro — fracionário deixa ponta e corpo em
+  // grades de subpixel diferentes (o filter/transform da inativa expõe
+  // 1px de fresta entre os dois, que passa batido na ativa).
+  const larguraPonta = Math.round((h * nativo.w) / nativo.h);
 
   return (
     <button
@@ -770,8 +773,8 @@ function Fita({
         minWidth: 0,
         opacity: ativa ? 1 : 0.66,
         filter: ativa ? "brightness(1.1)" : "saturate(0.72)",
-        // a escolhida SAI um pouco para fora do livro; as outras recuam
-        transform: ativa ? "none" : `translateX(${px(5)}px)`,
+        // repouso é a posição mais à esquerda; a escolhida se destaca recuando um pouco para a direita
+        transform: ativa ? `translateX(${px(5)}px)` : "none",
         transition: "opacity 120ms ease-out, filter 120ms ease-out, transform 120ms ease-out",
       }}
     >
@@ -786,6 +789,7 @@ function Fita({
           display: "flex",
           alignItems: "center",
           minWidth: 0,
+          marginLeft: -1,
           padding: `0 ${px(SK_MARKS.padX)}px 0 0`,
           backgroundImage: `url(${arte.body})`,
           backgroundSize: "100% 100%",

@@ -29,6 +29,7 @@ const VERTEX = `
 uniform float uTime;
 attribute vec3 aOffset;
 attribute float aScale;
+attribute float aStretch;
 attribute vec4 aFrameUv; // u0, v0, u1, v1
 attribute vec3 aColor;
 attribute float aOpacity;
@@ -46,6 +47,10 @@ void main() {
   float c = cos(aRotation);
   float s = sin(aRotation);
   vec2 rotated = vec2(position.x * c - position.y * s, position.x * s + position.y * c);
+  // esticado no eixo VERTICAL DA TELA (up), depois de rotacionar — nunca antes
+  // (esticar antes da rotação enviesaria o losango pra uma direção diagonal em
+  // vez de alongar reto na tela, ver docblock de dropStretch.ts).
+  rotated.y *= aStretch;
   vec3 worldOffset = (right * rotated.x + up * rotated.y) * aScale;
   gl_Position = projectionMatrix * viewMatrix * vec4(aOffset + worldOffset, 1.0);
 }`;
@@ -98,6 +103,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
 
   private offset!: Float32Array;
   private scaleAttr!: Float32Array;
+  private stretchAttr!: Float32Array;
   private uvAttr!: Float32Array;
   private colorAttr!: Float32Array;
   private opacityAttr!: Float32Array;
@@ -144,6 +150,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
 
     const offset = new Float32Array(newCapacity * 3);
     const scaleAttr = new Float32Array(newCapacity);
+    const stretchAttr = new Float32Array(newCapacity).fill(1);
     const uvAttr = new Float32Array(newCapacity * 4);
     const colorAttr = new Float32Array(newCapacity * 3).fill(1);
     const opacityAttr = new Float32Array(newCapacity);
@@ -160,6 +167,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     // preserva o que já existia (crescimento nunca perde instância viva)
     if (this.offset) offset.set(this.offset);
     if (this.scaleAttr) scaleAttr.set(this.scaleAttr);
+    if (this.stretchAttr) stretchAttr.set(this.stretchAttr);
     if (this.uvAttr) uvAttr.set(this.uvAttr);
     if (this.colorAttr) colorAttr.set(this.colorAttr);
     if (this.opacityAttr) opacityAttr.set(this.opacityAttr);
@@ -167,6 +175,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
 
     geometry.setAttribute("aOffset", new THREE.InstancedBufferAttribute(offset, 3));
     geometry.setAttribute("aScale", new THREE.InstancedBufferAttribute(scaleAttr, 1));
+    geometry.setAttribute("aStretch", new THREE.InstancedBufferAttribute(stretchAttr, 1));
     geometry.setAttribute("aFrameUv", new THREE.InstancedBufferAttribute(uvAttr, 4));
     geometry.setAttribute("aColor", new THREE.InstancedBufferAttribute(colorAttr, 3));
     geometry.setAttribute("aOpacity", new THREE.InstancedBufferAttribute(opacityAttr, 1));
@@ -191,6 +200,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     this.material = material;
     this.offset = offset;
     this.scaleAttr = scaleAttr;
+    this.stretchAttr = stretchAttr;
     this.uvAttr = uvAttr;
     this.colorAttr = colorAttr;
     this.opacityAttr = opacityAttr;
@@ -234,6 +244,11 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
       scale: number;
       opacity: number;
       rotation?: number;
+      /** multiplicador não-uniforme aplicado ao eixo VERTICAL DA TELA
+       * (`aStretch`, ver `VERTEX` acima) — ausente/`1` = quad normal, mesmo
+       * comportamento de sempre. Só quem passa isso explicitamente (Fire
+       * Lance, via `dropStretch.ts`) muda de forma. */
+      stretch?: number;
       color?: readonly [number, number, number];
       uv?: readonly [number, number, number, number];
     },
@@ -242,6 +257,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     this.offset[index * 3 + 1] = data.position[1];
     this.offset[index * 3 + 2] = data.position[2];
     this.scaleAttr[index] = data.scale;
+    this.stretchAttr[index] = data.stretch ?? 1;
     this.opacityAttr[index] = data.opacity;
     this.rotationAttr[index] = data.rotation ?? 0;
     const color = data.color ?? [1, 1, 1];
@@ -287,6 +303,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     const attrs: [string, number][] = [
       ["aOffset", 3],
       ["aScale", 1],
+      ["aStretch", 1],
       ["aFrameUv", 4],
       ["aColor", 3],
       ["aOpacity", 1],

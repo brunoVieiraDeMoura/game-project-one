@@ -44,6 +44,9 @@ export const CHAVES_ISOLAMENTO = [
   "semParticulas",
   "semCeuFoto",
   "semImpostorArvore",
+  "semGrama",
+  "semGramaFade",
+  "semRevelacaoArvore",
 ] as const;
 
 export type ChaveIsolamento = (typeof CHAVES_ISOLAMENTO)[number];

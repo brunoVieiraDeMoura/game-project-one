@@ -7,6 +7,9 @@ import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { computeFlightOffset } from "./flightOffset";
 import { computeOrbitOffset } from "./orbitOffset";
 import { computeDropOffset } from "./dropOffset";
+import { computeDropStretch } from "./dropStretch";
+import { computeBurstEnvelope } from "./burstEnvelope";
+import { computeCastChargeEnvelope } from "./castChargeEnvelope";
 
 // reusado a nível de módulo — nunca alocado por instância/quadro (mesmo
 // princípio de `BeamRenderer.ts: _position/_quaternion/_scale`).
@@ -75,7 +78,11 @@ export class SpriteRenderer extends InstancedBillboardBase {
       const frame = atlas?.metadata.frames[frameResult.frameName];
       if (atlas && frame) {
         const { u0, v0, u1, v1 } = frameToUv(frame, atlas.metadata.image);
-        uv = [u0, v0, u1, v1];
+        // `payload.flipX` (Eletrocutar, 2026-08-19-s: "varia invertendo
+        // horizontalmente a cada hit") — inverte a amostra U (troca u0/u1),
+        // mesma textura/frame, espelhada. Genérico: qualquer skill com
+        // atlas pode pedir isto, nunca um mecanismo novo por skill.
+        uv = instance.spawnOptions.payload?.flipX === true ? [u1, v0, u0, v1] : [u0, v0, u1, v1];
       }
     }
 
@@ -90,6 +97,24 @@ export class SpriteRenderer extends InstancedBillboardBase {
     const flight = computeFlightOffset(instance, elapsedMs);
     const orbit = computeOrbitOffset(instance, elapsedMs);
     const drop = computeDropOffset(instance, elapsedMs);
+    const stretch = computeDropStretch(instance, elapsedMs);
+    const burst = computeBurstEnvelope(instance, elapsedMs);
+    const charge = computeCastChargeEnvelope(instance, elapsedMs);
+
+    // `payload.rotation` (Eletrocutar, 2026-08-19-g: "cada SEGMENTO do raio
+    // precisa da PRÓPRIA rotação, não a instância inteira") — override por
+    // CAMADA em cima de `spawnOptions.rotation` (que continua compartilhado
+    // por todas as camadas de uma instância, ex. o losango 45° de Fire
+    // Lance/Cold Bolt). Ausente = comportamento de sempre; só quem passa
+    // `params.rotation` numa layer específica (via `VfxLayer.params`, já
+    // mesclado no payload da própria layer por `buildLayerRuntime`) ganha
+    // rotação independente da instância.
+    // somado (não substitui) `spawnOptions.rotation` — deixa uma skill
+    // combinar uma inclinação pequena POR HIT (`spawnOptions.rotation`,
+    // instância inteira, ex. "hit 3 ligeiramente pra direita") com a
+    // irregularidade PRÓPRIA de cada segmento (`payload.rotation`, camada).
+    const payloadRotation = instance.spawnOptions.payload?.rotation;
+    const rotation = (typeof payloadRotation === "number" ? payloadRotation : 0) + (instance.spawnOptions.rotation ?? 0);
 
     this.writeSlot(index, {
       position: [
@@ -97,9 +122,10 @@ export class SpriteRenderer extends InstancedBillboardBase {
         instance.position.y + flight.y + orbit.y + drop.y,
         instance.position.z + flight.z + orbit.z + drop.z,
       ],
-      scale,
-      opacity,
-      rotation: instance.spawnOptions.rotation ?? 0,
+      scale: scale * burst.scaleMul * charge.scaleMul,
+      opacity: opacity * burst.opacityMul * charge.opacityMul,
+      rotation,
+      stretch,
       color,
       uv,
     });

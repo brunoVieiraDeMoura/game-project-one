@@ -6,6 +6,25 @@
     <title>Game Client</title>
     <style>
       html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; }
+
+      /* área do jogo inteira (todo #root: login, char-select, play, editor...) não
+         seleciona texto ao clicar/arrastar — arraste de mouse é interação de jogo
+         (câmera, drag de skill, seleção de alvo), não seleção de texto do navegador.
+         input/textarea/[contenteditable] revertem pra permitir digitar/selecionar
+         normalmente (campo de login, chat). */
+      #root {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root input,
+      #root textarea,
+      #root [contenteditable="true"] {
+        -webkit-user-select: text;
+        user-select: text;
+        -webkit-touch-callout: default;
+      }
     </style>
   </head>
   <body>

@@ -32,10 +32,6 @@ export function useMap(id: string): { map: GameMap | null; error: string | null 
     if (!id) return;
 
     const emCache = cache.get(id);
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.info(`[MAP_CACHE] ${emCache ? "HIT" : "MISS"} ${id}`);
-    }
     if (emCache) {
       /**
        * Direto — sem `queueMicrotask` de folga. A versão anterior deste
@@ -81,8 +77,6 @@ export function useMap(id: string): { map: GameMap | null; error: string | null 
             ...(window as unknown as { __mapParseMs?: Record<string, number> }).__mapParseMs,
             [id]: Math.round(ms),
           };
-          // eslint-disable-next-line no-console
-          console.info(`[MAP_CACHE] MISS ${id} — fetch+zod.parse: ${Math.round(ms)}ms`);
         }
         return parsed;
       })

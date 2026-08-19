@@ -72,6 +72,9 @@ describe("isolamento (Fase C)", () => {
         "semParticulas",
         "semCeuFoto",
         "semImpostorArvore",
+        "semGrama",
+        "semGramaFade",
+        "semRevelacaoArvore",
       ].sort(),
     );
   });

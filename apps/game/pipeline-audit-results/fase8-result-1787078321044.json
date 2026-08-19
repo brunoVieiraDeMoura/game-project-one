@@ -1,0 +1,10 @@
+{
+  "rendererString": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "gid1": null,
+  "diagMonstroFalhou": {
+    "entidades": {},
+    "selfGid": 0,
+    "world": null,
+    "bodyChatText": "F8Tester\nHP\n40 / 40\nSP\n16 / 16\n1\nLVL\n1\nLVL\nprt_fild08\n15:38\n2\nMISSÕES\nO Cerco dos Lobos\nDerrotar lobos no campo norte\n6/10\nA Ponte de Veridia\npronta para entregar\nContrabando de Sal\nSeguir o carroceiro sem ser visto\n0/3\nGeral\nGlobal\nParty\nBem-vindo ao mundo.\nYou are unable to change your job.\n@jobchange failed.\nAll skills have been added to your skill tree.\nHP and SP have already been recovered.\n1\n2\n3\n4\n5\n6\n7\n8\n9\n1 / 3\nXP (Status)\n0 / 548\n0,0%\nXP (Skills)\n0 / 60\n0,0%\nInventário\nSkills\nStatus\nMapa\nQuest\nFriends\nSettings"
+  }
+}

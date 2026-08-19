@@ -23,7 +23,9 @@ import { createSeededRng } from "../../core/particleMath";
 // teto REAL do skill_db (Lv10→10), não mais um chute de 5 (auditoria
 // "count real" 2026-08-19).
 export const FIRE_LANCE_MAX_HITS = 10;
-export const FIRE_LANCE_STAGGER_MS = 200;
+/** pedido 2026-08-19 (sincronizar velocidade da animação/áudio): era 200,
+ * mesma razão de `ColdBoltImpact.ICICLE_STAGGER_MS`. */
+export const FIRE_LANCE_STAGGER_MS = 130;
 export const FIRE_LANCE_FALL_MS = 560;
 export const FIRE_LANCE_IMPACT_FRACTION = 0.82;
 const IMPACT_AT_MS = FIRE_LANCE_FALL_MS * FIRE_LANCE_IMPACT_FRACTION;

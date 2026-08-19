@@ -124,7 +124,9 @@ defineVfx({ id: "thunder_storm_cast", renderer: "dom", anchor: "caster-tip", dom
 // ---------------------------------------------------------------- impact
 
 const THUNDER_MAX_PULSES = 5;
-const THUNDER_PULSE_STAGGER_MS = 260;
+// pedido 2026-08-19 (sincronizar velocidade da animação/áudio): era 260 —
+// manter os DOIS lados em sync ao mudar, ver `../multiHitShared.ts`.
+const THUNDER_PULSE_STAGGER_MS = 170;
 const THUNDER_PULSE_DAMAGE_NUMBER_MS = 1000;
 const THUNDER_TOTAL_VISIBLE_MS = 1500;
 const BODY_Y = 0.05;
@@ -233,15 +235,6 @@ function ThunderStormImpactArt({ registerRef, targetScale, payload, portalTarget
   );
 }
 
-/** mesma trava de `core/multiHitDamageDomArt.tsx: impactAudioTocadoPara` —
- * necessária aqui em dobro porque Thunder Storm COALESCE (`coalesce:{by:
- * "target"}`, ver docblock do topo): um recast na mesma janela funde na
- * MESMA instância e `pulseCount` cresce (`pulseCountFrom` lê `ctx.payload`,
- * substituído a cada `pulse()`) — sem a trava, cada crescimento de
- * `pulseCount` cruzando uma faixa de nível tocava um `hit-lvl-*` NOVO no
- * meio do mesmo raio, além de tocar o mesmo arquivo 1x por pulso pousando. */
-const impactAudioTocadoPara = new WeakSet<DomArtRefs>();
-
 function updateThunderStormImpact(refs: DomArtRefs, ctx: DomArtUpdateCtx): void {
   const pulseCount = pulseCountFrom(ctx.payload);
   const t = ctx.elapsedMs;
@@ -288,10 +281,11 @@ function updateThunderStormImpact(refs: DomArtRefs, ctx: DomArtUpdateCtx): void 
       (refs[`pulse-${i}-dmg`] as HTMLDivElement | undefined)?.classList.add("ts-dmgnum--impact");
       hitsLanded++;
       if (boltWrapEl) boltWrapEl.dataset.hitsLanded = String(hitsLanded);
-      if (ctx.skillId !== undefined && !impactAudioTocadoPara.has(refs)) {
-        impactAudioTocadoPara.add(refs);
-        aoImpactoMultiHit(ctx.skillId, pulseCount);
-      }
+      // `groundEl` só entra aqui uma vez por pulso `i` (a checagem da classe
+      // `--impact` acima já garante isso, mesmo com Thunder Storm coalescendo
+      // recasts na MESMA instância) — `<skill>_hit.mp3` toca em CADA pouso
+      // real, ver `audio/mage/multiHitCastAudio.ts`.
+      if (ctx.skillId !== undefined) aoImpactoMultiHit(ctx.skillId);
     }
   }
 

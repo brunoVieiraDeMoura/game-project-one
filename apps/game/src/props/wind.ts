@@ -92,6 +92,16 @@ function profileFor(assetId: string, cat: WindCategory): WindProfile {
 }
 
 /**
+ * `profileFor` exportada — usada por `treeRevealMaterial.ts`, que precisa do
+ * `WindProfile` já resolvido (categoria + override de espécie) pra passar
+ * pro SEU PRÓPRIO `onBeforeCompile` (vento + revelação no mesmo patch, ver o
+ * comentário lá sobre por que não dá pra encadear com `windMaterialFor`).
+ */
+export function resolveWindProfile(assetId: string, cat: WindCategory): WindProfile {
+  return profileFor(assetId, cat);
+}
+
+/**
  * Uniforms GLOBAIS (direção/força/tempo do vento) — um objeto só,
  * COMPARTILHADO POR REFERÊNCIA por todo material com vento. `WindSystem`
  * muta `uWindTime.value` num único `useFrame`; nenhum material individual
@@ -103,8 +113,10 @@ export const windUniforms = {
   uWindStrength: { value: 1 },
 };
 
-/** GLSL comum injetado uma vez por material com vento */
-const WIND_GLSL = `
+/** GLSL comum injetado uma vez por material com vento — exportado porque
+ * `treeRevealMaterial.ts` injeta vento E revelação no MESMO
+ * `onBeforeCompile` (só dá pra ter um patch por material). */
+export const WIND_GLSL = `
 uniform float uWindTime;
 uniform vec2 uWindDir;
 uniform float uWindStrength;
@@ -126,7 +138,7 @@ uniform float uWindMaxY;
 // perfeita. `instanceMatrix[3].xz` é a tradução da PRÓPRIA instância (o atributo
 // que o three já declara sob `USE_INSTANCING`) — única por planta, sem uniform
 // novo nem custo extra por instância.
-const WIND_VERTEX = `
+export const WIND_VERTEX = `
 {
   float wH = clamp((transformed.y - uWindMinY) / max(uWindMaxY - uWindMinY, 1e-4), 0.0, 1.0);
   float wW = pow(wH, uWindHeightPow);

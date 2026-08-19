@@ -3,6 +3,9 @@ import { useSkillCatalog } from "../net/skillCatalog";
 import { marcarVfxCancel, marcarVfxEnd, marcarVfxStart } from "../core/diagnostics/vfxProbe";
 import { resolveMigratedVfxId, resetMigratedVfx, spawnMigratedVfx, stopMigratedVfxByUnit } from "./migratedVfxBridge";
 import { clearPendingMultiHitShards } from "./mage/multiHitShardImpact";
+import { clearPendingFireLanceHits } from "./mage/fire-lance/fireLanceMultiHit";
+import { clearPendingColdBoltHits } from "./mage/cold-bolt/coldBoltMultiHit";
+import { clearPendingLightBoltHits } from "./mage/light-bolt/lightBoltMultiHit";
 // side effect: registra as `VfxDefinition`/bindings do VFX Core — precisa
 // rodar ANTES do primeiro `spawn()` real (mesmo motivo de `skillCatalog`
 // já ser importado aqui: este módulo é o ponto de entrada de rede).
@@ -235,6 +238,9 @@ export const useVfxStore = create<VfxState>((set) => ({
   reset: () => {
     resetMigratedVfx();
     clearPendingMultiHitShards();
+    clearPendingFireLanceHits();
+    clearPendingColdBoltHits();
+    clearPendingLightBoltHits();
     set((s) => {
       // CANCELADA (sessão/mapa trocou) — nenhuma dessas instâncias
       // terminou por conta própria, foram derrubadas de fora

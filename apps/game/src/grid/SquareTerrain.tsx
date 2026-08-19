@@ -622,12 +622,6 @@ export function SquareTerrain({
           filaPrecarga.current = [];
           // quem espera tem de ser avisado de que não vem mais nada
           publicar();
-          if (import.meta.env.DEV) {
-            // eslint-disable-next-line no-console
-            console.info(
-              `[SquareTerrain] pré-carga desligada: ${Math.round((porChunk * cols * rows) / 1048576)} MB projetados`,
-            );
-          }
         }
       }
       const restante = filaPrecarga.current;

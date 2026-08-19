@@ -453,6 +453,13 @@ export interface ClientEvents {
 	/** `scope` escolhe o canal; omitido = fala normal do mapa */
 	"chat:send": (payload: { text: string; scope?: ChatScope }) => void;
 	"world:ready": () => void;
+	/** distinto de `world:ready`: emitido só quando a cena 3D (React/R3F) já
+	 * montou de verdade, não no instante em que a sessão entra no mapa. É o
+	 * que de fato inicia a contagem real de `mob_aggro_immune_time` no
+	 * servidor (`RoSession.notifyRenderReady`, custom CZ 0x0AE1) - antes
+	 * disso o player só tem a proteção-teto de carregamento
+	 * (`mob_aggro_immune_load_cap_time`). */
+	"world:render-ready": () => void;
 	"item:use": (payload: { index: number }) => void;
 	"item:equip": (payload: { index: number; position?: number }) => void;
 	"item:unequip": (payload: { index: number }) => void;

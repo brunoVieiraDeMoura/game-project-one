@@ -15,21 +15,28 @@ export interface CastAtual {
   /** performance.now() em que a conjuração acaba */
   fim: number;
   duracaoMs: number;
+  /**
+   * gid do alvo — só para skill de ENTIDADE (`skill:casting.targetGid > 0`).
+   * Ausente em skill de chão/AOE, que não tem "virar para o alvo": o servidor
+   * não manda entidade nenhuma para essas, só a célula. `NetPlayer` usa este
+   * campo para saber se deve girar o personagem durante o cast.
+   */
+  alvoGid?: number;
 }
 
 interface CastState {
   atual: CastAtual | null;
-  comecar: (skillId: number, duracaoMs: number) => void;
+  comecar: (skillId: number, duracaoMs: number, alvoGid?: number) => void;
   /** conjuração terminou, foi interrompida ou a sessão acabou */
   parar: () => void;
 }
 
 export const useCastStore = create<CastState>((set) => ({
   atual: null,
-  comecar: (skillId, duracaoMs) =>
+  comecar: (skillId, duracaoMs, alvoGid) =>
     // Skill instantânea chega com duração 0 (e muitas com 1–2 quadros): piscar
     // a barra nesse caso é pior que não mostrar nada.
-    set(duracaoMs >= 150 ? { atual: { skillId, fim: performance.now() + duracaoMs, duracaoMs } } : { atual: null }),
+    set(duracaoMs >= 150 ? { atual: { skillId, fim: performance.now() + duracaoMs, duracaoMs, alvoGid } } : { atual: null }),
   parar: () => set({ atual: null }),
 }));
 

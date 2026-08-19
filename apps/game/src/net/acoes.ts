@@ -5,11 +5,12 @@ import { interpolatedCell, useWorldStore } from "./worldStore";
 import { dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
 import { useSkillTargetStore } from "./skillTargetStore";
 import { alcanceEfetivoDaSkill } from "./skillCatalog";
-import { useAtaqueBasico } from "./ataqueBasico";
+import { ATAQUE_BASICO_ID, useAtaqueBasico } from "./ataqueBasico";
 import { alcanceDaArma, precisaDeMunicaoSemTer } from "./equipmentStore";
 import { useDamageFeed } from "./damageFeed";
 import { temLinhaDeVisao } from "./visao";
 import { olharParaAlvo } from "./olharParaAlvo";
+import { useSkillBar } from "../hud/skillBarStore";
 
 /**
  * O que um clique MANDA fazer — num lugar só.
@@ -58,8 +59,29 @@ export function atacar(gid: number, x: number, y: number): void {
   // caminhada — deixar duas de pé faria o personagem mudar de destino sozinho.
   useSkillWalkStore.getState().parar();
   useWorldStore.getState().setTarget(gid);
-  // o pacote de spawn traz só o nome; HP e nível vêm do ACK_REQNAME
-  gateway().emit("entity:info", { gid });
+  /**
+   * Clicar num alvo LIGA o Ataque Básico — o clique já manda `continuous:
+   * true` (abaixo), então a skill só está acompanhando o que o clique JÁ
+   * faz. Equivalente a escolher o alvo e ligar o modo na barra na mão, num
+   * passo só; só entra quando ele está NA BARRA (senão ligava um modo que
+   * nem aparece pra desligar). Mesmo `useAtaqueBasico` de sempre — nenhum
+   * segundo sistema de combate.
+   */
+  if (useSkillBar.getState().slots.some((s) => s.kind === "skill" && s.id === ATAQUE_BASICO_ID)) {
+    useAtaqueBasico.getState().ativar();
+  }
+  /**
+   * O pacote de spawn traz só o nome; HP e nível vêm do ACK_REQNAME — mas só
+   * pedimos se este gid AINDA não tem HP conhecido. `atacar()` roda a cada
+   * clique (inclusive re-clicar o mesmo alvo já travado, comum no combate
+   * corpo a corpo), e pedir de novo é só tráfego perdido: o gid já foi
+   * perguntado sozinho no spawn (`gateway session.ts: queryName`), e depois
+   * disso é `entity:hp` (dano real) quem mantém o número atualizado — nunca
+   * precisa de um SEGUNDO REQNAME no meio do combate.
+   */
+  if (useWorldStore.getState().entities[gid]?.hp === undefined) {
+    gateway().emit("entity:info", { gid });
+  }
   /**
    * `alcanceDaArma()` já É o alcance de verdade (`playerStore.stats.
    * atkRange`, o `SP_ATTACKRANGE` que o rAthena manda — ver o comentário do

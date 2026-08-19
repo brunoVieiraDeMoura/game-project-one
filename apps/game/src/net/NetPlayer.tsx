@@ -39,7 +39,8 @@ import { pegandoItem, usePickupStore } from "./pickupStore";
 import { useGroundItems } from "./GroundItems";
 import { usePlayerStore } from "./playerStore";
 import { useAimStore } from "./aimStore";
-import { estaCastando } from "./castStore";
+import { estaCastando, useCastStore } from "./castStore";
+import { passoDeGiroParaAlvo } from "./castFacing";
 import { useAtaqueBasico } from "./ataqueBasico";
 import { alcanceEfetivoDaSkill } from "./skillCatalog";
 import { celulaNoAlcance, dentroDoAlcance, useSkillWalkStore } from "./skillWalkStore";
@@ -150,6 +151,17 @@ const LOS_MARGEM = 0.75;
  * pixel na tela e nunca foi visto por ninguém. O que se persegue é o solavanco.
  */
 const RECUADA_MINIMA = 0.01;
+
+/**
+ * Fração do giro por quadro ao acompanhar o alvo — cast OU ataque básico,
+ * mesma constante para as duas fontes (ver `girarParaEntidade`, abaixo).
+ *
+ * Mesma ideia do `SNAP_EASE` da câmera (`play/cameraNorth.ts`) — um valor
+ * próprio porque o giro do CORPO deve ser mais rápido que o "voltar ao norte"
+ * da câmera (aqui é para acompanhar um alvo que pode estar andando, não um
+ * gesto ocasional de duplo-clique).
+ */
+const CAST_TURN_EASE = 0.22;
 
 /**
  * O personagem do jogador com o SERVIDOR mandando.
@@ -1134,7 +1146,64 @@ export function NetPlayer({
     // curva). Raiz posiciona, filho olha para onde anda.
     const dx = world.x - g.position.x;
     const dz = world.z - g.position.z;
-    if (cell.moving && dx * dx + dz * dz > 1e-6 && model.current) {
+    /**
+     * Gira o modelo, suave, em direção a uma entidade — fonte única para as
+     * duas situações de combate que travam a rotação de movimento: cast
+     * (abaixo) e ataque básico (`useAttackStore.alvo`, ver comentário
+     * seguinte). Mesma conta de sempre (`passoDeGiroParaAlvo`); só muda QUEM
+     * chama e com qual gid.
+     */
+    const girarParaEntidade = (gid: number): void => {
+      if (!model.current) return;
+      const alvoEnt = useWorldStore.getState().entities[gid];
+      if (!alvoEnt) return;
+      const celEu = interpolatedCell(self, now);
+      const celAlvo = interpolatedCell(alvoEnt, now);
+      const mundoEu = cellToWorld(map, mapping, celEu.x, celEu.y);
+      const mundoAlvo = cellToWorld(map, mapping, celAlvo.x, celAlvo.y);
+      const novaRot = passoDeGiroParaAlvo(
+        model.current.rotation.y,
+        mundoAlvo.x - mundoEu.x,
+        mundoAlvo.z - mundoEu.z,
+        CAST_TURN_EASE,
+      );
+      if (novaRot !== null) model.current.rotation.y = novaRot;
+    };
+
+    /**
+     * CONJURANDO com alvo de ENTIDADE: o corpo acompanha o alvo, suave, o
+     * cast inteiro — não só o giro instantâneo de `olharPara` ao SAIR o
+     * pedido. `estaCastando` é a mesma guarda de `pedirMovimento` (CONJURANDO
+     * NÃO ANDA): como o servidor já trava a caminhada nesse período, as duas
+     * fontes de rotação nunca disputam o mesmo quadro — aqui só quando NÃO se
+     * está andando por definição do próprio servidor.
+     *
+     * `alvoGid` ausente (skill de chão/AOE) cai direto no giro de movimento de
+     * sempre, sem tracking nenhum — é o mesmo `atual` que a barra de
+     * conjuração já lê, nenhum estado novo.
+     */
+    const castAtual = useCastStore.getState().atual;
+    /**
+     * ATAQUE BÁSICO com alvo vivo: mesma ideia do cast, mas a guarda é OUTRA
+     * — não há trava de movimento do servidor para o golpe corpo-a-corpo/à
+     * distância, então `useAttackStore.alvo` (a ordem "estou indo bater no
+     * gid X", já a fonte única de perseguição em `NetPlayer` e de intenção em
+     * `net/acoes.atacar` — clique avulso e Ataque Básico passam pelos dois
+     * pelo MESMO store) fica de pé durante toda a perseguição, não só durante
+     * o golpe. Por isso a guarda aqui é `!cell.moving`: enquanto o
+     * personagem ainda anda até o alcance, o giro de movimento abaixo manda
+     * (olha para onde anda, não para o alvo); parado — já em alcance,
+     * batendo de verdade — é que o corpo vira para o alvo. Alvo perdido
+     * (morreu, saiu de vista, trocou de ordem) já limpa `alvo` nas mesmas
+     * pontas que hoje param o Ataque Básico (`net/acoes`, `net/ataqueBasico`,
+     * `entity:vanish` em `useWorldEvents`) — nenhum evento novo para ouvir.
+     */
+    const alvoDeAtaque = useAttackStore.getState().alvo;
+    if (castAtual?.alvoGid !== undefined && estaCastando(now) && model.current) {
+      girarParaEntidade(castAtual.alvoGid);
+    } else if (alvoDeAtaque && !cell.moving && model.current) {
+      girarParaEntidade(alvoDeAtaque.gid);
+    } else if (cell.moving && dx * dx + dz * dz > 1e-6 && model.current) {
       model.current.rotation.y = Math.atan2(dx, dz);
     }
 
