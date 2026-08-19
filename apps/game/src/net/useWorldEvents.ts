@@ -18,7 +18,7 @@ import { useLootStore } from "../hud/lootStore";
 import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { vozDeAtaque, vozDeConjuracao, vozDeDano } from "../audio/combatVoice";
-import { efeitoDeAtaqueBasico, efeitoDeSkill, subtipoDaArmaEquipada } from "../audio/combatWeapon";
+import { efeitoDeAtaqueBasico, efeitoDeSkill } from "../audio/combatWeapon";
 import { aoComecarCastMultiHit, aoConcluirCastDeChao, aoLiberarCastMultiHit } from "../audio/mage/multiHitCastAudio";
 import {
   aoComecarCastProjetil,
@@ -59,7 +59,6 @@ import { soulStrikeQualityTier } from "../vfx/mage/soul-strike/soulStrikeRenderM
 import { IMPACT_VFX_DURATION_MS, BUFF_VFX_AEGIS } from "../vfx/mage/vfxDurationOverrides";
 import { getSkillProjectileCount } from "../vfx/mage/multiHitShared";
 import { classifyHit } from "../vfx/core/hitVfxResolver";
-import { spawnCombatHitVfx, spawnCombatHitImpacts } from "../vfx/combat/combatHitVfx";
 
 /** EFST_POSTDELAY — `tools/legacy-migration/output/efst.json:48` ("46":
  * "EFST_POSTDELAY"), tabela testada (âncoras do enum C real). Ver uso em
@@ -339,49 +338,6 @@ export function useWorldEvents(): void {
         onSelf: p.targetGid === selfGid,
         skill: false,
       });
-      /**
-       * Combat Hit VFX genérico (auditoria "fechar Normal/Single/Critical",
-       * 2026-08-19) — NORMAL/SINGLE_HIT/CRITICAL/MULTI_HIT/MULTI_HIT_
-       * CRITICAL do ataque básico, via `hitVfxResolver.classifyHit` (MESMO
-       * `count`/`action` reais que decidem áudio/número acima, nunca um
-       * segundo cálculo). Ataque básico NÃO tem `skillId`/elemento — cor
-       * cai no neutro (`shardColorForElement(undefined)`), nunca inventado.
-       * Gate igual ao resto: só em hit de verdade (`p.damage>0`), "Miss"
-       * continua só o texto de sempre.
-       */
-      if (p.damage > 0) {
-        const classification = classifyHit(p.count, 1, crit);
-        const color = shardColorForElement(undefined);
-        /**
-         * Tipo da arma de quem bateu — slash vs. circular
-         * (`vfx/combat/combatHitVfx.getBasicAttackHitVfx`, pedido "VFX de
-         * Hit Básico por Tipo de Arma" 2026-08-19). Só o PRÓPRIO jogador
-         * tem `subType` resolvido no cliente (`audio/combatWeapon.
-         * subtipoDaArmaEquipada`, mesma leitura que já decide o SOM do
-         * ataque básico) — mob/outro jogador não têm inventário
-         * sincronizado aqui, então `weaponType` fica `undefined` e o
-         * classificador já cai no fallback circular sozinho.
-         */
-        const weaponType = p.gid === selfGid ? subtipoDaArmaEquipada() : undefined;
-        if (import.meta.env.DEV) {
-          console.debug("[vfx-hit-debug] onAction hit confirmado", {
-            attackerGid: p.gid,
-            targetGid: p.targetGid,
-            damage: p.damage,
-            count: p.count,
-            crit,
-            isSelf: p.gid === selfGid,
-            weaponType,
-            multiplicity: classification.multiplicity,
-            hits: classification.hits,
-          });
-        }
-        if (classification.multiplicity === "single") {
-          spawnCombatHitVfx({ targetGid: p.targetGid, color, critical: crit, weaponType });
-        } else {
-          spawnCombatHitImpacts({ targetGid: p.targetGid, hits: classification.hits, color, critical: crit, weaponType });
-        }
-      }
     };
     const onName = (p: { gid: number; name: string }) => useWorldStore.getState().rename(p.gid, p.name);
     const onLevel = (p: { gid: number; level: number }) => useWorldStore.getState().setLevel(p.gid, p.level);

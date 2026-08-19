@@ -75,19 +75,12 @@ function classeAtual(): EfeitosDeClasse | undefined {
  */
 export function subtipoDaArmaEquipada(): string | undefined {
   const arma = equippedBySlot(usePlayerStore.getState().inventory).weapon;
-  if (!arma) {
-    if (import.meta.env.DEV) console.debug("[vfx-hit-debug] subtipoDaArmaEquipada: sem arma equipada");
-    return undefined;
-  }
+  if (!arma) return undefined;
   const info = useItemCatalog.getState().byId[arma.itemId];
   if (!info) {
-    if (import.meta.env.DEV)
-      console.debug("[vfx-hit-debug] subtipoDaArmaEquipada: catálogo ainda sem item", { itemId: arma.itemId });
     useItemCatalog.getState().ensure([arma.itemId]);
     return undefined;
   }
-  if (import.meta.env.DEV)
-    console.debug("[vfx-hit-debug] subtipoDaArmaEquipada", { itemId: arma.itemId, subType: info.subType });
   return info.subType;
 }
 
