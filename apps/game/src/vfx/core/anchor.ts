@@ -65,9 +65,12 @@ export interface ResolvedAnchor {
   /** posição de mundo do PONTO DE ANCORAGEM do efeito (o que
    * `VfxRoot`/renderer usa como origem local 0,0,0) */
   position: WorldPoint;
-  /** offset LOCAL, em unidades de célula, do CASTER relativo à âncora —
-   * só preenchido para `anchor:"caster-to-target"`; `null` quando não há
-   * dado de caster nenhum (mesmo fallback documentado em `SkillVfx.tsx`). */
+  /** offset LOCAL, em unidades de MUNDO (2026-08-19-zb: nunca dividido por
+   * `cellSize` — os renderers GPU somam isto direto em `instance.position`,
+   * que já é mundo, sem nenhum `<group>` reescalando no meio), do CASTER
+   * relativo à âncora — só preenchido para `anchor:"caster-to-target"`;
+   * `null` quando não há dado de caster nenhum (mesmo fallback documentado
+   * em `SkillVfx.tsx`). */
   casterOffset: WorldPoint | null;
   targetScale: number;
   /** entidade de `anchor:"entity"` não resolveu (gid sumiu do `worldStore`)
@@ -140,8 +143,16 @@ export function resolveAnchor(
   // caster-to-target: âncora fica no ALVO (posição real do efeito), e o
   // offset local do caster é o que os renderers de projétil usam pra saber
   // de onde "partir" (mesmo contrato de `casterOffsetX/Y/Z` hoje).
-  const targetPos = resolveEntityOrCellPosition(world, { gid: opts.targetGid, cell: opts.cell }) ??
-    opts.position ?? { x: 0, y: -999, z: 0 };
+  const resolvedTarget = resolveEntityOrCellPosition(world, { gid: opts.targetGid, cell: opts.cell });
+  const targetPos = resolvedTarget ?? opts.position ?? { x: 0, y: -999, z: 0 };
+  // `trackTargetSafely` (Fire Ball, 2026-08-19-v — mesmo mecanismo de
+  // `anchorKind==="entity"` acima, nunca um segundo campo): se o alvo
+  // morrer/sumir NO MEIO do voo caster→alvo, `manager.ts` já sabe segurar a
+  // última posição boa em vez de saltar pro sentinela — só faltava este
+  // anchor kind computar `stale` também (antes só `"entity"` fazia). Opt-in
+  // por payload, comportamento DEFAULT (flag ausente) continua o mesmo salto
+  // de sempre pra quem não pede o contrário.
+  const stale = opts.payload?.trackTargetSafely === true && opts.targetGid !== undefined && !opts.cell && resolvedTarget === null;
 
   let casterOffset: WorldPoint | null = null;
   if (opts.sourceGid !== undefined) {
@@ -149,15 +160,23 @@ export function resolveAnchor(
     const casterWorld = tip ?? resolveEntityOrCellPosition(world, { gid: opts.sourceGid });
     if (casterWorld) {
       const yBias = tip ? 0 : FALLBACK_LAUNCH_Y_BIAS;
+      // MUNDO, nunca dividido por `cellSize` (bug real, 2026-08-19-zb:
+      // "a esfera nasce do meio do caminho, não da ponta do cajado" — a
+      // divisão aqui era resquício do `<group>` da versão DOM antiga, que
+      // escalava por `cellSize` sozinho; `flightOffset.ts`/`curveOffset.ts`
+      // somam isto DIRETO em `instance.position` (unidades de mundo, sem
+      // nenhum group intermediário reescalando) — dividir por `cellSize`
+      // encolhia o ponto de partida pra `1/cellSize` da distância real
+      // até o alvo (com `cellSize:2`, a bola nascia na METADE do caminho).
       casterOffset = {
-        x: (casterWorld.x - targetPos.x) / world.cellSize,
-        y: (casterWorld.y - targetPos.y) / world.cellSize + yBias,
-        z: (casterWorld.z - targetPos.z) / world.cellSize,
+        x: casterWorld.x - targetPos.x,
+        y: casterWorld.y - targetPos.y + yBias,
+        z: casterWorld.z - targetPos.z,
       };
     }
   }
 
-  return { position: targetPos, casterOffset, targetScale };
+  return { position: targetPos, casterOffset, targetScale, stale };
 }
 
 /** correção de altura pra um ponto deslocado do centro do efeito (partícula

@@ -20,6 +20,8 @@ import { spawnColdBoltHits } from "../vfx/mage/cold-bolt/coldBoltMultiHit";
 import type { ColdBoltGpuTier } from "../vfx/mage/cold-bolt/coldBoltVfxDefGpu";
 import { spawnLightBoltHits } from "../vfx/mage/light-bolt/lightBoltMultiHit";
 import type { LightBoltGpuTier } from "../vfx/mage/light-bolt/lightBoltVfxDefGpu";
+import { spawnSoulStrikeHits } from "../vfx/mage/soul-strike/soulStrikeMultiHit";
+import type { SoulStrikeGpuTier } from "../vfx/mage/soul-strike/soulStrikeVfxDefGpu";
 import { NetDamageNumbers } from "../net/NetDamageNumbers";
 import { gridFor } from "../grid";
 import { PerfProbe, PerfOverlay } from "../scene/PerfHud";
@@ -85,8 +87,11 @@ const BENCH_SKILLS: { id: number; aegisName: string; kind: VfxKind; areaRadius: 
   { id: 90008, aegisName: "MG_LIGHTNINGBOLT", kind: "cast", areaRadius: 0, label: "Light Bolt — cast (= Thunder Storm)" },
   { id: 90009, aegisName: "MG_SOULSTRIKE", kind: "impact", areaRadius: 0, label: "Soul Strike — impact" },
   { id: 90010, aegisName: "MG_SOULSTRIKE", kind: "cast", areaRadius: 0, label: "Soul Strike — cast" },
-  { id: 90011, aegisName: "MG_FIREBALL", kind: "impact", areaRadius: 1.5, label: "Fire Ball — impact" },
-  { id: 90012, aegisName: "MG_FIREBALL", kind: "cast", areaRadius: 1.5, label: "Fire Ball — cast" },
+  // 2026-08-19-v: `areaRadius:2` bate com o real (`SplashArea: Area:2` do
+  // `skill_db.yml` = 5x5, ver docblock de `fireBallVfxDefGpu.tsx`) — era
+  // 1.5 (chute do protótipo genérico anterior).
+  { id: 90011, aegisName: "MG_FIREBALL", kind: "impact", areaRadius: 2, label: "Fire Ball — impact" },
+  { id: 90012, aegisName: "MG_FIREBALL", kind: "cast", areaRadius: 2, label: "Fire Ball — cast" },
   { id: 90013, aegisName: "MG_FROSTDIVER", kind: "impact", areaRadius: 0, label: "Frost Diver — impact" },
   { id: 90014, aegisName: "MG_FROSTDIVER", kind: "cast", areaRadius: 0, label: "Frost Diver — cast (= Cold Bolt)" },
   { id: 90015, aegisName: "MG_STONECURSE", kind: "impact", areaRadius: 0, label: "Stone Curse — impact" },
@@ -292,6 +297,10 @@ interface BenchApi {
   /** Eletrocutar real, driver dedicado (reconstrução 2026-08-19-f) — ver
    * docblock de `spawnFireLanceHitsAll` acima. */
   spawnLightBoltHitsAll: (opts: { hits: number; tier: LightBoltGpuTier; critical?: boolean }) => void;
+  /** Esferas Espirituais real, driver dedicado (reconstrução 2026-08-19-z)
+   * — ver docblock de `spawnFireLanceHitsAll` acima. Único driver que
+   * também usa `sourceGid` (voo caster→alvo, não cai de cima). */
+  spawnSoulStrikeHitsAll: (opts: { hits: number; tier: SoulStrikeGpuTier; critical?: boolean }) => void;
   clear: () => void;
   domNodeCount: () => number;
   /** draw calls/triângulos do quadro mais recente (`gl.info.render`, mesma
@@ -1034,6 +1043,18 @@ function makeApi(): BenchApi {
     }
   }
 
+  function spawnSoulStrikeHitsAll(opts: { hits: number; tier: SoulStrikeGpuTier; critical?: boolean }): void {
+    for (let i = 0; i < lastTargetGids.length; i++) {
+      spawnSoulStrikeHits({
+        sourceGid: lastCasterGids[i],
+        targetGid: lastTargetGids[i]!,
+        hits: opts.hits,
+        tier: opts.tier,
+        critical: opts.critical === true,
+      });
+    }
+  }
+
   return {
     reset,
     spawn: spawnOne,
@@ -1046,6 +1067,7 @@ function makeApi(): BenchApi {
     spawnFireLanceHitsAll,
     spawnColdBoltHitsAll,
     spawnLightBoltHitsAll,
+    spawnSoulStrikeHitsAll,
     clear: () => useVfxStore.getState().reset(),
     domNodeCount: () => document.getElementsByTagName("*").length,
     perfSnapshot,

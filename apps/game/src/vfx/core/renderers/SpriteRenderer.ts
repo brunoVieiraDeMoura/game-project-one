@@ -5,6 +5,7 @@ import { loadedAtlas } from "../assets/atlasLoader";
 import type { VfxInstanceRuntime, VfxWorldContext } from "../types";
 import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { computeFlightOffset } from "./flightOffset";
+import { computeCurveOffset } from "./curveOffset";
 import { computeOrbitOffset } from "./orbitOffset";
 import { computeDropOffset } from "./dropOffset";
 import { computeDropStretch } from "./dropStretch";
@@ -95,6 +96,7 @@ export class SpriteRenderer extends InstancedBillboardBase {
     const opacityRaw = instance.spawnOptions.payload?.opacity;
     const opacity = typeof opacityRaw === "number" ? opacityRaw : 1;
     const flight = computeFlightOffset(instance, elapsedMs);
+    const curve = computeCurveOffset(instance, elapsedMs);
     const orbit = computeOrbitOffset(instance, elapsedMs);
     const drop = computeDropOffset(instance, elapsedMs);
     const stretch = computeDropStretch(instance, elapsedMs);
@@ -118,9 +120,9 @@ export class SpriteRenderer extends InstancedBillboardBase {
 
     this.writeSlot(index, {
       position: [
-        instance.position.x + flight.x + orbit.x + drop.x,
-        instance.position.y + flight.y + orbit.y + drop.y,
-        instance.position.z + flight.z + orbit.z + drop.z,
+        instance.position.x + flight.x + curve.x + orbit.x + drop.x,
+        instance.position.y + flight.y + curve.y + orbit.y + drop.y,
+        instance.position.z + flight.z + curve.z + orbit.z + drop.z,
       ],
       scale: scale * burst.scaleMul * charge.scaleMul,
       opacity: opacity * burst.opacityMul * charge.opacityMul,

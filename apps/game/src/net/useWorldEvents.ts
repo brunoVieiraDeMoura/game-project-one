@@ -18,7 +18,7 @@ import { useLootStore } from "../hud/lootStore";
 import { limparAmeacas, marcarAmeaca } from "./ameacas";
 import { limparPulsosDeCombate, marcarAtaque, marcarCastRelease, marcarCastStart } from "./combatAnim";
 import { vozDeAtaque, vozDeConjuracao, vozDeDano } from "../audio/combatVoice";
-import { efeitoDeAtaqueBasico, efeitoDeSkill } from "../audio/combatWeapon";
+import { efeitoDeAtaqueBasico, efeitoDeSkill, subtipoDaArmaEquipada } from "../audio/combatWeapon";
 import { aoComecarCastMultiHit, aoConcluirCastDeChao, aoLiberarCastMultiHit } from "../audio/mage/multiHitCastAudio";
 import {
   aoComecarCastProjetil,
@@ -54,6 +54,8 @@ import { spawnColdBoltHits } from "../vfx/mage/cold-bolt/coldBoltMultiHit";
 import { coldBoltQualityTier } from "../vfx/mage/cold-bolt/coldBoltRenderMode";
 import { spawnLightBoltHits } from "../vfx/mage/light-bolt/lightBoltMultiHit";
 import { lightBoltQualityTier } from "../vfx/mage/light-bolt/lightBoltRenderMode";
+import { spawnSoulStrikeHits } from "../vfx/mage/soul-strike/soulStrikeMultiHit";
+import { soulStrikeQualityTier } from "../vfx/mage/soul-strike/soulStrikeRenderMode";
 import { IMPACT_VFX_DURATION_MS, BUFF_VFX_AEGIS } from "../vfx/mage/vfxDurationOverrides";
 import { getSkillProjectileCount } from "../vfx/mage/multiHitShared";
 import { classifyHit } from "../vfx/core/hitVfxResolver";
@@ -350,10 +352,34 @@ export function useWorldEvents(): void {
       if (p.damage > 0) {
         const classification = classifyHit(p.count, 1, crit);
         const color = shardColorForElement(undefined);
+        /**
+         * Tipo da arma de quem bateu — slash vs. circular
+         * (`vfx/combat/combatHitVfx.getBasicAttackHitVfx`, pedido "VFX de
+         * Hit Básico por Tipo de Arma" 2026-08-19). Só o PRÓPRIO jogador
+         * tem `subType` resolvido no cliente (`audio/combatWeapon.
+         * subtipoDaArmaEquipada`, mesma leitura que já decide o SOM do
+         * ataque básico) — mob/outro jogador não têm inventário
+         * sincronizado aqui, então `weaponType` fica `undefined` e o
+         * classificador já cai no fallback circular sozinho.
+         */
+        const weaponType = p.gid === selfGid ? subtipoDaArmaEquipada() : undefined;
+        if (import.meta.env.DEV) {
+          console.debug("[vfx-hit-debug] onAction hit confirmado", {
+            attackerGid: p.gid,
+            targetGid: p.targetGid,
+            damage: p.damage,
+            count: p.count,
+            crit,
+            isSelf: p.gid === selfGid,
+            weaponType,
+            multiplicity: classification.multiplicity,
+            hits: classification.hits,
+          });
+        }
         if (classification.multiplicity === "single") {
-          spawnCombatHitVfx({ targetGid: p.targetGid, color, critical: crit });
+          spawnCombatHitVfx({ targetGid: p.targetGid, color, critical: crit, weaponType });
         } else {
-          spawnCombatHitImpacts({ targetGid: p.targetGid, hits: classification.hits, color, critical: crit });
+          spawnCombatHitImpacts({ targetGid: p.targetGid, hits: classification.hits, color, critical: crit, weaponType });
         }
       }
     };
@@ -854,6 +880,17 @@ export function useWorldEvents(): void {
        */
       if (isMultiHit && aegis === "MG_THUNDERSTORM" && p.kind === "target" && p.damage > 0) {
         spawnLightBoltHits({ targetGid: p.targetGid, hits, critical: crit, tier: lightBoltQualityTier() });
+      }
+      /**
+       * Esferas Espirituais/Soul Strike (reconstrução 2026-08-19-z) —
+       * driver PRÓPRIO (`soul-strike/soulStrikeMultiHit.ts:
+       * spawnSoulStrikeHits`), MESMO padrão das outras 4. Única diferença
+       * de assinatura: passa `sourceGid` também — a esfera VOA do caster
+       * até o alvo (`anchor:"caster-to-target"`, precisa da ponta do
+       * cajado), diferente das outras 4 que nascem em cima do alvo.
+       */
+      if (isMultiHit && aegis === "MG_SOULSTRIKE" && p.kind === "target" && p.damage > 0) {
+        spawnSoulStrikeHits({ sourceGid: p.sourceGid, targetGid: p.targetGid, hits, critical: crit, tier: soulStrikeQualityTier() });
       }
       // Miss (`damage === 0`) continua pelo `damageFeed` de sempre MESMO
       // nessas skills — `*Impact` só desenha número pra dano > 0

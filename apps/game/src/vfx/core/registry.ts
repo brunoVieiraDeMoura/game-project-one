@@ -18,7 +18,7 @@ const definitions = new Map<string, VfxDefinition>();
  * não aqui: registry não sabe nada de rAthena. */
 const skillBindings = new Map<string, string>();
 
-const RENDERER_KINDS: ReadonlySet<VfxRendererKind> = new Set(["sprite", "particle", "beam", "ring", "trail", "dom"]);
+const RENDERER_KINDS: ReadonlySet<VfxRendererKind> = new Set(["sprite", "particle", "beam", "ring", "trail", "cage", "dom"]);
 
 export class VfxDefinitionError extends Error {}
 

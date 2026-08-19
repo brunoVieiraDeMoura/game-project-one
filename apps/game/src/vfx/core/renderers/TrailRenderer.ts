@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { VfxInstanceRuntime } from "../types";
 import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { computeFlightOffset } from "./flightOffset";
+import { computeCurveOffset } from "./curveOffset";
 import { computeOrbitOffset } from "./orbitOffset";
 import { computeDropOffset } from "./dropOffset";
 
@@ -68,12 +69,13 @@ export class TrailRenderer extends InstancedBillboardBase {
     // a história tem que seguir a bola voando, não o ponto fixo do alvo
     // (mesmo helper genérico que Sprite/Particle usam, ver `flightOffset.ts`).
     const flight = computeFlightOffset(instance, elapsedMs);
+    const curve = computeCurveOffset(instance, elapsedMs);
     const orbit = computeOrbitOffset(instance, elapsedMs);
     const drop = computeDropOffset(instance, elapsedMs);
     hist.push({
-      x: instance.position.x + flight.x + orbit.x + drop.x,
-      y: instance.position.y + flight.y + orbit.y + drop.y,
-      z: instance.position.z + flight.z + orbit.z + drop.z,
+      x: instance.position.x + flight.x + curve.x + orbit.x + drop.x,
+      y: instance.position.y + flight.y + curve.y + orbit.y + drop.y,
+      z: instance.position.z + flight.z + curve.z + orbit.z + drop.z,
     });
     if (hist.length > HISTORY_CAP) hist.shift();
     this.writeFromInstance(instance);

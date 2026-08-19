@@ -103,7 +103,20 @@ export class RingRenderer implements VfxRenderer {
   }
 
   onInstanceCreate(instance: VfxInstanceRuntime, world: VfxWorldContext): void {
-    const radius = Number(instance.spawnOptions.payload?.radius ?? 0.5) * world.cellSize;
+    // `payload.areaRadius` (Fire Ball, 2026-08-19-v) — fallback pro raio REAL
+    // da skill (`SplashArea` do `skill_db.yml`, já resolvido pro nível certo
+    // em `migratedVfxBridge.ts`) quando a `VfxDefinition` não fixa um
+    // `radius` decorativo próprio (Fire Wall/Safety Wall sempre passam
+    // `radius` explícito nos `params` do layer — nunca caem aqui). Sem os
+    // dois, `0.5` de sempre.
+    const radius = Number(instance.spawnOptions.payload?.radius ?? instance.spawnOptions.payload?.areaRadius ?? 0.5) * world.cellSize;
+    // `payload.heightOffset` (Cúpula Sagrada, 2026-08-19-y: "relevo do
+    // terreno atrapalha a visualização do círculo, deixa ele acima dos
+    // relevos") — sobrescreve o `HEIGHT_OFFSET` padrão (5cm, pensado pra
+    // decal raso tipo Fire Wall/Safety Wall) só pra quem precisar de mais
+    // folga acima de relevo irregular. Ausente = `HEIGHT_OFFSET` de sempre,
+    // nenhuma mudança pros decals existentes.
+    const heightOffset = Number(instance.spawnOptions.payload?.heightOffset ?? HEIGHT_OFFSET);
     const mode = instance.spawnOptions.payload?.mode === "disc" ? 1 : 0;
     const colorHex = String(instance.spawnOptions.payload?.color ?? "#c084fc");
 
@@ -111,15 +124,44 @@ export class RingRenderer implements VfxRenderer {
     entry.material.uniforms.uColor!.value.set(colorHex);
     entry.material.uniforms.uMode!.value = mode;
     entry.material.uniforms.uOpacity!.value = 1;
-    moldarMalhaTerreno(entry.mesh.geometry, instance.position.x, instance.position.z, radius, SEGMENTS, HEIGHT_OFFSET, world.terrain);
+    moldarMalhaTerreno(entry.mesh.geometry, instance.position.x, instance.position.z, radius, SEGMENTS, heightOffset, world.terrain);
     entry.mesh.visible = true;
     this.entries.set(instance.instanceId, entry);
   }
 
-  onInstanceUpdate(): void {
-    // posição/forma são fixas no nascimento (`anchor:"cell"` — mesma regra
-    // documentada em `SkillVfx.tsx: presoNaCelula`); só a animação do
-    // shader (`uTime`) muda, feita no `flush()`.
+  /**
+   * Posição/forma são fixas no nascimento (`anchor:"cell"` — mesma regra
+   * documentada em `SkillVfx.tsx: presoNaCelula`); a pulsação contínua do
+   * shader (`uTime`) é feita no `flush()`. O que MUDA aqui (Fire Ball,
+   * 2026-08-19-v: "anel no chão só depois que a bola chega, não durante o
+   * voo inteiro") é só `uOpacity` — atraso+fade opcionais, lidos do
+   * payload, pra um anel poder nascer JUNTO com o projétil (`anchor:
+   * "caster-to-target"`, uma instância só) mas ficar invisível até o
+   * instante certo. `payload.ringDelayMs`/`ringFadeInMs`/`ringFadeOutMs`
+   * TODOS ausentes/zero (todo `ring` existente hoje — Fire Wall/Safety
+   * Wall/decorativos) = `uOpacity` fica 1 o tempo todo, comportamento de
+   * sempre, custo zero extra (early return).
+   */
+  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number): void {
+    const payload = instance.spawnOptions.payload;
+    const delayMs = Number(payload?.ringDelayMs ?? 0);
+    const fadeInMs = Number(payload?.ringFadeInMs ?? 0);
+    const fadeOutMs = Number(payload?.ringFadeOutMs ?? 0);
+    if (delayMs <= 0 && fadeInMs <= 0 && fadeOutMs <= 0) return;
+    const entry = this.entries.get(instance.instanceId);
+    if (!entry) return;
+    const local = elapsedMs - delayMs;
+    let opacity: number;
+    if (local < 0) {
+      opacity = 0;
+    } else if (fadeInMs > 0 && local < fadeInMs) {
+      opacity = local / fadeInMs;
+    } else {
+      const total = instance.def.lifetimeMs;
+      const remain = total !== undefined ? total - elapsedMs : Infinity;
+      opacity = fadeOutMs > 0 && remain < fadeOutMs ? Math.max(0, remain / fadeOutMs) : 1;
+    }
+    entry.material.uniforms.uOpacity!.value = opacity;
   }
 
   /** frustum culling — `mesh.visible=false` some com o draw call inteiro

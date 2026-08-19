@@ -12,8 +12,11 @@ import type { VfxLodTier } from "./lod";
  * completo spawn → coalesce → renderer.
  */
 
-/** quem sabe desenhar uma `VfxDefinition` — cada um é um módulo próprio em `renderers/*`. */
-export type VfxRendererKind = "sprite" | "particle" | "beam" | "ring" | "trail" | "dom";
+/** quem sabe desenhar uma `VfxDefinition` — cada um é um módulo próprio em `renderers/*`.
+ * `"cage"` (2026-08-19-x) — 6º renderer, gaiola 3D de arestas ao redor de uma
+ * célula (ver `renderers/CageRenderer.ts` pro raciocínio completo: nenhum
+ * dos outros 5 desenha forma 3D real, só billboards/decal de chão). */
+export type VfxRendererKind = "sprite" | "particle" | "beam" | "ring" | "trail" | "cage" | "dom";
 
 /** onde a instância nasce/segue — resolvido por `anchor.ts`, nunca pelo renderer. */
 export type VfxAnchorKind =

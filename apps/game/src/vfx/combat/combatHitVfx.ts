@@ -40,9 +40,30 @@ export const SLASH_IMPACT_VFX_ID = "slash_impact_vfx";
 
 const HIT_FLASH_MS = 180;
 const HIT_TAIL_MS = 80;
-const HIT_SPRITE_SCALE = 0.4;
-const HIT_PARTICLE_SCALE = 0.1;
-const HIT_PARTICLE_RADIUS = 0.28;
+/**
+ * Escala/posição (rodada 2 — "não gostei do efeito", 2026-08-19): dois
+ * problemas reais achados no `/play`, não mais escala pura:
+ *
+ * 1) SEM offset vertical, `anchor:"entity"` pousa no PÉ do alvo
+ *    (`resolveEntityOrCellPosition` → `interpolatedCell`/`cellToWorld`,
+ *    nunca centro de massa) — o próprio corpo do alvo (geometria opaca,
+ *    escreve profundidade) ocultava o flash por trás/dentro das pernas.
+ *    `offset:[0,HIT_OFFSET_Y,0]` é o MESMO mecanismo que
+ *    `freezeBodyVfxDefGpu.tsx`/`FREEZE_SHATTER_GPU_DEF` já usam pra pousar
+ *    no torso em vez do chão — reaproveitado, não um offset novo.
+ * 2) Um sprite só (disco radial suave) nunca ia LER como "impacto" —
+ *    `HIT_HALO_SCALE` adiciona uma segunda camada maior/mais fraca
+ *    concêntrica (núcleo denso + halo largo, ambas placeholder-circle),
+ *    a mesma técnica de "duas camadas concêntricas" que
+ *    `freezeBodyVfxDefGpu.tsx` já usa (corpo + núcleo, linhas 38-39) —
+ *    sem inventar renderer novo.
+ */
+const HIT_OFFSET_Y = 1.0;
+const HIT_SPRITE_SCALE = 1.3;
+const HIT_HALO_SCALE = 2.3;
+const HIT_HALO_OPACITY = 0.3;
+const HIT_PARTICLE_SCALE = 0.18;
+const HIT_PARTICLE_RADIUS = 0.45;
 /** só existe no crítico — "pequena diferença visual, sem exagero" (pedido
  * explícito); comparar com Oracle (66/instância) ou mesmo o burst das
  * skills migradas (12-30/instância) — isto é uma fração pequena disso. */
@@ -65,20 +86,130 @@ const COMBAT_HIT_VFX_DEF: VfxDefinition = {
   // estava no instante do hit, nunca reconsulta depois.
   freezeAnchorAfterMs: 0,
   lifetimeMs: HIT_FLASH_MS + HIT_TAIL_MS,
-  scale: { base: HIT_SPRITE_SCALE },
+  scale: { base: HIT_SPRITE_SCALE, byTarget: true },
   layers: [
-    // camada 1: flash — cor vem de `payload.color` por CHAMADA (elemento
-    // real quando existir, neutro quando não), sem fall/rotação.
-    { renderer: "sprite", params: { opacity: 0.85 } },
-    // camada 2: burst — `particleCount` DELIBERADAMENTE fora de `params`
+    // camada 1: núcleo — denso, opaco, lê como o "estouro" do impacto.
+    // cor vem de `payload.color` por CHAMADA (elemento real quando
+    // existir, neutro quando não), sem fall/rotação. `offset` é POR
+    // CAMADA (`manager.ts: buildLayerRuntime`/`applyOffsetInto` só lê
+    // `layer.offset`, o campo `offset` no nível de `VfxDefinition` não é
+    // aplicado a posição nenhuma — achado desta rodada, repetir em
+    // TODA camada em vez de setar uma vez no topo).
+    { renderer: "sprite", offset: [0, HIT_OFFSET_Y, 0], params: { opacity: 0.95 } },
+    // camada 2: halo — MAIOR e mais fraco, concêntrico ao núcleo (mesma
+    // técnica de 2 camadas de `freezeBodyVfxDefGpu.tsx: buildFreezeBodyLayers`,
+    // linhas 38-39) — é o que faz o disco único parar de ler como "um
+    // ponto" e virar "uma onda de choque".
+    {
+      renderer: "sprite",
+      scale: { base: HIT_HALO_SCALE, byTarget: true },
+      offset: [0, HIT_OFFSET_Y, 0],
+      params: { opacity: HIT_HALO_OPACITY },
+    },
+    // camada 3: burst — `particleCount` DELIBERADAMENTE fora de `params`
     // aqui (layer.params vence sobre o payload da chamada — ver
     // `manager.ts: buildLayerRuntime` — setar aqui clobbaria o valor
     // por-chamada); vem inteiro de `spawnCombatHitVfx`/`spawnHitImpacts`
     // (0 no hit normal, `CRITICAL_BURST_PARTICLES` no crítico).
-    { renderer: "particle", scale: { base: HIT_PARTICLE_SCALE }, params: { radius: HIT_PARTICLE_RADIUS } },
+    { renderer: "particle", scale: { base: HIT_PARTICLE_SCALE }, offset: [0, HIT_OFFSET_Y, 0], params: { radius: HIT_PARTICLE_RADIUS } },
   ],
 };
 defineVfx(COMBAT_HIT_VFX_DEF);
+
+/**
+ * Achatamento fixo (`stretchFrom===stretchTo`, sem animação) — vira uma
+ * "lâmina" alongada em vez de flash redondo. Rodada 2 ("tem que parecer
+ * um corte", 2026-08-19): largura ENCOLHIDA (`SLASH_SPRITE_SCALE` desceu
+ * de 0.85→0.6) e `SLASH_STRETCH` subiu (3.0→4.8) — mais fino e mais
+ * comprido lê como LÂMINA, largo+curto lia como blob esticado. Comprimento
+ * aparente é `SLASH_SPRITE_SCALE * SLASH_STRETCH * targetScale` (~2.9
+ * unidades no alvo padrão), largura só `SLASH_SPRITE_SCALE * targetScale`
+ * (~0.6) — mesmo `byTarget:true` de `freezeBodyVfxDefGpu.tsx`. `offset`
+ * sobe pro torso pelo MESMO motivo/mecanismo do circular acima (ver
+ * `HIT_OFFSET_Y`) — sem ele o corte nascia no pé do alvo, atrás/dentro da
+ * própria geometria do corpo.
+ */
+const SLASH_FLASH_MS = 160;
+const SLASH_TAIL_MS = 90;
+const SLASH_OFFSET_Y = 1.0;
+const SLASH_SPRITE_SCALE = 0.6;
+const SLASH_PARTICLE_SCALE = 0.14;
+const SLASH_PARTICLE_RADIUS = 0.35;
+const SLASH_STRETCH = 4.8;
+/** mesma ideia de `CRITICAL_BURST_PARTICLES`, fração menor (o corte já é
+ * visualmente maior por causa do `SLASH_STRETCH`, não precisa do mesmo
+ * burst do impacto circular pra "ler" como crítico). */
+const SLASH_CRITICAL_BURST_PARTICLES = 4;
+/** ângulo-base do corte (mesmo espírito de `SHARD_ROTATION` em
+ * `multiHitShardImpact.ts`: diagonal, não alinhado aos eixos) + faixa de
+ * variação aleatória por golpe (pedido explícito: "permitir variação de
+ * rotação para evitar que todos os cortes tenham exatamente a mesma
+ * orientação"). */
+const SLASH_BASE_ROTATION = Math.PI / 4;
+const SLASH_ROTATION_JITTER = Math.PI / 3;
+
+function randomSlashRotation(): number {
+  return SLASH_BASE_ROTATION + (Math.random() - 0.5) * SLASH_ROTATION_JITTER;
+}
+
+const SLASH_IMPACT_VFX_DEF: VfxDefinition = {
+  id: SLASH_IMPACT_VFX_ID,
+  renderer: "sprite",
+  anchor: "entity",
+  // congela no spawn — mesma razão de `COMBAT_HIT_VFX_DEF` acima.
+  freezeAnchorAfterMs: 0,
+  lifetimeMs: SLASH_FLASH_MS + SLASH_TAIL_MS,
+  scale: { base: SLASH_SPRITE_SCALE, byTarget: true },
+  layers: [
+    {
+      renderer: "sprite",
+      // `offset` — mesmo mecanismo/motivo de `COMBAT_HIT_VFX_DEF` acima
+      // (`layer.offset`, nunca o campo no nível de `VfxDefinition`, que o
+      // manager não lê pra posição).
+      offset: [0, SLASH_OFFSET_Y, 0],
+      // `fallMs` SEM `fallHeight` — `computeDropOffset` continua devolvendo
+      // zero (não cai), mas `computeDropStretch` já lê só `fallMs` pra
+      // habilitar o alongamento (`dropStretch.ts`); `stretchFrom===stretchTo`
+      // deixa o valor CONSTANTE pela vida inteira do sprite, sem animar.
+      params: {
+        opacity: 0.95,
+        fallMs: SLASH_FLASH_MS + SLASH_TAIL_MS,
+        stretchFrom: SLASH_STRETCH,
+        stretchTo: SLASH_STRETCH,
+      },
+    },
+    // burst PEQUENO só no crítico — mesmo padrão de `COMBAT_HIT_VFX_DEF`
+    // (`particleCount` fora de `params`, vem por chamada).
+    { renderer: "particle", scale: { base: SLASH_PARTICLE_SCALE }, offset: [0, SLASH_OFFSET_Y, 0], params: { radius: SLASH_PARTICLE_RADIUS } },
+  ],
+};
+defineVfx(SLASH_IMPACT_VFX_DEF);
+
+/**
+ * Classificação CENTRALIZADA arma → família de VFX (pedido explícito:
+ * "não espalhar if/else de tipos de armas por vários arquivos" — este é o
+ * ÚNICO lugar que sabe a lista). `weaponType` é o `ItemSubType` real do
+ * catálogo (`net/itemCatalog.ts: ItemInfo.subType`, migrado do `item_db`
+ * `SubType`) — nunca o nome textual do item.
+ *
+ * Regra de fallback (pedido explícito): qualquer arma fora da lista SLASH
+ * — incluindo `undefined` (arma desconhecida, sem arma, ou dono cujo
+ * inventário o cliente não enxerga: só o PRÓPRIO jogador tem `subType`
+ * resolvido, ver `audio/combatWeapon.ts: subtipoDaArmaEquipada`) — cai em
+ * `"circular-impact"`. Nunca deixa um golpe sem VFX por falta de
+ * classificação.
+ */
+export type BasicAttackHitVfxKind = "slash-impact" | "circular-impact";
+
+const SLASH_WEAPON_TYPES: ReadonlySet<string> = new Set([
+  "dagger", "1h_sword", "2h_sword", "1h_spear", "2h_spear",
+  "1h_axe", "2h_axe", "katar", "huuma", // huuma = Fuuma Shuriken (W_HUUMA)
+]);
+
+export function getBasicAttackHitVfx(weaponType: string | undefined): BasicAttackHitVfxKind {
+  if (weaponType && SLASH_WEAPON_TYPES.has(weaponType)) return "slash-impact";
+  return "circular-impact";
+}
 
 export interface SpawnCombatHitVfxOptions {
   targetGid: number;
@@ -87,16 +218,33 @@ export interface SpawnCombatHitVfxOptions {
    * inventado), skill sem receita própria usaria o `element` real dela. */
   color: string;
   critical: boolean;
+  /** `ItemSubType` da arma de quem bateu — `undefined` cai no circular
+   * (ver `getBasicAttackHitVfx`). */
+  weaponType?: string;
 }
 
 /** hit ÚNICO (NORMAL/SINGLE_HIT/CRITICAL — `multiplicity==="single"` do
  * `hitVfxResolver`) — um `play()` só, sem loop/timeout nenhum. */
 export function spawnCombatHitVfx(opts: SpawnCombatHitVfxOptions): void {
-  vfxManager.play(COMBAT_HIT_VFX_ID, {
+  const kind = getBasicAttackHitVfx(opts.weaponType);
+  const isSlash = kind === "slash-impact";
+  const vfxId = isSlash ? SLASH_IMPACT_VFX_ID : COMBAT_HIT_VFX_ID;
+  const handle = vfxManager.play(vfxId, {
     targetGid: opts.targetGid,
     scale: criticalScaleFor(opts.critical),
-    payload: { color: opts.color, particleCount: opts.critical ? CRITICAL_BURST_PARTICLES : 0 },
+    rotation: isSlash ? randomSlashRotation() : undefined,
+    payload: {
+      color: opts.color,
+      particleCount: opts.critical ? (isSlash ? SLASH_CRITICAL_BURST_PARTICLES : CRITICAL_BURST_PARTICLES) : 0,
+    },
   });
+  if (import.meta.env.DEV) {
+    // `handle === undefined` = `vfxManager.play` descartou o spawn em
+    // silêncio (definition não registrada OU `world` ainda não setado por
+    // `VfxRoot` — ver `manager.ts: play()`). É o sinal definitivo de "não
+    // deveria ter renderizado nada mesmo".
+    console.debug("[vfx-hit-debug] spawnCombatHitVfx", { weaponType: opts.weaponType, kind, vfxId, targetGid: opts.targetGid, spawned: handle !== undefined });
+  }
 }
 
 export interface SpawnCombatHitImpactsOptions {
@@ -104,6 +252,8 @@ export interface SpawnCombatHitImpactsOptions {
   hits: number;
   color: string;
   critical: boolean;
+  /** mesmo campo de `SpawnCombatHitVfxOptions` — ver `getBasicAttackHitVfx`. */
+  weaponType?: string;
 }
 
 /** MULTI_HIT/MULTI_HIT_CRITICAL sem receita própria — mesma mecânica de N
@@ -111,13 +261,20 @@ export interface SpawnCombatHitImpactsOptions {
  * (`spawnHitImpacts`, generalizada nesta auditoria), só com o `vfxId`
  * genérico de combate em vez do losango mágico. */
 export function spawnCombatHitImpacts(opts: SpawnCombatHitImpactsOptions): void {
+  const kind = getBasicAttackHitVfx(opts.weaponType);
+  const isSlash = kind === "slash-impact";
+  const vfxId = isSlash ? SLASH_IMPACT_VFX_ID : COMBAT_HIT_VFX_ID;
+  if (import.meta.env.DEV) {
+    console.debug("[vfx-hit-debug] spawnCombatHitImpacts", { weaponType: opts.weaponType, kind, vfxId, targetGid: opts.targetGid, hits: opts.hits });
+  }
   spawnHitImpacts({
-    vfxId: COMBAT_HIT_VFX_ID,
+    vfxId,
     targetGid: opts.targetGid,
     hits: opts.hits,
     staggerMs: BASIC_ATTACK_MULTI_STAGGER_MS,
     color: opts.color,
     critical: opts.critical,
+    rotation: isSlash ? randomSlashRotation() : undefined,
   });
 }
 

@@ -10,6 +10,7 @@ import { ParticleRenderer } from "./renderers/ParticleRenderer";
 import { BeamRenderer } from "./renderers/BeamRenderer";
 import { RingRenderer } from "./renderers/RingRenderer";
 import { TrailRenderer } from "./renderers/TrailRenderer";
+import { CageRenderer } from "./renderers/CageRenderer";
 import { DomRenderer } from "./renderers/DomRenderer";
 
 /**
@@ -49,6 +50,7 @@ export function VfxRoot({
     const beam = new BeamRenderer(group);
     const ring = new RingRenderer(group);
     const trail = new TrailRenderer(group);
+    const cage = new CageRenderer(group);
     // mesmo container que `core/diagnostics/vfxProbe.ts: registrarContainerVfx`
     // já usa como alvo de varredura — VFX de skill some daí de propósito
     // (renderer:"dom" migrado não conta mais como custo de DOM da sessão,
@@ -62,15 +64,17 @@ export function VfxRoot({
     vfxManager.registerRenderer(beam);
     vfxManager.registerRenderer(ring);
     vfxManager.registerRenderer(trail);
+    vfxManager.registerRenderer(cage);
     vfxManager.registerRenderer(dom);
 
     return () => {
-      for (const kind of ["sprite", "particle", "beam", "ring", "trail", "dom"]) vfxManager.unregisterRenderer(kind);
+      for (const kind of ["sprite", "particle", "beam", "ring", "trail", "cage", "dom"]) vfxManager.unregisterRenderer(kind);
       sprite.dispose();
       particle.dispose();
       beam.dispose();
       ring.dispose();
       trail.dispose();
+      cage.dispose();
       dom.dispose();
       domRendererRef.current = null;
     };

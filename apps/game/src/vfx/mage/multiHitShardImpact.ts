@@ -159,7 +159,14 @@ export function spawnHitImpacts(opts: SpawnHitImpactsOptions): void {
   const rotation = opts.rotation ?? 0;
   const payload = { color: opts.color };
   const first = vfxManager.play(opts.vfxId, { targetGid: opts.targetGid, rotation, scale, payload });
-  if (!first) return;
+  if (!first) {
+    // DEBUG TEMPORÁRIO (investigação "VFX de hit básico não aparece",
+    // 2026-08-19) — mesmo sinal de `combatHitVfx.spawnCombatHitVfx`:
+    // `vfxManager.play` descartou o hit 1 em silêncio (definition
+    // desconhecida OU `world` ainda não setado por `VfxRoot`).
+    if (import.meta.env.DEV) console.debug("[vfx-hit-debug] spawnHitImpacts: play() descartou o hit 1", { vfxId: opts.vfxId, targetGid: opts.targetGid });
+    return;
+  }
   const instance = vfxManager.getInstance(first.instanceId);
   if (!instance) return;
   const position = { x: instance.position.x, y: instance.position.y, z: instance.position.z };

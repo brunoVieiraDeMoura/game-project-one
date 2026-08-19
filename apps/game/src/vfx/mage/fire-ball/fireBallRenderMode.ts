@@ -1,35 +1,54 @@
-import { defineVfx } from "../../core/registry";
+import { defineVfx, bindSkillVfx, unbindSkillVfx } from "../../core/registry";
+import { fireBallImpactGpuDef, fireBallCastGpuDef, type FireBallGpuTier } from "./fireBallVfxDefGpu";
+import { useVfxQuality, getVfxQualityTier } from "../../vfxQualityStore";
 import type { VfxDefinition } from "../../core/types";
-import { FIREBALL_CAST_GPU_DEF, FIREBALL_IMPACT_GPU_DEF } from "./fireBallVfxDefGpu";
 
 /**
- * Flag DOM↔GPU pra Fire Ball (Fase 5, rodada "reestruturar VFX pra escala",
- * leia1.txt item 3: "flag clara de benchmark, implementação antiga
- * continua disponível como baseline"). `fireBallVfxDef.tsx` (a versão DOM
- * real, em produção) NUNCA é importado nem tocado por este arquivo — ele
- * já registrou as próprias `VfxDefinition` no module-load de sempre, e
- * continua sendo o que o jogo usa por padrão. Isto aqui só existe pra
- * TROCAR a receita das mesmas duas `VfxDefinition` (`fireball_cast`/
- * `fireball_impact`) em runtime, pra comparação lado a lado — `defineVfx`
- * já "registra OU SUBSTITUI" (`registry.ts`), então recadastrar o mesmo id
- * com outro `renderer`/`layers` troca só a receita de desenho, nunca
- * dano/alvo/timing/rede (isso continua 100% no servidor, nunca aqui).
+ * Flag DOM↔GPU + tier de qualidade pra Fire Ball (reconstrução 2026-08-19-v)
+ * — Fire Ball NÃO é multi-hit (`HitCount:1`, verificado no `skill_db.yml`),
+ * então não precisa do padrão "N ids por tier + driver escolhe a cada
+ * chamada" que Fire Lance/Cold Bolt/Eletrocutar usam pro PROJÉTIL. 1 cast =
+ * 1 instância inteira (projétil+trail+impacto+AoE, ver docblock de
+ * `fireBallVfxDefGpu.tsx`), então basta o padrão que Fire Lance JÁ usa pro
+ * próprio CAST (`fireLanceRenderMode.ts: applyCastTier`): 2 ids ESTÁVEIS
+ * (`fireball_impact`/`fireball_cast`), `bindSkillVfx` fixo, e troca de tier
+ * RE-REGISTRA a receita sob os MESMOS ids (`defineVfx` "registra OU
+ * SUBSTITUI") toda vez que a config GLOBAL muda — nenhum driver novo, nenhum
+ * `setTimeout`.
  *
- * Cópia local dos metadados DOM (id/renderer/anchor/dom/lifetimeMs) — NÃO
- * a arte em si (nenhum componente/CSS duplicado) — só pra poder VOLTAR pro
- * estado original depois de testar GPU, sem precisar recarregar a página.
+ * `fireBallVfxDef.tsx` (a versão DOM real) NUNCA é importado/tocado por
+ * este arquivo — só re-registra as MESMAS duas `VfxDefinition` sob outra
+ * receita, exatamente como sempre.
  *
- * **GPU é o padrão de produção** (Directive B, rodada de virada) — o
- * `setFireBallRenderMode("gpu")` no fim deste arquivo roda no module-load,
- * sempre, substituindo a `VfxDefinition` DOM que `fireBallVfxDef.tsx`
- * acabou de registrar (import ANTES deste em `skillVfxBindings.ts` —
- * ordem garante que este `defineVfx` vence por último). `window.
- * __fireballBench.set("dom")` continua disponível em dev pra comparar/
- * reverter sem rebuild.
+ * **GPU é o padrão de produção**; tier default = `"high"` (default da
+ * store global, preserva o visual de sempre pra quem nunca abriu
+ * Configurações). `window.__fireBallRenderBench` continua disponível em
+ * dev pra comparar DOM/GPU e forçar tier sem depender da UI.
  */
+export type FireBallRenderMode = "dom" | "gpu";
+
+let mode: FireBallRenderMode = "gpu";
+let devTierOverride: FireBallGpuTier | null = null;
+
+/** tier EFETIVO — override de dev vence, senão a config global. */
+export function fireBallQualityTier(): FireBallGpuTier {
+  return devTierOverride ?? getVfxQualityTier();
+}
+
+/** reaplica AMBAS as composições (impacto+cast) pro tier efetivo atual —
+ * chamado no module-load, em toda mudança da store global, e em todo
+ * `setFireBallQualityTier` de dev. Só faz sentido em modo GPU (DOM não tem
+ * tier); chamado de qualquer forma, sem custo — `defineVfx` de um id que o
+ * modo DOM não usa não afeta nada visível. */
+function applyTier(): void {
+  const tier = fireBallQualityTier();
+  defineVfx(fireBallImpactGpuDef(tier));
+  defineVfx(fireBallCastGpuDef(tier));
+}
+
 const FIREBALL_FLIGHT_MS = 480;
-const IMPACT_AT_MS = FIREBALL_FLIGHT_MS * 0.93;
-const IMPACT_TAIL_MS = 650;
+const IMPACT_AT_MS = FIREBALL_FLIGHT_MS * 0.95;
+const IMPACT_TAIL_MS = 700;
 
 const FIREBALL_CAST_DOM_DEF: VfxDefinition = {
   id: "fireball_cast",
@@ -46,25 +65,48 @@ const FIREBALL_IMPACT_DOM_DEF: VfxDefinition = {
   lifetimeMs: IMPACT_AT_MS + IMPACT_TAIL_MS,
 };
 
-export type FireBallRenderMode = "dom" | "gpu";
-
-let mode: FireBallRenderMode = "gpu";
-
 export function setFireBallRenderMode(next: FireBallRenderMode): void {
   mode = next;
-  defineVfx(next === "gpu" ? FIREBALL_CAST_GPU_DEF : FIREBALL_CAST_DOM_DEF);
-  defineVfx(next === "gpu" ? FIREBALL_IMPACT_GPU_DEF : FIREBALL_IMPACT_DOM_DEF);
+  bindSkillVfx("MG_FIREBALL", "cast", "fireball_cast");
+  bindSkillVfx("MG_FIREBALL", "impact", "fireball_impact");
+  if (next === "gpu") {
+    applyTier();
+  } else {
+    defineVfx(FIREBALL_CAST_DOM_DEF);
+    defineVfx(FIREBALL_IMPACT_DOM_DEF);
+  }
 }
 
 export function fireBallRenderMode(): FireBallRenderMode {
   return mode;
 }
 
+/** override de DEV — nunca escreve na store global. */
+export function setFireBallQualityTier(next: FireBallGpuTier): void {
+  devTierOverride = next;
+  if (mode === "gpu") applyTier();
+}
+
+/** volta a seguir a config global (some o override de dev). */
+export function clearFireBallQualityOverride(): void {
+  devTierOverride = null;
+  if (mode === "gpu") applyTier();
+}
+
 setFireBallRenderMode(mode); // aplica o padrão de produção no module-load
 
+// reaplica sempre que a config GLOBAL mudar — só quando não há override de
+// dev ativo (dev tem prioridade explícita enquanto durar).
+useVfxQuality.subscribe(() => {
+  if (devTierOverride === null && mode === "gpu") applyTier();
+});
+
 if (import.meta.env.DEV && typeof window !== "undefined") {
-  (window as unknown as { __fireballBench?: unknown }).__fireballBench = {
+  (window as unknown as { __fireBallRenderBench?: unknown }).__fireBallRenderBench = {
     set: setFireBallRenderMode,
     get: fireBallRenderMode,
+    setTier: setFireBallQualityTier,
+    getTier: fireBallQualityTier,
+    clearTierOverride: clearFireBallQualityOverride,
   };
 }

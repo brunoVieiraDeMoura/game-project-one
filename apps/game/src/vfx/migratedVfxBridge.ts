@@ -58,12 +58,17 @@ function toSpawnOptions(effect: Omit<VfxInstance, "id">): VfxSpawnOptions {
       crit: effect.crit,
       onSelf: effect.onSelf,
       hits: effect.hits,
-      // só usado por buff (Oráculo: raio das partículas de área) — mesma
-      // leitura síncrona do catálogo que `VfxNode` fazia reativamente pro
-      // caminho legado (ver `vfx/SkillVfx.tsx`, `buffInfo?.areaRadius`).
-      // Catálogo ainda não resolvido pra esta skill = `undefined`, cada
-      // arte tem seu próprio default real (nunca um chute).
-      areaRadius: effect.kind === "buff" ? useSkillCatalog.getState().byId[effect.skillId]?.areaRadius : undefined,
+      // buff (Oráculo: raio das partículas de área) OU impact (Fire Ball,
+      // 2026-08-19-v: "conferir a área real da skill antes de desenhar o
+      // AoE" — `SplashArea` real do `skill_db.yml`, já lido pro nível certo
+      // em `net/skillCatalog.ts`, nunca um raio chutado na composição
+      // visual). Mesma leitura síncrona do catálogo que `VfxNode` fazia
+      // reativamente pro caminho legado (ver `vfx/SkillVfx.tsx`,
+      // `buffInfo?.areaRadius`). Catálogo ainda não resolvido pra esta
+      // skill = `undefined`, cada arte tem seu próprio default real (nunca
+      // um chute) — inofensivo pra impact-kind SEM área (Cold Bolt/Light
+      // Bolt/etc.), que nunca leem `payload.areaRadius`.
+      areaRadius: effect.kind === "buff" || effect.kind === "impact" ? useSkillCatalog.getState().byId[effect.skillId]?.areaRadius : undefined,
     },
   };
 }

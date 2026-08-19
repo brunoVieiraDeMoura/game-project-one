@@ -3,6 +3,7 @@ import type { VfxInstanceRuntime, VfxWorldContext } from "../types";
 import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { createSeededRng } from "../particleMath";
 import { computeFlightOffset } from "./flightOffset";
+import { computeCurveOffset } from "./curveOffset";
 
 /**
  * `renderer:"particle"` — N slots do MESMO `InstancedMesh` por instância de
@@ -38,6 +39,14 @@ interface ParticleSpec {
  * pequeno (jitter curto) + `durBaseMs`/`durJitterMs` curtos, pra nascer e
  * morrer dentro da janela real de vida da instância.
  */
+/**
+ * `heightMin`/`heightMax` (Cúpula Sagrada, 2026-08-19-y: "partículas
+ * espalhadas dentro do prisma, não só no pé do personagem") — faixa
+ * vertical de onde cada partícula nasce, sorteada por partícula. Default
+ * `0.1/0.1` (faixa de largura zero) preserva o `dy:0.1` fixo de sempre pra
+ * quem não passa os dois campos (Oracle/Fire Wall/embers de impacto —
+ * nenhum muda).
+ */
 function buildParticles(
   seed: number,
   count: number,
@@ -46,6 +55,8 @@ function buildParticles(
   delayMaxMs = 2200,
   durBaseMs = 1200,
   durJitterMs = 1000,
+  heightMin = 0.1,
+  heightMax = 0.1,
 ): ParticleSpec[] {
   const out: ParticleSpec[] = [];
   const rnd = createSeededRng(seed);
@@ -55,7 +66,7 @@ function buildParticles(
     out.push({
       dx: Math.cos(angle) * r,
       dz: Math.sin(angle) * r,
-      dy: 0.1,
+      dy: heightMin + rnd() * Math.max(0, heightMax - heightMin),
       delayMs: delayBaseMs + rnd() * delayMaxMs,
       durMs: durBaseMs + rnd() * durJitterMs,
       seed: rnd(),
@@ -89,13 +100,20 @@ export class ParticleRenderer extends InstancedBillboardBase {
 
   onInstanceCreate(instance: VfxInstanceRuntime): void {
     const count = Number(instance.spawnOptions.payload?.particleCount ?? DEFAULT_PARTICLE_COUNT);
-    const radius = Number(instance.spawnOptions.payload?.radius ?? 1);
+    // `payload.areaRadius` (Fire Ball, 2026-08-19-w: "fumaça/brasas espalhadas
+    // pela área REAL, não um raio decorativo") — mesmo fallback de
+    // `RingRenderer.ts`: só entra quando a `VfxDefinition` NÃO fixa um
+    // `radius` próprio (Oracle/Fire Wall sempre passam `radius` explícito,
+    // nunca caem aqui).
+    const radius = Number(instance.spawnOptions.payload?.radius ?? instance.spawnOptions.payload?.areaRadius ?? 1);
     const payload = instance.spawnOptions.payload;
     const delayBaseMs = Number(payload?.burstDelayBaseMs ?? 0);
     const delayMaxMs = Number(payload?.burstDelayMaxMs ?? 2200);
     const durBaseMs = Number(payload?.burstDurBaseMs ?? 1200);
     const durJitterMs = Number(payload?.burstDurJitterMs ?? 1000);
-    const specs = buildParticles(instance.instanceId * 7919 + 1, count, radius, delayBaseMs, delayMaxMs, durBaseMs, durJitterMs);
+    const heightMin = Number(payload?.heightMin ?? 0.1);
+    const heightMax = Number(payload?.heightMax ?? 0.1);
+    const specs = buildParticles(instance.instanceId * 7919 + 1, count, radius, delayBaseMs, delayMaxMs, durBaseMs, durJitterMs, heightMin, heightMax);
     const indices = specs.map(() => this.acquireSlot().index);
     this.slots.set(instance.instanceId, { indices, specs });
     this.trySyncAtlas(instance.def);
@@ -135,6 +153,7 @@ export class ParticleRenderer extends InstancedBillboardBase {
     const opacityRaw = instance.spawnOptions.payload?.opacity;
     const opacityMultiplier = typeof opacityRaw === "number" ? opacityRaw : 1;
     const flight = computeFlightOffset(instance, elapsedMs);
+    const curve = computeCurveOffset(instance, elapsedMs);
     // mesmo campo que `SpriteRenderer` já lê ("crítico = maior", auditoria
     // "Hit VFX genérico" 2026-08-19) — nenhum renderer decide sozinho o
     // que é crítico, só multiplica o que `hitVfxResolver.criticalScaleFor`
@@ -148,7 +167,11 @@ export class ParticleRenderer extends InstancedBillboardBase {
       const alive = elapsedMs >= spec.delayMs;
       const fade = alive ? Math.sin(Math.max(0, Math.min(1, cycle)) * Math.PI) : 0;
       this.writeSlot(index, {
-        position: [instance.position.x + flight.x + spec.dx, instance.position.y + flight.y + spec.dy, instance.position.z + flight.z + spec.dz],
+        position: [
+          instance.position.x + flight.x + curve.x + spec.dx,
+          instance.position.y + flight.y + curve.y + spec.dy,
+          instance.position.z + flight.z + curve.z + spec.dz,
+        ],
         scale: baseScale * (0.7 + 0.3 * spec.seed) * critScale,
         opacity: fade * opacityMultiplier,
         color,

@@ -6,6 +6,7 @@ import { clearPendingMultiHitShards } from "./mage/multiHitShardImpact";
 import { clearPendingFireLanceHits } from "./mage/fire-lance/fireLanceMultiHit";
 import { clearPendingColdBoltHits } from "./mage/cold-bolt/coldBoltMultiHit";
 import { clearPendingLightBoltHits } from "./mage/light-bolt/lightBoltMultiHit";
+import { clearPendingSoulStrikeHits } from "./mage/soul-strike/soulStrikeMultiHit";
 // side effect: registra as `VfxDefinition`/bindings do VFX Core — precisa
 // rodar ANTES do primeiro `spawn()` real (mesmo motivo de `skillCatalog`
 // já ser importado aqui: este módulo é o ponto de entrada de rede).
@@ -241,6 +242,7 @@ export const useVfxStore = create<VfxState>((set) => ({
     clearPendingFireLanceHits();
     clearPendingColdBoltHits();
     clearPendingLightBoltHits();
+    clearPendingSoulStrikeHits();
     set((s) => {
       // CANCELADA (sessão/mapa trocou) — nenhuma dessas instâncias
       // terminou por conta própria, foram derrubadas de fora
