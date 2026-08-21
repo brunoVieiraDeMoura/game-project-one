@@ -3,6 +3,7 @@ import { gateway } from "../net/gateway";
 import { ATAQUE_BASICO, ATAQUE_BASICO_ID, useAtaqueBasico } from "../net/ataqueBasico";
 import { usePlayerStore } from "../net/playerStore";
 import { getSkillDisplayName, useSkillCatalog, type SkillInfo } from "../net/skillCatalog";
+import { skillIconUrl } from "../net/skillIcons";
 import { useHudStore } from "./hudStore";
 import { IconSquare, LoadingRing } from "../ui/rpg";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
@@ -441,9 +442,7 @@ function Detalhe({ linha }: { linha: Linha }) {
             imageSrc={
               basica
                 ? `/assets/skills/auto-atack-${ataqueBasicoAtivo ? "on" : "off"}.png`
-                : linha.info?.icon
-                  ? `/assets/skills/${linha.info.icon}`
-                  : undefined
+                : skillIconUrl(linha.info?.icon)
             }
           />
         </div>
@@ -632,9 +631,7 @@ function Icone({
           imageSrc={
             basica
               ? `/assets/skills/auto-atack-${ataqueBasicoAtivo ? "on" : "off"}.png`
-              : linha.info?.icon
-                ? `/assets/skills/${linha.info.icon}`
-                : undefined
+              : skillIconUrl(linha.info?.icon)
           }
         />
       </div>

@@ -11,6 +11,7 @@ import { REVEAL_CONFIG, createRevealState, tickRevealFade, type RevealState, typ
 import { registrarInstancias } from "./instancedPropRegistry";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 import { isolado } from "../core/diagnostics/isolamento";
+import { medir } from "../core/diagnostics/medir";
 import { Y_DEPOSITO } from "../play/PreCompilarProps";
 
 /**
@@ -415,38 +416,40 @@ function CamadaDeEspecie({
   }, [camada, temRevelacao]);
 
   useEffect(() => {
-    const meshes = refs.current;
-    // a DECISÃO (corte por raio + densidade adaptativa pra categoria
-    // rasteira) mora em `instanciasVisiveisNaCamada` — pura, testada sem
-    // `<Canvas>`. Aqui só sobra escrever o resultado nos buffers de GPU.
-    const visiveis = instanciasVisiveisNaCamada(camada.instancias, center, raioEfetivo, rasteira);
-    const ativos: MapProp[] = [];
-    const candidatos: RevealCandidate[] = [];
-    let n = 0;
-    for (const inst of visiveis) {
-      _m.compose(inst.position, inst.quaternion, inst.scale);
-      for (const mesh of meshes) mesh?.setMatrixAt(n, _m);
-      ativos.push(inst.prop);
-      if (temRevelacao) candidatos.push({ slot: n, x: inst.position.x, z: inst.position.z });
-      n++;
-    }
-    candidatosRef.current = candidatos;
-    for (const mesh of meshes) {
-      if (!mesh) continue;
-      mesh.count = n;
-      mesh.instanceMatrix.needsUpdate = true;
-      // registra SEMPRE, mesmo com n=0 — uma malha sem instância ativa não
-      // pode continuar respondendo por props antigos no clique
-      registrarInstancias(mesh, ativos);
-    }
-    if (primeira.current) {
-      registrarEvento("cena", "vegetacaoInstanciada:create", {
-        especie: camada.assetId,
-        capacidade: camada.instancias.length,
-        visiveis: n,
-      });
-      primeira.current = false;
-    }
+    medir("vegetacao→camada", () => {
+      const meshes = refs.current;
+      // a DECISÃO (corte por raio + densidade adaptativa pra categoria
+      // rasteira) mora em `instanciasVisiveisNaCamada` — pura, testada sem
+      // `<Canvas>`. Aqui só sobra escrever o resultado nos buffers de GPU.
+      const visiveis = instanciasVisiveisNaCamada(camada.instancias, center, raioEfetivo, rasteira);
+      const ativos: MapProp[] = [];
+      const candidatos: RevealCandidate[] = [];
+      let n = 0;
+      for (const inst of visiveis) {
+        _m.compose(inst.position, inst.quaternion, inst.scale);
+        for (const mesh of meshes) mesh?.setMatrixAt(n, _m);
+        ativos.push(inst.prop);
+        if (temRevelacao) candidatos.push({ slot: n, x: inst.position.x, z: inst.position.z });
+        n++;
+      }
+      candidatosRef.current = candidatos;
+      for (const mesh of meshes) {
+        if (!mesh) continue;
+        mesh.count = n;
+        mesh.instanceMatrix.needsUpdate = true;
+        // registra SEMPRE, mesmo com n=0 — uma malha sem instância ativa não
+        // pode continuar respondendo por props antigos no clique
+        registrarInstancias(mesh, ativos);
+      }
+      if (primeira.current) {
+        registrarEvento("cena", "vegetacaoInstanciada:create", {
+          especie: camada.assetId,
+          capacidade: camada.instancias.length,
+          visiveis: n,
+        });
+        primeira.current = false;
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camada, center.x, center.z, raioEfetivo, temRevelacao]);
 

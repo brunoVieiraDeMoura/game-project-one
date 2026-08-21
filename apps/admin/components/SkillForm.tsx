@@ -20,8 +20,8 @@ import {
   type Skill,
   type StatusEffectDef,
 } from "@ragnarok/game-data";
-import { createSkill, updateSkill, listAllStatuses } from "@/lib/api";
-import { Button, Checkbox, Field, Input, MultiSelectField, NumberField, Section, Select, TokenListField } from "./ui";
+import { createSkill, updateSkill, listAllStatuses, removeSkillIcon, uploadSkillIcon } from "@/lib/api";
+import { Button, Checkbox, Field, Input, Label, MultiSelectField, NumberField, Section, Select, TokenListField } from "./ui";
 import { SKILL_LIMITS } from "@/lib/field-limits";
 
 /** Full-coverage skill form (soul.txt §5.3). Statuses são escolhidos por
@@ -120,6 +120,105 @@ function JsonField({
   );
 }
 
+/**
+ * Ícone de skill de verdade — upload que processa (redimensiona) no backend
+ * e grava em `public/assets/skills/` de ambos os apps (`skills.ts:
+ * POST /:id/icon`), e a partir daí aparece sozinho em todo lugar que o jogo
+ * mostra ícone de skill (barra, janela de habilidades, badge de cast de mob,
+ * ícone de status): todos leem o MESMO `Skill.icon` do catálogo. Mesmo
+ * componente/contrato do `IconUploader` de `ItemForm.tsx`.
+ *
+ * Fora do submit do formulário de propósito — o upload é sua PRÓPRIA
+ * requisição (`setIcon` não passa pelo `update()`/`skill_db.yml`, ver
+ * `SkillRepository.setIcon`), então soltar o arquivo já salva.
+ */
+function SkillIconUploader({
+  skillId,
+  icon,
+  onChange,
+}: {
+  skillId: number;
+  icon?: string;
+  onChange: (icon: string | undefined) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // cache-bust: o nome do arquivo (`<id>.png`) não muda numa TROCA de ícone.
+  const [rev, setRev] = useState(0);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await uploadSkillIcon(skillId, file);
+      onChange(updated.icon);
+      setRev((v) => v + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRemove() {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await removeSkillIcon(skillId);
+      onChange(updated.icon);
+      setRev((v) => v + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (skillId <= 0) {
+    return (
+      <div>
+        <Label>Ícone</Label>
+        <p className="text-xs text-zinc-500">salve a skill primeiro pra poder enviar um ícone</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Label>Ícone (barra, janela de habilidades, cast de mob, status)</Label>
+      <div className="flex items-center gap-2">
+        {icon && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/assets/skills/${icon}?v=${rev}`}
+            alt=""
+            className="h-10 w-10 rounded border border-zinc-700 bg-zinc-900 object-contain"
+            onError={(e) => {
+              e.currentTarget.style.visibility = "hidden";
+            }}
+          />
+        )}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          onChange={onFile}
+          disabled={busy}
+          className="text-xs text-zinc-400"
+        />
+        {icon && (
+          <Button type="button" onClick={onRemove} disabled={busy}>
+            Remover
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}
+
 export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" | "edit" }) {
   const router = useRouter();
   const [sk, setSk] = useState<Skill>(initial ?? EMPTY);
@@ -200,26 +299,11 @@ export function SkillForm({ initial, mode }: { initial?: Skill; mode: "create" |
           <Field label="Nome">
             <Input value={sk.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
-          <Field label="Ícone (arquivo em public/assets/skills/)">
-            <div className="flex items-center gap-2">
-              {sk.icon && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/assets/skills/${sk.icon}`}
-                  alt=""
-                  className="h-8 w-8 rounded border border-zinc-700 object-contain"
-                  onError={(e) => {
-                    e.currentTarget.style.visibility = "hidden";
-                  }}
-                />
-              )}
-              <Input
-                value={sk.icon ?? ""}
-                placeholder="chuva-de-flechas.png"
-                onChange={(e) => set("icon", e.target.value === "" ? undefined : e.target.value)}
-              />
-            </div>
-          </Field>
+          <SkillIconUploader
+            skillId={mode === "edit" ? sk.id : -1}
+            icon={sk.icon}
+            onChange={(icon) => set("icon", icon)}
+          />
           <NumberField
             label="Nível máximo"
             value={sk.maxLevel}

@@ -1,0 +1,114 @@
+From: game-project
+Subject: [PATCH] Add GP_BLINK (9000) — Blink 15 custom skill
+
+Blink 15: teleport-forward skill for the "Blink 15" admin-panel skill
+validation. Reuses skill_blown()/unit_blown()/path_blownpos() exactly like
+TF_BACKSLIDING (skills/thief/backslide.cpp), just feeds the OPPOSITE facing
+direction so skill_blown's internal vector negation lands the character
+forward instead of backward. Stop-before-blockage and out-of-map behavior
+come for free from path_blownpos's CELL_CHKPASS walk (map/path.cpp) — same
+collision the rest of the game uses, no parallel logic.
+
+Range (Knockback), cooldown (Cooldown) and SP cost (Requires.SpCost) live
+entirely in skill_db.yml, written by the admin panel
+(apps/api/src/store/yaml-skill-repository.ts) — none of that is hardcoded
+here.
+
+See docs/claude-context (skills area) and CLAUDE.md for project context.
+---
+--- a/src/map/skill.hpp
++++ b/src/map/skill.hpp
+@@ -2603,7 +2603,10 @@
+ 	ABR_DUAL_CANNON_FIRE,
+ 	ABR_NET_REPAIR,
+ 	ABR_NET_SUPPORT,
+-	ABR_INFINITY_BUSTER
++	ABR_INFINITY_BUSTER,
++
++	// Custom (game-project): faixa 9000-9999 livre entre ABR e GD_SKILLBASE (10000).
++	GP_BLINK = 9000, // Blink 15 — teleporte pra frente, skills/custom/blink.cpp
+ };
+ 
+ /// The client view ids for land skills.
+--- a/src/map/skills/custom/skill_factory_custom.cpp
++++ b/src/map/skills/custom/skill_factory_custom.cpp
+@@ -4,6 +4,7 @@
+ #include "skill_factory_custom.hpp"
+ 
+ #include "../swordman/bash.hpp"
++#include "blink.cpp"
+ 
+ class SkillCustomBash;
+ 
+@@ -18,7 +19,13 @@
+ 	}
+ #endif
+ 
+-	return nullptr;
++	switch (skill_id) {
++		case GP_BLINK:
++			return std::make_unique<SkillBlink>();
++
++		default:
++			return nullptr;
++	}
+ }
+ 
+ class SkillCustomBash : public SkillBash{
+--- /dev/null
++++ b/src/map/skills/custom/blink.hpp
+@@ -0,0 +1,13 @@
++// Copyright (c) rAthena Dev Teams - Licensed under GNU GPL
++// For more information, see LICENCE in the main folder
++
++#pragma once
++
++#include "../skill_impl.hpp"
++
++class SkillBlink : public SkillImpl {
++public:
++	SkillBlink();
++
++	void castendNoDamageId(block_list *src, block_list *bl, uint16 skill_lv, t_tick tick, int32 &flag) const override;
++};
+--- /dev/null
++++ b/src/map/skills/custom/blink.cpp
+@@ -0,0 +1,38 @@
++// Copyright (c) rAthena Dev Teams - Licensed under GNU GPL
++// For more information, see LICENCE in the main folder
++
++#include "blink.hpp"
++
++#include "map/clif.hpp"
++#include "map/unit.hpp"
++
++// GP_BLINK (id 9000) — Blink 15: teleporta o personagem PRA FRENTE, na
++// direção em que está virado, até `Knockback` (skill_db.yml) células.
++//
++// Reaproveita exatamente a mesma cadeia do Backslide (TF_BACKSLIDING,
++// skills/thief/backslide.cpp): skill_blown() -> unit_blown() ->
++// path_blownpos(). É o path_blownpos (map/path.cpp) que anda célula a
++// célula com map_getcellp(..., CELL_CHKPASS) e para na ÚLTIMA célula válida
++// antes do primeiro bloqueio (parede/penhasco/água bloqueada/fora do mapa) —
++// a mesma checagem de colisão usada pelo movimento normal, nenhuma lógica
++// paralela.
++//
++// A ÚNICA diferença para o Backslide é a direção: skill_blown() SEMPRE
++// inverte o vetor recebido (dx = -dirx[dir], dy = -diry[dir] — é assim que
++// o Backslide, alimentado com unit_getdir(bl), sai pra trás). Alimentando a
++// direção OPOSTA à que o personagem encara, essa inversão interna devolve o
++// vetor pra frente, sem duplicar path_blownpos nem escrever um unit_blown()
++// paralelo.
++SkillBlink::SkillBlink() : SkillImpl(GP_BLINK) {
++}
++
++void SkillBlink::castendNoDamageId(block_list *src, block_list *bl, uint16 skill_lv, t_tick tick, int32 &flag) const {
++	uint8 dir_oposta = (unit_getdir(bl) + 4) % 8; // ver comentário acima: skill_blown() inverte de novo
++
++	int16 blew_count = skill_blown(src, bl, skill_get_blewcount(getSkillId(), skill_lv), dir_oposta,
++	                               static_cast<enum e_skill_blown>(BLOWN_IGNORE_NO_KNOCKBACK | BLOWN_DONT_SEND_PACKET));
++	clif_skill_nodamage(src, *bl, getSkillId(), skill_lv);
++
++	if (blew_count > 0)
++		clif_blown(src); // Always blow, otherwise it shows a casting animation. [Lemongrass]
++}

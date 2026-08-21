@@ -175,3 +175,43 @@ describe("as outras entidades: o mob também para onde está", () => {
     expect(st().entities[MOB]!.path).toBeUndefined();
   });
 });
+
+describe("aplicarFixpos(forcarTeleporte): skill de deslocamento tipo Blink", () => {
+  /**
+   * `ZC_HIGHJUMP` chega como `self:warp` com `teleporte: true`. Sem a flag,
+   * um empurrão CURTO (bem abaixo de `FIXPOS_DERIVA_MAX`) que aponta PRA
+   * TRÁS em relação ao rumo do passo em andamento cai no ramo
+   * `servidorAtras` — construído para segurar reconciliações atrasadas do
+   * fixpos normal — e o personagem simplesmente não se move. Isso é errado
+   * pra um deslocamento de verdade: o servidor está afirmando uma posição
+   * NOVA, não uma correção de rota velha.
+   */
+  it("empurrão curto pra trás SEM a flag não move (o bug que a flag existe pra evitar)", () => {
+    st().selfMove({ x: 10, y: 10 }, { x: 20, y: 10 }); // rumo +x
+    vi.advanceTimersByTime(450);
+    const antes = pos();
+    st().aplicarFixpos(antes.x - 3, antes.y); // 3 células pra trás, gap << 8
+    const depois = pos();
+    expect(depois.x).toBeCloseTo(antes.x, 6); // não moveu — servidorAtras segurou
+  });
+
+  it("o MESMO empurrão COM forcarTeleporte snapa de verdade", () => {
+    st().selfMove({ x: 10, y: 10 }, { x: 20, y: 10 }); // rumo +x
+    vi.advanceTimersByTime(450);
+    const antes = pos();
+    const alvo = antes.x - 3;
+    st().aplicarFixpos(alvo, antes.y, true);
+    const depois = pos();
+    expect(depois.x).toBe(alvo);
+    expect(depois.y).toBe(antes.y);
+    expect(st().self.durationMs).toBe(0); // snap seco, não deslize
+  });
+
+  it("forcarTeleporte também vence o gap curto pra FRENTE (sem depender do rumo)", () => {
+    st().setSelfCell(10, 10);
+    st().aplicarFixpos(13, 10, true); // 3 células, bem abaixo de FIXPOS_DERIVA_MAX
+    const depois = pos();
+    expect(depois.x).toBe(13);
+    expect(st().self.durationMs).toBe(0);
+  });
+});

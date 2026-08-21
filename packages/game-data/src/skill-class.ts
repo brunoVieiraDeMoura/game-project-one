@@ -41,6 +41,10 @@ export const SK_CLASS_BY_PREFIX: SkillClassEntry[] = [
   // primeira classe
   { prefix: "SM", label: "Espadachim" },
   { prefix: "MG", label: "Mago" },
+  // GP_ (game-project): skills custom nossas, sem prefixo real do rAthena.
+  // GP_BLINK vive na árvore de Mago (rathena-db-import/skill_tree.yml) —
+  // agrupar na MESMA fita evita a aba solta "GP" no fim da janela.
+  { prefix: "GP", label: "Mago", grupo: "MG" },
   { prefix: "AC", label: "Arqueiro" },
   { prefix: "AL", label: "Noviço Acólito" },
   { prefix: "MC", label: "Mercador" },

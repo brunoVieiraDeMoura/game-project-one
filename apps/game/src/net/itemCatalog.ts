@@ -22,6 +22,10 @@ export interface ItemInfo {
   /** healing | usable | etc — é por ele que o ícone genérico é escolhido */
   type: string;
   subType?: string;
+  /** nome de arquivo em `public/assets/items/` (`net/itemIcons.itemIconUrl`
+   * monta a URL) — subido pelo admin (`POST /items/:id/icon`, Painel 3000).
+   * Ausente = sem ícone de verdade, cai no quadrado por seed. */
+  icon?: string;
   weight: number;
   /**
    * Metadata estática que a Fase 4 passou a usar (equipar, requisitos): a API
@@ -101,6 +105,7 @@ export const useItemCatalog = create<CatalogState>((set, get) => ({
               aegisName: String(cru.aegisName ?? ""),
               type: String(cru.type ?? "etc"),
               subType: cru.subType ? String(cru.subType) : undefined,
+              icon: cru.icon ? String(cru.icon) : undefined,
               weight: Number(cru.weight ?? 0),
               slots: Number(cru.slots ?? 0),
               jobs: Array.isArray(cru.jobs) ? cru.jobs.map(String) : ["all"],

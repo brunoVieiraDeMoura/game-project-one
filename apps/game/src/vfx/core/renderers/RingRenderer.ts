@@ -119,11 +119,20 @@ export class RingRenderer implements VfxRenderer {
     const heightOffset = Number(instance.spawnOptions.payload?.heightOffset ?? HEIGHT_OFFSET);
     const mode = instance.spawnOptions.payload?.mode === "disc" ? 1 : 0;
     const colorHex = String(instance.spawnOptions.payload?.color ?? "#c084fc");
+    // `payload.depthTest` (Cúpula Fantasma, 2026-08-19-zh: "bota o
+    // personagem pra ficar acima desse círculo do chão") — o decal padrão
+    // desliga `depthTest` de propósito (atravessa relevo/grama, Fire Wall/
+    // Safety Wall dependem disso). Um brilho de chão perto de um
+    // personagem DE PÉ é o caso oposto: sem depth test, o disco pinta por
+    // cima dos pés/pernas dele sempre, não importa a profundidade real.
+    // Ausente = `false` de sempre (nenhum decal existente muda).
+    const depthTest = instance.spawnOptions.payload?.depthTest === true;
 
     const entry = this.acquire();
     entry.material.uniforms.uColor!.value.set(colorHex);
     entry.material.uniforms.uMode!.value = mode;
     entry.material.uniforms.uOpacity!.value = 1;
+    entry.material.depthTest = depthTest;
     moldarMalhaTerreno(entry.mesh.geometry, instance.position.x, instance.position.z, radius, SEGMENTS, heightOffset, world.terrain);
     entry.mesh.visible = true;
     this.entries.set(instance.instanceId, entry);

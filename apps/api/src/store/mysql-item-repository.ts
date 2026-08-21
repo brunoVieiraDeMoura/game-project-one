@@ -21,9 +21,55 @@ import { roDatabase } from "./mysql.js";
  */
 export class MysqlItemRepository implements ItemRepository {
 	private readonly table: string;
+	private ready: Promise<void> | null = null;
 
 	constructor(table = "item_db_re") {
 		this.table = table;
+	}
+
+	/**
+	 * Ícone do item, fora do `item_db_re` (que não é nossa: é a tabela que o
+	 * rAthena lê direto, ver comentário de `mysql-item-row.ts`). Mesmo padrão
+	 * de `panel_account_ban`/`panel_audit_log` (`mysql-user-repository.ts`):
+	 * tabela auxiliar criada na primeira vez que este repositório é usado,
+	 * pra não sujar o schema do jogo.
+	 */
+	private async ensureSchema(): Promise<void> {
+		this.ready ??= roDatabase().query(`CREATE TABLE IF NOT EXISTS \`panel_item_icon\` (
+			\`item_id\` int(11) unsigned NOT NULL,
+			\`filename\` varchar(255) NOT NULL,
+			\`updated_at\` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+			PRIMARY KEY (\`item_id\`)
+		) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4`).then(() => undefined);
+		return this.ready;
+	}
+
+	private async iconsFor(ids: number[]): Promise<Map<number, string>> {
+		if (ids.length === 0) return new Map();
+		await this.ensureSchema();
+		const db = roDatabase();
+		const [rows] = await db.query<RowDataPacket[]>(
+			`SELECT item_id, filename FROM \`panel_item_icon\` WHERE item_id IN (${ids.map(() => "?").join(",")})`,
+			ids,
+		);
+		return new Map(rows.map((r) => [Number(r.item_id), String(r.filename)]));
+	}
+
+	/** Grava/remove o ícone do item — não passa por `update()` de propósito:
+	 * `item_db_re` não tem coluna pra isso (ver `iconsFor`), e um upload de
+	 * ícone não deveria exigir o formulário inteiro do item validado. */
+	async setIcon(id: number, filename: string | null): Promise<Item | undefined> {
+		await this.ensureSchema();
+		const db = roDatabase();
+		if (filename) {
+			await db.query(
+				"INSERT INTO `panel_item_icon` (`item_id`, `filename`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `filename` = VALUES(`filename`)",
+				[id, filename],
+			);
+		} else {
+			await db.query("DELETE FROM `panel_item_icon` WHERE `item_id` = ?", [id]);
+		}
+		return this.get(id);
 	}
 
 	async list({ page, pageSize, search, type, subType }: ItemListQuery): Promise<ItemListResult> {
@@ -68,8 +114,10 @@ export class MysqlItemRepository implements ItemRepository {
 			[...params, pageSize, (page - 1) * pageSize],
 		);
 
+		const items = rows.map((row) => mysqlRowToItem(row as MysqlItemRow));
+		const icons = await this.iconsFor(items.map((i) => i.id));
 		return {
-			items: rows.map((row) => mysqlRowToItem(row as MysqlItemRow)),
+			items: items.map((i) => (icons.has(i.id) ? { ...i, icon: icons.get(i.id) } : i)),
 			total,
 			page,
 			pageSize,
@@ -80,7 +128,11 @@ export class MysqlItemRepository implements ItemRepository {
 		const db = roDatabase();
 		const [rows] = await db.query<RowDataPacket[]>(`SELECT * FROM \`${this.table}\` WHERE id = ?`, [id]);
 		const row = rows[0];
-		return row ? mysqlRowToItem(row as MysqlItemRow) : undefined;
+		if (!row) return undefined;
+		const item = mysqlRowToItem(row as MysqlItemRow);
+		const icons = await this.iconsFor([id]);
+		const icon = icons.get(id);
+		return icon ? { ...item, icon } : item;
 	}
 
 	async create(item: Item): Promise<Item> {

@@ -125,6 +125,15 @@ export const ItemSchema = z.object({
   viewSprite: z.number().int().nonnegative().default(0),
   aliasName: z.string().optional(),
 
+  /**
+   * Ícone visual do item, por NOME DE ARQUIVO em `public/assets/items/`
+   * (mesma convenção do `icon` de skills — não é coluna do rAthena, item_db_re
+   * não tem campo pra isso; vive à parte, ver `panel_item_icon` em
+   * `apps/api/src/store/mysql-item-repository.ts`). Ausente = todo lugar que
+   * mostra ícone de item cai no placeholder por seed.
+   */
+  icon: z.string().optional(),
+
   flags: ItemFlagsSchema.optional(),
   delay: ItemDelaySchema.optional(),
   stack: ItemStackSchema.optional(),

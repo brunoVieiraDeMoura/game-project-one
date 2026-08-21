@@ -44,6 +44,19 @@ import type { VfxDefinition, VfxLayer } from "../../core/types";
  * 4. `heightOffset` do disco central alto o bastante pra nunca afundar em
  *    relevo de terreno irregular (`RingRenderer.ts`, novo — era só
  *    `HEIGHT_OFFSET=0.05` fixo, pensado pra decal raso tipo Fire Wall).
+ *
+ * ## Rodada 2026-08-19-ze — 3 prismas orbitando na altura do peito
+ *
+ * A gaiola ÚNICA que envolvia o personagem de pé virou 3 gaiolas PEQUENAS
+ * (metade do tamanho da rodada anterior, que já era metade da original —
+ * `CAGE_RADIUS`/`CAGE_HEIGHT` acumulam os dois cortes de 50%) circulando
+ * ao redor da célula central branca, na altura do peito. `CageRenderer.ts`
+ * ganhou `payload.orbitRadius/orbitSpeedDegPerSec/orbitAngle0Deg/
+ * orbitHeight` — MESMO `orbitOffset.ts` que Oracle e os fantasmas orbitando
+ * de antes da Cúpula Sagrada já usavam, nunca um mecanismo novo — e passou
+ * a recalcular posição TODO quadro (antes só a rotação animava). Sem
+ * `orbitRadius`, o comportamento é idêntico ao de sempre (gaiola parada,
+ * ancorada no chão) — nenhuma skill que já usava `renderer:"cage"` muda.
  */
 
 const EDGE_COLOR = "#ffffff";
@@ -54,39 +67,76 @@ const CENTER_GLOW_COLOR = "#ffffff";
  * o elemento principal (identidade é a gaiola, não a partícula). */
 const SPARK_COLOR = "#fff6d8";
 const SPARK_COUNT = 24;
-const CAGE_HEIGHT = 2.3;
+// 2026-08-19-zc: "diminui 50% do tamanho do prisma" — eram 1.15/2.3.
+// 2026-08-19-ze: "diminui em 50% novamente" — eram 0.575/1.15.
+const CAGE_RADIUS = 0.2875;
+const CAGE_HEIGHT = 0.575;
+/** raio da órbita (célula) e altura (mundo, peito) — 2026-08-19-ze: "3
+ * prismas voando e girando ao entorno da célula principal branca, na
+ * altura do peito". `orbitOffset.ts` (já usado por Oracle/os fantasmas
+ * antigos) faz o trabalho — `CageRenderer.ts` só precisou aprender a ler
+ * `payload.orbitRadius` em vez de ancorar a ponta de baixo no chão. */
+// 2026-08-19-zf: "aumenta o espaçamento entre os triângulos" — era 0.8.
+const ORBIT_RADIUS = 1.15;
+const ORBIT_HEIGHT = 1.0;
+const ORBIT_SPEED_DEG_PER_SEC = 40;
+const ORBIT_ANGLES_DEG = [0, 120, 240] as const;
+
+function buildOrbitingCageLayers(): VfxLayer[] {
+  return ORBIT_ANGLES_DEG.map((angle0Deg) => ({
+    renderer: "cage",
+    params: {
+      radius: CAGE_RADIUS,
+      height: CAGE_HEIGHT,
+      edgeColor: EDGE_COLOR,
+      fillColor: FILL_COLOR,
+      fillOpacity: 0.08,
+      // 2026-08-19-zi: "remove o mini-círculo dentro de cada prisma" —
+      // `bandOpacity:0` apaga a faixa (torus) sem tocar `CageRenderer.ts`,
+      // única skill usando `renderer:"cage"` hoje.
+      bandColor: BAND_COLOR,
+      bandOpacity: 0,
+      rotateSpeedDegPerSec: 15,
+      orbitRadius: ORBIT_RADIUS,
+      orbitSpeedDegPerSec: ORBIT_SPEED_DEG_PER_SEC,
+      orbitAngle0Deg: angle0Deg,
+      orbitHeight: ORBIT_HEIGHT,
+    },
+  }));
+}
 
 function buildGhostDomeGpuLayers(): VfxLayer[] {
   return [
-    {
-      renderer: "cage",
-      params: {
-        radius: 1.15,
-        height: CAGE_HEIGHT,
-        edgeColor: EDGE_COLOR,
-        fillColor: FILL_COLOR,
-        fillOpacity: 0.08,
-        bandColor: BAND_COLOR,
-        bandOpacity: 0.6,
-        rotateSpeedDegPerSec: 15,
-      },
-    },
+    ...buildOrbitingCageLayers(),
     {
       renderer: "particle",
       scale: { base: 0.1 },
       params: {
         particleCount: SPARK_COUNT,
-        radius: 0.4,
+        radius: 0.2, // acompanha o raio menor do prisma (era 0.4 pro 1.15 antigo)
         color: SPARK_COLOR,
-        // dentro do volume do prisma (0.2 acima do chão até perto do topo,
-        // com folga das duas pontas pra não furar a silhueta afunilada).
-        heightMin: 0.2,
+        // dentro do volume do prisma (acima do chão até perto do topo, com
+        // folga das duas pontas pra não furar a silhueta afunilada) —
+        // `heightMin` acompanha a proporção antiga (0.2/2.3), `heightMax`
+        // já é fração de `CAGE_HEIGHT`, acompanha o prisma sozinho.
+        heightMin: 0.1,
         heightMax: CAGE_HEIGHT * 0.78,
       },
     },
     {
+      // 2026-08-19-zd: "deixa o chão da célula branco também, pra destacar
+      // o local da skill" — raio 1 cobria o TILE inteiro (era 0.5, um brilho
+      // decorativo pequeno no centro), o chão da célula inteira acendeu.
+      // 2026-08-19-zf: "diminui um pouco o círculo do chão" — 0.7.
+      // 2026-08-19-zg: "bota um pouco mais pra baixo" — heightOffset 0.5→0.2
+      // (ainda acima do suficiente pra não afundar em relevo irregular).
+      // 2026-08-19-zh: "personagem na layer acima desse círculo" —
+      // `depthTest:true` (novo em `RingRenderer.ts`): sem isto o decal
+      // sempre pintava por cima dos pés/pernas do personagem, não importa
+      // a profundidade real (comportamento padrão de decal, pensado pra
+      // atravessar relevo — errado pra um brilho perto de alguém de pé).
       renderer: "ring",
-      params: { radius: 0.5, mode: "disc", color: CENTER_GLOW_COLOR, heightOffset: 0.5 },
+      params: { radius: 0.7, mode: "disc", color: CENTER_GLOW_COLOR, heightOffset: 0.2, depthTest: true },
     },
   ];
 }

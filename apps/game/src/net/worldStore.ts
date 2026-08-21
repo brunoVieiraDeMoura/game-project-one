@@ -387,8 +387,15 @@ interface WorldState {
   setSelfGid: (gid: number) => void;
   setTarget: (gid: number | null) => void;
   setSelfCell: (x: number, y: number) => void;
-  /** ZC_STOPMOVE / fixpos: correção quando é perto, teleporte quando é longe */
-  aplicarFixpos: (x: number, y: number) => void;
+  /**
+   * ZC_STOPMOVE / fixpos: correção quando é perto, teleporte quando é longe.
+   *
+   * `forcarTeleporte` pula o gap/rumo e o ramo `servidorAtras` — usado por
+   * `ZC_HIGHJUMP` (skill de deslocamento tipo Blink/Backslide): um empurrão
+   * curto PRA TRÁS em relação ao rumo cairia no ramo `servidorAtras` e o
+   * personagem não se moveria (ver comentário dentro da função).
+   */
+  aplicarFixpos: (x: number, y: number, forcarTeleporte?: boolean) => void;
   selfMove: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
   /**
    * Começa a andar SEM esperar o servidor (client-side prediction).
@@ -693,7 +700,7 @@ export const useWorldStore = create<WorldState>((set) => ({
    * Borboleta, e ali qualquer suavização desenharia o personagem atravessando o
    * mapa a pé.
    */
-  aplicarFixpos: (x, y) =>
+  aplicarFixpos: (x, y, forcarTeleporte) =>
     set((s) => {
       // idem: teleporte/empurrão invalida qualquer predição pendente
       esquecerPrevistos();
@@ -701,7 +708,7 @@ export const useWorldStore = create<WorldState>((set) => ({
       const now = performance.now();
       const atual = interpolatedCell(s.self, now);
       const gap = Math.hypot(atual.x - x, atual.y - y);
-      const teleporte = gap > FIXPOS_DERIVA_MAX;
+      const teleporte = forcarTeleporte === true || gap > FIXPOS_DERIVA_MAX;
       movWarp(gap, teleporte);
       /**
        * O SERVIDOR ESTÁ ATRÁS DE NÓS? Então PARA — não volta.

@@ -7,9 +7,10 @@ import { cellToWorld, type LegacyMapping } from "./legacyCells";
 import { useCursorStore } from "../ui/cursorStore";
 import { BOOK } from "../ui/travelbook";
 import { GlowChao } from "./GlowChao";
-import { GEO_CAIXA, MATERIAL_INVISIVEL, materialOpaco } from "./recursosCompartilhados";
+import { GEO_CAIXA, GEO_PLANO, MATERIAL_INVISIVEL, materialDeIcone, materialOpaco } from "./recursosCompartilhados";
 import { pegar } from "./acoes";
 import { useItemCatalog, getItemDisplayName } from "./itemCatalog";
+import { itemIconUrl } from "./itemIcons";
 
 /**
  * Itens caídos no chão.
@@ -127,6 +128,7 @@ function ItemNoChao({
   // `undefined` enquanto o catálogo não respondeu; a plaquinha (abaixo) só
   // aparece quando há nome de verdade pra mostrar.
   const nome = useItemCatalog((s) => getItemDisplayName(s.byId[item.itemId]));
+  const iconUrl = useItemCatalog((s) => itemIconUrl(s.byId[item.itemId]?.icon));
   useEffect(() => {
     useItemCatalog.getState().ensure([item.itemId]);
   }, [item.itemId]);
@@ -183,19 +185,27 @@ function ItemNoChao({
       {/* brilho dourado de leve enquanto o ponteiro está em cima */}
       <GlowChao cor={GLOW_LOOT} raio={cellSize * PEGAR_RAIO * 1.3} aceso={realce} />
 
-      {/* a caixinha em si: só desenho, sem handler — quem recebe o clique é a
-          área invisível acima, que é bem maior */}
-      {/* caixa unitária escalada + material cacheado por COR: sem isso um campo
-          depois de uma caçada aloca um par de objetos por item caído, e dezenas
-          deles são do mesmo tipo */}
-      <mesh
-        position={[0, size * 0.6, 0]}
-        rotation={[0, Math.PI / 5, 0]}
-        scale={size}
-        raycast={() => null}
-        geometry={GEO_CAIXA}
-        material={materialOpaco(colorFor(item.itemId))}
-      />
+      {/* o desenho em si: só visual, sem handler — quem recebe o clique é a
+          área invisível acima, que é bem maior. Com sprite (`net/itemIcons`),
+          um plano sempre de frente pra câmera (`Billboard`); sem sprite, a
+          caixinha colorida por id de sempre. */}
+      {iconUrl ? (
+        <Billboard position={[0, size * 0.6, 0]}>
+          <mesh scale={size * 1.6} raycast={() => null} geometry={GEO_PLANO} material={materialDeIcone(iconUrl)} />
+        </Billboard>
+      ) : (
+        // caixa unitária escalada + material cacheado por COR: sem isso um campo
+        // depois de uma caçada aloca um par de objetos por item caído, e dezenas
+        // deles são do mesmo tipo
+        <mesh
+          position={[0, size * 0.6, 0]}
+          rotation={[0, Math.PI / 5, 0]}
+          scale={size}
+          raycast={() => null}
+          geometry={GEO_CAIXA}
+          material={materialOpaco(colorFor(item.itemId))}
+        />
+      )}
 
       {/**
        * O nome, ABAIXO do item, só com o ponteiro em cima.

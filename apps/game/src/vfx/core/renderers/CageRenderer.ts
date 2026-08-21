@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { VfxInstanceRuntime, VfxWorldContext } from "../types";
 import type { VfxRenderer } from "./rendererTypes";
+import { computeOrbitOffset } from "./orbitOffset";
 
 /**
  * `renderer:"cage"` — gaiola de cristal 3D ao redor de uma célula (Cúpula
@@ -161,24 +162,50 @@ export class CageRenderer implements VfxRenderer {
     // raio errado).
     entry.band.scale.set(bandRadius, bandRadius, 1);
     entry.band.position.y = -height * BAND_T;
-    entry.group.position.set(instance.position.x, instance.position.y + height, instance.position.z);
     entry.group.visible = true;
     this.entries.set(instance.instanceId, entry);
+    this.applyTransform(entry, instance, height, 0, world);
   }
 
   /**
-   * Posição/escala fixas no nascimento — só a ROTAÇÃO horizontal gira
-   * (Cúpula Sagrada, 2026-08-19-y: "prisma rotacionando 360° devagar").
-   * `payload.rotateSpeedDegPerSec` (default 15 — uma volta completa a cada
-   * 24s, "devagar" do pedido) soma em cima do `ROTATION_Y` estético fixo
-   * (a face achatada de frente pra câmera no nascimento, preservada como
-   * ângulo INICIAL, não descartada). `0` para quem quiser uma gaiola
-   * parada (nenhum uso hoje, mas sem custo condicional pra oferecer).
+   * Posição/rotação recalculadas TODO quadro (Cúpula Sagrada, 2026-08-19-ze:
+   * "3 prismas voando e girando ao redor da célula principal, na altura do
+   * peito") — antes só a rotação animava (`ROTATION_Y` + giro), a posição
+   * era fixa no nascimento. `payload.orbitRadius` (novo aqui, MESMO
+   * `orbitOffset.ts` que Oracle/os fantasmas antigos já usavam) faz o grupo
+   * inteiro circular ao redor da célula ANTES de aplicar `height` — sem
+   * `orbitRadius`, `computeOrbitOffset` devolve zero e o comportamento é
+   * IDÊNTICO ao de antes (gaiola única, parada no centro), nenhuma skill
+   * existente muda.
+   *
+   * `payload.rotateSpeedDegPerSec` (default 15 — 24s por volta, "devagar")
+   * soma em cima do `ROTATION_Y` estético fixo (face achatada de frente pra
+   * câmera no nascimento) — continua girando no próprio eixo INDEPENDENTE
+   * da órbita ao redor da célula.
    */
-  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number): void {
+  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number, world: VfxWorldContext): void {
     const entry = this.entries.get(instance.instanceId);
     if (!entry) return;
-    const speedDegPerSec = Number(instance.spawnOptions.payload?.rotateSpeedDegPerSec ?? DEFAULT_ROTATE_SPEED_DEG_PER_SEC);
+    const height = Number(instance.spawnOptions.payload?.height ?? 2.4);
+    this.applyTransform(entry, instance, height, elapsedMs, world);
+  }
+
+  /**
+   * `orbitRadius` presente = órbita ao redor da célula: o grupo CENTRALIZA
+   * na altura da órbita (`payload.orbitHeight`, ex. peito), nunca ancora a
+   * ponta de baixo no chão — é o mesmo campo que já existia
+   * (`height`/`+height`), só reinterpretado quando a gaiola está voando em
+   * vez de envolver o personagem de pé. Ausente = comportamento de sempre
+   * (ponta de baixo encosta no chão, `+height`).
+   */
+  private applyTransform(entry: CageEntry, instance: VfxInstanceRuntime, height: number, elapsedMs: number, world: VfxWorldContext): void {
+    const payload = instance.spawnOptions.payload;
+    const orbit = computeOrbitOffset(instance, elapsedMs, world);
+    const orbiting = typeof payload?.orbitRadius === "number";
+    const yBase = orbiting ? instance.position.y : instance.position.y + height;
+    entry.group.position.set(instance.position.x + orbit.x, yBase + orbit.y, instance.position.z + orbit.z);
+
+    const speedDegPerSec = Number(payload?.rotateSpeedDegPerSec ?? DEFAULT_ROTATE_SPEED_DEG_PER_SEC);
     entry.group.rotation.y = ROTATION_Y + THREE.MathUtils.degToRad(speedDegPerSec) * (elapsedMs / 1000);
   }
 

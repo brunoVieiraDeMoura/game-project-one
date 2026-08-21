@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import compress from "@fastify/compress";
+import multipart from "@fastify/multipart";
 import { env } from "./env.js";
 import { itemRoutes } from "./routes/items.js";
 import { jobClassRoutes } from "./routes/job-classes.js";
@@ -88,6 +89,17 @@ export interface ServerDeps {
   /** `rathena-conf/map_conf.txt` — só CONFERIDO (nunca escrito) pra saber se
    * o arquivo de spawn de um mapa está registrado. */
   mapConfPath?: string;
+  /** pastas onde `POST /items/:id/icon` grava o PNG processado — mesma
+   * convenção manual dos ícones de skill (arquivo espelhado em
+   * `apps/game/public/assets/items/` E `apps/admin/public/assets/items/`,
+   * ver `ItemForm.tsx`), só que escrito pelo servidor em vez de à mão.
+   * `null` desliga o upload (rota responde 501 — usado nos testes que não
+   * precisam de disco). */
+  itemIconRoots?: string[] | null;
+  /** pastas onde `POST /skills/:id/icon` grava o PNG processado — mesma
+   * convenção de `itemIconRoots`, espelhado em `apps/game/public/assets/skills/`
+   * E `apps/admin/public/assets/skills/`. `null` desliga o upload. */
+  skillIconRoots?: string[] | null;
 }
 
 function defaultItemRepository(): ItemRepository {
@@ -264,6 +276,10 @@ export async function buildServer(deps: ServerDeps = {}) {
   // colisão repetida dezenas de milhares de vezes. Compressão resolve o
   // tamanho sem inventar formato binário nem paginar o mapa.
   await app.register(compress, { global: true, threshold: 1024, encodings: ["br", "gzip"] });
+  // ícone de item (POST /items/:id/icon): 5 MB cobre folgado qualquer PNG de
+  // ícone de UI — o processamento (sharp) redimensiona antes de gravar, o
+  // teto aqui é só contra upload absurdo, não o tamanho final do arquivo.
+  await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
 
   const itemRepository = deps.itemRepository ?? defaultItemRepository();
   const security = deps.security === undefined ? defaultSecurity() : deps.security;
@@ -279,9 +295,17 @@ export async function buildServer(deps: ServerDeps = {}) {
     deps.efstTable ?? loadEfstTable(join(REPO_ROOT, "tools", "legacy-migration", "output", "efst.json"));
 
   app.get("/health", async () => ({ ok: true }));
-  await app.register(itemRoutes(itemRepository, security), { prefix: "/items" });
+  const itemIconRoots =
+    deps.itemIconRoots === undefined
+      ? [join(REPO_ROOT, "apps", "game", "public", "assets", "items"), join(REPO_ROOT, "apps", "admin", "public", "assets", "items")]
+      : deps.itemIconRoots;
+  await app.register(itemRoutes(itemRepository, security, itemIconRoots), { prefix: "/items" });
   await app.register(jobClassRoutes(jobClassRepository, security), { prefix: "/job-classes" });
-  await app.register(skillRoutes(skillRepository, security), { prefix: "/skills" });
+  const skillIconRoots =
+    deps.skillIconRoots === undefined
+      ? [join(REPO_ROOT, "apps", "game", "public", "assets", "skills"), join(REPO_ROOT, "apps", "admin", "public", "assets", "skills")]
+      : deps.skillIconRoots;
+  await app.register(skillRoutes(skillRepository, security, skillIconRoots), { prefix: "/skills" });
   await app.register(statusRoutes(statusRepository, security, efstTable), { prefix: "/statuses" });
   const mapRepository = deps.mapRepository ?? defaultMapRepository();
   await app.register(mapRoutes(mapRepository, security), { prefix: "/maps" });

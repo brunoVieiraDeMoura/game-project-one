@@ -98,13 +98,19 @@ export class ParticleRenderer extends InstancedBillboardBase {
     super(group);
   }
 
-  onInstanceCreate(instance: VfxInstanceRuntime): void {
+  onInstanceCreate(instance: VfxInstanceRuntime, world: VfxWorldContext): void {
+    void world;
     const count = Number(instance.spawnOptions.payload?.particleCount ?? DEFAULT_PARTICLE_COUNT);
     // `payload.areaRadius` (Fire Ball, 2026-08-19-w: "fumaça/brasas espalhadas
     // pela área REAL, não um raio decorativo") — mesmo fallback de
     // `RingRenderer.ts`: só entra quando a `VfxDefinition` NÃO fixa um
     // `radius` próprio (Oracle/Fire Wall sempre passam `radius` explícito,
-    // nunca caem aqui).
+    // nunca caem aqui). REVERTIDO (rodada "Fire Ball saindo estranho"): uma
+    // tentativa de multiplicar por `world.cellSize` aqui (pra bater com a
+    // AoE real, mesma ideia de `orbitOffset.ts`) quebrou o espalhamento já
+    // calibrado da fumaça/brasas do Fire Ball, que dependia do valor CRU.
+    // `orbitOffset.ts` manteve a multiplicação (só o Oráculo passa por lá,
+    // isolado); aqui não — `radius` explícito nunca passava por conta nenhuma.
     const radius = Number(instance.spawnOptions.payload?.radius ?? instance.spawnOptions.payload?.areaRadius ?? 1);
     const payload = instance.spawnOptions.payload;
     const delayBaseMs = Number(payload?.burstDelayBaseMs ?? 0);

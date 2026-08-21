@@ -5,6 +5,11 @@ import { jobClassToRow, rowToJobClass, type JobClassRow } from "./job-class-row"
 
 const PG_UNIQUE_VIOLATION = "23505";
 
+/** Mesmo cap silencioso do PostgREST que `supabase-skill-repository.ts`
+ * documenta — chamadas internas "pega tudo" (`list({pageSize: 100_000})`)
+ * precisam paginar em loop acima disso. */
+const SUPABASE_MAX_ROWS = 1000;
+
 function sanitizeSearch(search: string): string {
   return search.replace(/[,()%\\]/g, " ").trim();
 }
@@ -20,24 +25,35 @@ export class SupabaseJobClassRepository implements JobClassRepository {
   }
 
   async list({ page, pageSize, search }: JobClassListQuery): Promise<JobClassListResult> {
-    let query = this.client.from("job_classes").select("*", { count: "exact" });
-    if (search) {
-      const q = sanitizeSearch(search);
-      if (q) {
-        const filters = [`name.ilike.*${q}*`];
-        if (/^\d+$/.test(q)) filters.push(`id.eq.${q}`);
-        query = query.or(filters.join(","));
+    const buildQuery = () => {
+      let query = this.client.from("job_classes").select("*", { count: "exact" });
+      if (search) {
+        const q = sanitizeSearch(search);
+        if (q) {
+          const filters = [`name.ilike.*${q}*`];
+          if (/^\d+$/.test(q)) filters.push(`id.eq.${q}`);
+          query = query.or(filters.join(","));
+        }
       }
-    }
+      return query.order("id");
+    };
+
     const start = (page - 1) * pageSize;
-    const { data, error, count } = await query.order("id").range(start, start + pageSize - 1);
-    if (error && error.code === "PGRST103") {
-      return { jobClasses: [], total: count ?? 0, page, pageSize };
+    const rows: JobClassRow[] = [];
+    let total = 0;
+    for (let offset = start; offset < start + pageSize; offset += SUPABASE_MAX_ROWS) {
+      const end = Math.min(offset + SUPABASE_MAX_ROWS, start + pageSize) - 1;
+      const { data, error, count } = await buildQuery().range(offset, end);
+      if (error && error.code === "PGRST103") break;
+      if (error) throw new Error(`supabase list failed: ${error.message}`);
+      total = count ?? 0;
+      const chunk = data as JobClassRow[];
+      rows.push(...chunk);
+      if (chunk.length < end - offset + 1) break;
     }
-    if (error) throw new Error(`supabase list failed: ${error.message}`);
     return {
-      jobClasses: (data as JobClassRow[]).map(rowToJobClass),
-      total: count ?? 0,
+      jobClasses: rows.map(rowToJobClass),
+      total,
       page,
       pageSize,
     };

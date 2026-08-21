@@ -8,6 +8,7 @@ import { compartilharTexturas } from "../gltfTexturas";
 import { alturaDoHorizonte } from "./HorizonMesh";
 import { registrarEvento } from "../core/diagnostics/flightRecorder";
 import { isolado } from "../core/diagnostics/isolamento";
+import { medir } from "../core/diagnostics/medir";
 
 /**
  * IMPOSTORES DE ÁRVORE — billboard TEXTURIZADO, não mais a "cruz" sem
@@ -483,33 +484,35 @@ export function TreeImpostors({
   useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh || !atlas || instances.length === 0) return;
-    const sizeAttr = geometry.getAttribute("aSize") as THREE.InstancedBufferAttribute;
-    const rectAttr = geometry.getAttribute("aAtlasRect") as THREE.InstancedBufferAttribute;
-    // a DECISÃO (quem desenha, com que Y) mora em `resolverInstanciasVisiveis`
-    // — pura, testada sem `<Canvas>` (`coerenciaHorizonte.test.ts`). Aqui só
-    // sobra escrever o resultado nos buffers de GPU (matriz/tamanho/atlas).
-    const visiveis = resolverInstanciasVisiveis(instances, alturasHorizonte, center, radius, limite);
-    let n = 0;
-    for (const v of visiveis) {
-      const inst = instances[v.index]!;
-      const size = atlas.sizeByAssetId.get(inst.assetId) ?? FALLBACK_SIZE;
-      const rect = atlas.rectByAssetId.get(inst.assetId);
-      if (!rect) continue; // espécie não bakeada (não deveria acontecer — collectTreeSpecies gera o mesmo conjunto)
-      _pos.set(inst.position.x, v.y, inst.position.z);
-      _m.compose(_pos, _q, _s);
-      mesh.setMatrixAt(n, _m);
-      sizeAttr.setXY(n, size.width * inst.scale * inst.flip, size.height * inst.scale);
-      rectAttr.setXYZW(n, rect[0], rect[1], rect[2], rect[3]);
-      n++;
-    }
-    mesh.count = n;
-    mesh.instanceMatrix.needsUpdate = true;
-    sizeAttr.needsUpdate = true;
-    rectAttr.needsUpdate = true;
-    if (primeira.current) {
-      registrarEvento("cena", "impostorArvore:create", { instancias: instances.length, visiveis: n });
-      primeira.current = false;
-    }
+    medir("impostor→rebuild", () => {
+      const sizeAttr = geometry.getAttribute("aSize") as THREE.InstancedBufferAttribute;
+      const rectAttr = geometry.getAttribute("aAtlasRect") as THREE.InstancedBufferAttribute;
+      // a DECISÃO (quem desenha, com que Y) mora em `resolverInstanciasVisiveis`
+      // — pura, testada sem `<Canvas>` (`coerenciaHorizonte.test.ts`). Aqui só
+      // sobra escrever o resultado nos buffers de GPU (matriz/tamanho/atlas).
+      const visiveis = resolverInstanciasVisiveis(instances, alturasHorizonte, center, radius, limite);
+      let n = 0;
+      for (const v of visiveis) {
+        const inst = instances[v.index]!;
+        const size = atlas.sizeByAssetId.get(inst.assetId) ?? FALLBACK_SIZE;
+        const rect = atlas.rectByAssetId.get(inst.assetId);
+        if (!rect) continue; // espécie não bakeada (não deveria acontecer — collectTreeSpecies gera o mesmo conjunto)
+        _pos.set(inst.position.x, v.y, inst.position.z);
+        _m.compose(_pos, _q, _s);
+        mesh.setMatrixAt(n, _m);
+        sizeAttr.setXY(n, size.width * inst.scale * inst.flip, size.height * inst.scale);
+        rectAttr.setXYZW(n, rect[0], rect[1], rect[2], rect[3]);
+        n++;
+      }
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+      sizeAttr.needsUpdate = true;
+      rectAttr.needsUpdate = true;
+      if (primeira.current) {
+        registrarEvento("cena", "impostorArvore:create", { instancias: instances.length, visiveis: n });
+        primeira.current = false;
+      }
+    });
   }, [instances, alturasHorizonte, atlas, geometry, center.x, center.z, radius, limite]);
 
   // isolamento (`?iso=semImpostorArvore`): checado DEPOIS dos hooks, mesmo

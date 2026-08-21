@@ -139,7 +139,7 @@ export declare interface RoSession {
 		listener: (payload: { from: Cell; to: Cell; startTime: number }) => void,
 	): this;
 	/** o servidor REPOSICIONOU o personagem (teleporte, empurrão, fixpos) */
-	on(event: "self-warp", listener: (payload: Cell) => void): this;
+	on(event: "self-warp", listener: (payload: Cell & { teleporte?: boolean }) => void): this;
 	on(
 		event: "attack-too-far",
 		listener: (payload: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void,
@@ -171,6 +171,11 @@ export declare interface RoSession {
 	on(event: "skill-ground-cast", listener: (payload: SkillGroundCast) => void): this;
 	on(event: "skill-ground", listener: (payload: SkillGround) => void): this;
 	on(event: "skill-ground-gone", listener: (payload: { gid: number }) => void): this;
+	/** ver comentário em `protocol.ts: ServerEvents["ghost-dome-block"]` */
+	on(
+		event: "ghost-dome-block",
+		listener: (payload: { sourceGid: number; targetGid: number; remainingHits: number; wasHit: boolean }) => void,
+	): this;
 	on(event: "skill-cooldown", listener: (payload: { skillId: number; durationMs: number }) => void): this;
 	on(event: "npc-dialog", listener: (payload: NpcDialog) => void): this;
 	on(event: "ground-item", listener: (payload: GroundItem) => void): this;
@@ -740,11 +745,15 @@ export class RoSession extends EventEmitter {
 		});
 
 		// ZC_HIGHJUMP (`clif_slide`) — teleporte visual instantâneo, mandado
-		// junto do fixpos em knockback/backslide.
+		// junto do fixpos em knockback/backslide/Blink. `teleporte: true` no
+		// self-warp: um deslocamento curto PRA TRÁS (ex.: Backslide) cairia no
+		// ramo `servidorAtras` do `aplicarFixpos` e não moveria o personagem —
+		// aqui o servidor está afirmando um reposicionamento de verdade, não
+		// uma correção de rota atrasada.
 		if (PACKET.ZC.HIGHJUMP) {
 			conn.hook(PACKET.ZC.HIGHJUMP, (pkt: any) => {
 				const gid = pkt.AID;
-				if (this.isSelf(gid)) this.emit("self-warp", { x: pkt.xPos, y: pkt.yPos });
+				if (this.isSelf(gid)) this.emit("self-warp", { x: pkt.xPos, y: pkt.yPos, teleporte: true });
 				else this.emit("entity-stop", { gid, x: pkt.xPos, y: pkt.yPos });
 			});
 		}
@@ -1390,9 +1399,33 @@ export class RoSession extends EventEmitter {
 		}
 
 		// skill sem dano (buff, cura): o servidor manda ZC.USE_SKILL
+		//
+		// MG_SAFETYWALL (id 12, skill_db.yml) é caso especial: o rAthena
+		// patcheado (rathena-patches/0001) reaproveita este MESMO pacote pra
+		// notificar um bloqueio REAL de Cúpula Fantasma — `level`/`heal` carrega
+		// `group->val2` já decrementado (cargas restantes, 0 na última), e o
+		// campo `result` (normalmente "a skill funcionou") é reaproveitado
+		// pra carregar `wasHit`: true = a Wall absorveu um HIT de verdade
+		// (dá pra dar mais destaque visual), false = absorveu um MISS. Por
+		// isso este branch roda ANTES do guard `!pkt.result` genérico — aqui
+		// `result` NÃO significa "falhou", e um MISS bloqueado (`result:
+		// false`) ainda é um evento real que precisa sair. Vira
+		// "ghost-dome-block" dedicado, NUNCA "skill-cast" genérico (um
+		// "buff" de Safety Wall a cada ataque bloqueado seria ruído falso na
+		// UI — não é cast nenhum, é notificação de bloqueio).
+		const MG_SAFETYWALL_SKILL_ID = 12;
 		for (const name of ["USE_SKILL", "USE_SKILL2"] as const) {
 			if (!PACKET.ZC[name]) continue;
 			conn.hook(PACKET.ZC[name], (pkt: any) => {
+				if (pkt.SKID === MG_SAFETYWALL_SKILL_ID) {
+					this.emit("ghost-dome-block", {
+						sourceGid: pkt.srcAID,
+						targetGid: pkt.targetAID,
+						remainingHits: pkt.level ?? 0,
+						wasHit: Boolean(pkt.result),
+					});
+					return;
+				}
 				if (!pkt.result) return; // 0 = falhou
 				this.emit("skill-cast", {
 					skillId: pkt.SKID,

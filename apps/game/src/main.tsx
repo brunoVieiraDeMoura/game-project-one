@@ -73,7 +73,11 @@ if (import.meta.env.DEV) {
    * e é a linha de base contra a qual os retratos são comparados.
    */
   observarCriacaoDeContexto();
-  observarTarefasLongas();
+  // limiar baixado de 120 pra 30 (investigação do engasgo de 45-85 ms na
+  // troca de chunk, voo-1787231857225.json): render-lento (Profiler) e
+  // trocaMs (medir) já descartados, falta saber se é longtask NATIVA
+  // (JS bloqueando a thread) ou outra coisa — reverter pra 120 depois
+  observarTarefasLongas(30);
 }
 
 /**

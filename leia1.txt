@@ -1,3 +1,26 @@
-grassInstancesResident deve significar instâncias atualmente residentes nos GrassPatch montados, e não "do mapa inteiro". O próprio texto posterior já define isso corretamente; mantenha essa definição como a fonte de verdade e não use "mapa inteiro" no relatório.
+Antes de executar T5, faça uma revisão da semântica do FrameBudget para garantir que ele seja realmente um livro-caixa passivo, e não um manager disfarçado.
 
-depois pode dar inicio ao plano no automode
+A API deve ter uma semântica clara para cada operação:
+
+- beginFrame(): inicia/reset o orçamento do frame.
+- remaining(): informa quanto orçamento ainda está disponível.
+- shouldDegrade(priority): apenas informa se o subsistema deveria degradar dado o orçamento restante e a prioridade recebida.
+- consume(ms): registra o custo de trabalho efetivamente realizado.
+
+Não misture "reserva de orçamento" com "custo real consumido" sem deixar isso explicitamente definido na API. Se for necessário reservar orçamento antes de executar trabalho, crie uma semântica separada e claramente nomeada para reserva, em vez de fazer `consume()` representar simultaneamente uma promessa e um custo medido.
+
+A regra arquitetural continua sendo:
+
+subsistema → FrameBudget
+
+e nunca:
+
+FrameBudget → subsistema.
+
+O FrameBudget não deve importar nem conhecer Terrain, VFX, moveTarget, Entity, Network, Gameplay ou qualquer outro sistema da cena. Ele não deve agendar, executar, priorizar, interromper ou comandar nenhum subsistema.
+
+Cada consumidor continua responsável por decidir o que fazer com a informação recebida do orçamento.
+
+Também preserve o fallback: se o FrameBudget estiver indisponível ou for removido, cada subsistema deve continuar funcionando usando seus próprios limites atuais. O FrameBudget deve ser uma camada adicional de coordenação de orçamento, não um ponto único de falha.
+
+Antes de implementar T5, valide essa semântica no código e atualize o plano/documentação se necessário. Não avance para uma implementação que crie acoplamento entre o FrameBudget e os subsistemas.

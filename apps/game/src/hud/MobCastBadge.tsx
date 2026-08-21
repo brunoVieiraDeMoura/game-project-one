@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { IconSquare } from "../ui/rpg";
 import { useEntityCastStore } from "../net/entityCastStore";
 import { useSkillCatalog } from "../net/skillCatalog";
+import { skillIconUrl } from "../net/skillIcons";
 import { subscribeStatusTick } from "./statusTick";
 
 /**
@@ -62,7 +63,7 @@ export function MobCastBadge({ gid, size = 32 }: { gid: number; size?: number })
   if (!cast) return null;
 
   const nome = skillInfo?.name || `#${cast.skillId}`;
-  const imageSrc = skillInfo?.icon ? `/assets/skills/${skillInfo.icon}` : undefined;
+  const imageSrc = skillIconUrl(skillInfo?.icon);
 
   return (
     <div

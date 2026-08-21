@@ -12,6 +12,7 @@ import { RingRenderer } from "./renderers/RingRenderer";
 import { TrailRenderer } from "./renderers/TrailRenderer";
 import { CageRenderer } from "./renderers/CageRenderer";
 import { DomRenderer } from "./renderers/DomRenderer";
+import { useWebglRecoveryEpoch } from "../../core/webglContextRecovery";
 
 /**
  * O ÚNICO componente R3F do VFX Core (item 28 do pedido: "1 VFX Manager +
@@ -40,6 +41,17 @@ export function VfxRoot({
   const { camera, size, gl } = useThree();
   const groupRef = useRef<THREE.Group>(null);
   const domRendererRef = useRef<DomRenderer | null>(null);
+  // `contextEpoch` — ver `core/webglContextRecovery.ts` pro raciocínio
+  // completo: `gl` é a MESMA instância antes/depois de uma restauração de
+  // contexto WebGL (o three reinicializa por dentro, nunca troca o
+  // objeto), então este efeito nunca re-rodava sozinho num restore, e os
+  // `InstancedMesh`/buffers dos renderers do Core ficavam presos ao
+  // contexto morto. Incluir o epoch no array de dependências força este
+  // efeito a rodar de novo (descarta os renderers antigos, cria novos)
+  // toda vez que o contexto É restaurado de verdade — mesmo mecanismo de
+  // resiliência que já existia pra remonte de StrictMode, só com mais um
+  // gatilho.
+  const contextEpoch = useWebglRecoveryEpoch((s) => s.epoch);
 
   useEffect(() => {
     const group = groupRef.current;
@@ -78,7 +90,7 @@ export function VfxRoot({
       dom.dispose();
       domRendererRef.current = null;
     };
-  }, [gl]);
+  }, [gl, contextEpoch]);
 
   useFrame((_, dt) => {
     vfxManager.setWorldContext({ map, mapping, cellSize, terrain, camera });

@@ -169,9 +169,42 @@ export function materialDeBarra(opcoes: {
   return mat;
 }
 
+/**
+ * Materiais de ÍCONE DE ITEM (`net/itemIcons`), por url — a caixinha de loot
+ * troca a cor sólida por este material quando o item tem sprite de verdade.
+ *
+ * `TextureLoader` fica junto do cache, não separado (ao contrário de
+ * `vfx/core/assets/textureManager`, que é ref-counted para VFX efêmero): a
+ * mesma regra de "quem usa não descarta" do resto deste arquivo vale aqui —
+ * um item no chão nasce e morre o tempo todo, e a textura do ícone é a MESMA
+ * a cada vez.
+ */
+const iconTexturas = new Map<string, THREE.Texture>();
+const icones = new Map<string, THREE.MeshBasicMaterial>();
+
+export function materialDeIcone(url: string): THREE.MeshBasicMaterial {
+  const pronto = icones.get(url);
+  if (pronto) return pronto;
+  let textura = iconTexturas.get(url);
+  if (!textura) {
+    textura = new THREE.TextureLoader().load(url);
+    textura.colorSpace = THREE.SRGBColorSpace;
+    iconTexturas.set(url, textura);
+  }
+  const mat = new THREE.MeshBasicMaterial({
+    map: textura,
+    transparent: true,
+    alphaTest: 0.1,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  icones.set(url, mat);
+  return mat;
+}
+
 /** para o diagnóstico e o teste: quantos materiais o cache guarda */
-export function materiaisCompartilhados(): { brilhos: number; opacos: number; barras: number } {
-  return { brilhos: brilhos.size, opacos: opacos.size, barras: barras.size };
+export function materiaisCompartilhados(): { brilhos: number; opacos: number; barras: number; icones: number } {
+  return { brilhos: brilhos.size, opacos: opacos.size, barras: barras.size, icones: icones.size };
 }
 
 /** só para o teste — os caches são de módulo e sobrevivem entre casos */
@@ -179,4 +212,6 @@ export function zerarRecursosCompartilhados(): void {
   brilhos.clear();
   opacos.clear();
   barras.clear();
+  icones.clear();
+  iconTexturas.clear();
 }

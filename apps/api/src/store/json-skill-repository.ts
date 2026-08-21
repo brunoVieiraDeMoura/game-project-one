@@ -85,4 +85,13 @@ export class JsonSkillRepository implements SkillRepository {
     if (existed) this.schedulePersist();
     return existed;
   }
+
+  async setIcon(id: number, filename: string | null): Promise<Skill | undefined> {
+    const skill = this.skills.get(id);
+    if (!skill) return undefined;
+    const updated = { ...skill, icon: filename ?? undefined };
+    this.skills.set(id, updated);
+    this.schedulePersist();
+    return updated;
+  }
 }

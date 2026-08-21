@@ -73,7 +73,7 @@ function classeAtual(): EfeitosDeClasse | undefined {
  * catálogo ainda não respondeu (`ensure` pede pro próximo golpe já saber —
  * ver `net/itemCatalog`).
  */
-export function subtipoDaArmaEquipada(): string | undefined {
+function subtipoDaArmaEquipada(): string | undefined {
   const arma = equippedBySlot(usePlayerStore.getState().inventory).weapon;
   if (!arma) return undefined;
   const info = useItemCatalog.getState().byId[arma.itemId];

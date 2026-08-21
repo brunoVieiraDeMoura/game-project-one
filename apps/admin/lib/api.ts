@@ -109,6 +109,27 @@ export async function deleteItem(id: number): Promise<{ ok: boolean }> {
   return handle<{ ok: boolean }>(res);
 }
 
+/** upload de ícone (`POST /items/:id/icon`) — sem `Content-Type` de propósito:
+ * o browser monta o boundary do multipart sozinho a partir do `FormData`. */
+export async function uploadItemIcon(id: number, file: File): Promise<Item> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${API_URL}/items/${id}/icon`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body,
+  });
+  return handle<Item>(res);
+}
+
+export async function removeItemIcon(id: number): Promise<Item> {
+  const res = await fetch(`${API_URL}/items/${id}/icon`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handle<Item>(res);
+}
+
 export interface JobClassListResponse {
   jobClasses: JobClass[];
   total: number;
@@ -202,6 +223,25 @@ export async function deleteSkill(id: number): Promise<{ ok: boolean }> {
     headers: await authHeaders(),
   });
   return handle<{ ok: boolean }>(res);
+}
+
+export async function uploadSkillIcon(id: number, file: File): Promise<Skill> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${API_URL}/skills/${id}/icon`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body,
+  });
+  return handle<Skill>(res);
+}
+
+export async function removeSkillIcon(id: number): Promise<Skill> {
+  const res = await fetch(`${API_URL}/skills/${id}/icon`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handle<Skill>(res);
 }
 
 export interface StatusListResponse {

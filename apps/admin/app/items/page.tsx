@@ -102,6 +102,7 @@ export default function ItemsPage() {
         <table className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-xs uppercase text-zinc-400">
             <tr>
+              <th className="px-3 py-2" />
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">Aegis</th>
@@ -117,19 +118,34 @@ export default function ItemsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={11} className="px-3 py-6 text-center text-zinc-500">
                   Carregando...
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={11} className="px-3 py-6 text-center text-zinc-500">
                   Nenhum item encontrado
                 </td>
               </tr>
             ) : (
               items.map((item) => (
                 <tr key={item.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
+                  <td className="px-3 py-2">
+                    {item.icon ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/assets/items/${item.icon}`}
+                        alt=""
+                        className="h-6 w-6 rounded border border-zinc-700 bg-zinc-900 object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.visibility = "hidden";
+                        }}
+                      />
+                    ) : (
+                      <div className="h-6 w-6 rounded border border-zinc-800 bg-zinc-900" />
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-zinc-400">{item.id}</td>
                   <td className="px-3 py-2">{item.name}</td>
                   <td className="px-3 py-2 text-zinc-400">{item.aegisName}</td>

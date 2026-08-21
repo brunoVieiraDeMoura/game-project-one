@@ -15,7 +15,7 @@ import {
   type Item,
   type StatusEffectDef,
 } from "@ragnarok/game-data";
-import { createItem, listAllStatuses, updateItem } from "@/lib/api";
+import { createItem, listAllStatuses, removeItemIcon, updateItem, uploadItemIcon } from "@/lib/api";
 import { Button, CatalogPickerField, Checkbox, Field, Input, Label, NumberField, Select, Section, type CatalogOption } from "./ui";
 import { EffectsEditor } from "./EffectsEditor";
 import { ITEM_LIMITS } from "@/lib/field-limits";
@@ -52,6 +52,107 @@ function RawScriptField({
         className="w-full rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-900 outline-none focus:border-zinc-500"
         placeholder="vazio = item sem script"
       />
+    </div>
+  );
+}
+
+/**
+ * Ícone de item de verdade — upload que processa (redimensiona) no backend e
+ * grava em `public/assets/items/` de ambos os apps (`items.ts:
+ * POST /:id/icon`), e a partir daí aparece sozinho em todo lugar que o jogo
+ * mostra ícone de item (bolsa, chão, aviso de loot, janela de detalhe): os
+ * quatro leem o MESMO `Item.icon` do catálogo, não um registro à parte.
+ *
+ * Fora do submit do formulário de propósito — o upload é sua PRÓPRIA
+ * requisição (`setIcon` no backend não passa pelo `update()` do item, ver
+ * `mysql-item-repository.ts`), então soltar o arquivo já salva, sem precisar
+ * apertar "Salvar" embaixo.
+ */
+function IconUploader({
+  itemId,
+  icon,
+  onChange,
+}: {
+  itemId: number;
+  icon?: string;
+  onChange: (icon: string | undefined) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // cache-bust: o nome do arquivo (`<id>.png`) não muda numa TROCA de ícone
+  // — sem isto o <img> continuava mostrando os bytes antigos do cache do
+  // navegador depois de subir um novo.
+  const [rev, setRev] = useState(0);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite escolher o MESMO arquivo de novo depois
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await uploadItemIcon(itemId, file);
+      onChange(updated.icon);
+      setRev((v) => v + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRemove() {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await removeItemIcon(itemId);
+      onChange(updated.icon);
+      setRev((v) => v + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (itemId <= 0) {
+    return (
+      <div>
+        <Label>Ícone</Label>
+        <p className="text-xs text-zinc-500">salve o item primeiro pra poder enviar um ícone</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Label>Ícone (bolsa, chão e aviso de loot, no jogo)</Label>
+      <div className="flex items-center gap-2">
+        {icon && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/assets/items/${icon}?v=${rev}`}
+            alt=""
+            className="h-10 w-10 rounded border border-zinc-700 bg-zinc-900 object-contain"
+            onError={(e) => {
+              e.currentTarget.style.visibility = "hidden";
+            }}
+          />
+        )}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          onChange={onFile}
+          disabled={busy}
+          className="text-xs text-zinc-400"
+        />
+        {icon && (
+          <Button type="button" onClick={onRemove} disabled={busy}>
+            Remover
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
 }
@@ -186,6 +287,9 @@ export function ItemForm({ initial, mode }: { initial?: EditableItem; mode: "cre
             onChange={(v) => set("viewSprite", v as Item["viewSprite"])}
             {...ITEM_LIMITS.viewSprite}
           />
+        </div>
+        <div className="mt-3">
+          <IconUploader itemId={item.id} icon={item.icon} onChange={(icon) => set("icon", icon)} />
         </div>
       </Section>
 

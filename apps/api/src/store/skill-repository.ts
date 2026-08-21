@@ -23,4 +23,13 @@ export interface SkillRepository {
   create(skill: Skill): Promise<Skill>;
   update(id: number, skill: Skill): Promise<Skill | undefined>;
   remove(id: number): Promise<boolean>;
+  /**
+   * Grava só o nome do arquivo do ícone (rota dedicada `POST/DELETE
+   * /skills/:id/icon`) — fora do `update()` de propósito: `icon` é um campo
+   * só de exibição do HUD, não existe em `skill_db.yml`, então gravá-lo não
+   * pode disparar `writeOverride`/`@reloadskilldb` como um `update()`
+   * qualquer dispararia (ver `YamlSkillRepository.setIcon`). `undefined` =
+   * backend não suporta upload.
+   */
+  setIcon?(id: number, filename: string | null): Promise<Skill | undefined>;
 }

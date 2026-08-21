@@ -15,6 +15,7 @@ import {
 } from "../net/statusStore";
 import { useStatusCatalog } from "../net/statusCatalog";
 import { useSkillCatalog } from "../net/skillCatalog";
+import { skillIconUrl } from "../net/skillIcons";
 import { subscribeStatusTick } from "./statusTick";
 
 /**
@@ -226,7 +227,7 @@ function StatusEffectIcon({
         : undefined;
   const imageSrc =
     isSkillSourced && skillInfo?.icon
-      ? `/assets/skills/${skillInfo.icon}`
+      ? skillIconUrl(skillInfo.icon)
       : debuffIconFile
         ? `/assets/debuffs/${debuffIconFile}`
         : undefined;

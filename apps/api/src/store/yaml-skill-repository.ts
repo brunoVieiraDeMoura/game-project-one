@@ -117,6 +117,16 @@ export class YamlSkillRepository implements SkillRepository {
     return this.delegate.remove(id);
   }
 
+  /**
+   * `icon` não existe em `skill_db.yml` (é campo só de exibição do HUD) —
+   * delega direto pro catálogo, sem passar por `writeOverride`/
+   * `queueReload("skilldb")`. `applyOverride` não toca `icon`, então não há
+   * risco de a leitura seguinte pisar o valor recém-gravado.
+   */
+  async setIcon(id: number, filename: string | null): Promise<Skill | undefined> {
+    return this.delegate.setIcon?.(id, filename);
+  }
+
   /** Overrides já gravados, por id — cada um validado contra o schema oficial (nunca lido "na confiança"). */
   private async readOverrides(): Promise<Map<number, RawSkillYaml>> {
     let mtimeMs: number;

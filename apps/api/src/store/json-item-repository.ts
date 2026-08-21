@@ -84,4 +84,13 @@ export class JsonItemRepository implements ItemRepository {
     if (existed) this.schedulePersist();
     return existed;
   }
+
+  async setIcon(id: number, filename: string | null): Promise<Item | undefined> {
+    const item = this.items.get(id);
+    if (!item) return undefined;
+    const updated = { ...item, icon: filename ?? undefined };
+    this.items.set(id, updated);
+    this.schedulePersist();
+    return updated;
+  }
 }

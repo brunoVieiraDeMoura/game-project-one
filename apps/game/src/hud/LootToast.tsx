@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
-import { LoadingRing } from "../ui/rpg";
+import { itemIconUrl } from "../net/itemIcons";
+import { IconSquare } from "../ui/rpg";
 import { CurvedBox } from "../ui/CurvedBox";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { BOOK } from "../ui/travelbook";
@@ -104,12 +105,23 @@ export function LootToast() {
         // NUNCA id como nome provisório (regra absoluta, auditoria
         // 2026-08-14) — `undefined` enquanto o catálogo não respondeu.
         nome={getItemDisplayName(nomes[aviso.itemId])}
+        iconUrl={itemIconUrl(nomes[aviso.itemId]?.icon)}
       />
     </div>
   );
 }
 
-function Linha({ itemId, amount, nome }: { itemId: number; amount: number; nome?: string }) {
+function Linha({
+  itemId,
+  amount,
+  nome,
+  iconUrl,
+}: {
+  itemId: number;
+  amount: number;
+  nome?: string;
+  iconUrl?: string;
+}) {
   return (
     <CurvedBox
       border={px(CHROME.tabBorder)}
@@ -141,24 +153,19 @@ function Linha({ itemId, amount, nome }: { itemId: number; amount: number; nome?
       {/**
        * O ícone, à esquerda.
        *
-       * Enquanto não há sprite de item, é o MESMO quadrado colorido por id que
-       * a caixinha no chão usa (`GroundItems.colorFor`) — assim o que se viu no
-       * chão e o que aparece aqui são a mesma coisa, e trocar por um sprite
-       * depois é mexer só neste bloco.
+       * `net/itemIcons` — mesmo registro que a bolsa e o chão usam. Sem
+       * entrada lá, `IconSquare` cai sozinho no quadrado colorido por seed
+       * (mesmo id, mesmo mecanismo do inventário — não precisa mais de
+       * placeholder próprio aqui).
        */}
-      {nome ? (
-        <div
-          style={{
-            width: px(LOOT.icone),
-            height: px(LOOT.icone),
-            borderRadius: px(3),
-            background: `hsl(${(itemId * 47) % 360}, 55%, 55%)`,
-            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.45)",
-          }}
-        />
-      ) : (
-        <LoadingRing size={px(LOOT.icone)} />
-      )}
+      <IconSquare
+        seed={nome ? `item-${itemId}` : undefined}
+        loading={!nome}
+        imageSrc={iconUrl}
+        size={px(LOOT.icone)}
+        radius={3}
+        border={false}
+      />
       <span
         style={{
           fontFamily: FRAME_FONT,

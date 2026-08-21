@@ -7,10 +7,12 @@ import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { computeFlightOffset } from "./flightOffset";
 import { computeCurveOffset } from "./curveOffset";
 import { computeOrbitOffset } from "./orbitOffset";
+import { computeFacingOffset } from "./facingOffset";
 import { computeDropOffset } from "./dropOffset";
 import { computeDropStretch } from "./dropStretch";
 import { computeBurstEnvelope } from "./burstEnvelope";
 import { computeCastChargeEnvelope } from "./castChargeEnvelope";
+import { computeIdleFlicker } from "./idleFlicker";
 
 // reusado a nível de módulo — nunca alocado por instância/quadro (mesmo
 // princípio de `BeamRenderer.ts: _position/_quaternion/_scale`).
@@ -38,15 +40,15 @@ export class SpriteRenderer extends InstancedBillboardBase {
     super(group);
   }
 
-  onInstanceCreate(instance: VfxInstanceRuntime): void {
+  onInstanceCreate(instance: VfxInstanceRuntime, world: VfxWorldContext): void {
     const slot = this.acquireSlot();
     this.slots.set(instance.instanceId, slot.index);
     this.trySyncAtlas(instance.def);
-    this.writeFromInstance(instance, 0);
+    this.writeFromInstance(instance, 0, world);
   }
 
-  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number): void {
-    this.writeFromInstance(instance, elapsedMs);
+  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number, world: VfxWorldContext): void {
+    this.writeFromInstance(instance, elapsedMs, world);
   }
 
   onInstanceDestroy(instance: VfxInstanceRuntime): void {
@@ -62,7 +64,7 @@ export class SpriteRenderer extends InstancedBillboardBase {
     if (index !== undefined) this.writeInactiveSlot(index);
   }
 
-  private writeFromInstance(instance: VfxInstanceRuntime, elapsedMs: number): void {
+  private writeFromInstance(instance: VfxInstanceRuntime, elapsedMs: number, world: VfxWorldContext): void {
     const index = this.slots.get(instance.instanceId);
     if (index === undefined) return;
 
@@ -97,11 +99,19 @@ export class SpriteRenderer extends InstancedBillboardBase {
     const opacity = typeof opacityRaw === "number" ? opacityRaw : 1;
     const flight = computeFlightOffset(instance, elapsedMs);
     const curve = computeCurveOffset(instance, elapsedMs);
-    const orbit = computeOrbitOffset(instance, elapsedMs);
+    const orbit = computeOrbitOffset(instance, elapsedMs, world);
+    const facing = computeFacingOffset(instance);
     const drop = computeDropOffset(instance, elapsedMs);
-    const stretch = computeDropStretch(instance, elapsedMs);
+    // `payload.stretchY` (Fire Wall, "chama alta, não redonda") — alongamento
+    // VERTICAL CONSTANTE, independente de `computeDropStretch` (que só existe
+    // enquanto `payload.fallMs` está ativo, ex. Fire Lance caindo). Ausente/`1`
+    // = comportamento de sempre; os dois multiplicam juntos sem conflito (uma
+    // skill caindo E alongada estaticamente nunca coexistiu, mas nada impede).
+    const staticStretch = Number(instance.spawnOptions.payload?.stretchY ?? 1);
+    const stretch = computeDropStretch(instance, elapsedMs) * staticStretch;
     const burst = computeBurstEnvelope(instance, elapsedMs);
     const charge = computeCastChargeEnvelope(instance, elapsedMs);
+    const idle = computeIdleFlicker(instance, elapsedMs);
 
     // `payload.rotation` (Eletrocutar, 2026-08-19-g: "cada SEGMENTO do raio
     // precisa da PRÓPRIA rotação, não a instância inteira") — override por
@@ -116,20 +126,40 @@ export class SpriteRenderer extends InstancedBillboardBase {
     // instância inteira, ex. "hit 3 ligeiramente pra direita") com a
     // irregularidade PRÓPRIA de cada segmento (`payload.rotation`, camada).
     const payloadRotation = instance.spawnOptions.payload?.rotation;
-    const rotation = (typeof payloadRotation === "number" ? payloadRotation : 0) + (instance.spawnOptions.rotation ?? 0);
+    const rotation = (typeof payloadRotation === "number" ? payloadRotation : 0) + (instance.spawnOptions.rotation ?? 0) + idle.rotationRad;
+
+    // `payload.flameShape`/`noiseAmt` (Fire Wall) — mesma fase determinística
+    // por `instance.instanceId` que `idleFlicker.ts` já usa, pra cada célula
+    // "crepitar" fora de sincronia com as vizinhas.
+    const flameShape = instance.spawnOptions.payload?.flameShape === true;
+    const noiseAmt = Number(instance.spawnOptions.payload?.noiseAmt ?? (flameShape ? 1 : 0));
+    const seed = flameShape ? (instance.instanceId % 1000) / 1000 : 0;
+    // pedido "animação balançando pra frente/pra trás começa em 0% na base,
+    // termina em 100% no topo" — pra `flameShape`, `idle.scaleMul` deixa de
+    // multiplicar o `aScale` inteiro (que escalava simétrico a partir do
+    // CENTRO, arrastando a base junto) e vira `breatheAmt`, aplicado no
+    // VERTEX ponderado por `uv.y` (ver `instancedBillboardBase.ts`). Sprites
+    // sem `flameShape` continuam com o `idle.scaleMul` de sempre no `aScale`
+    // — nenhuma outra skill muda.
+    const breatheAmt = flameShape ? idle.scaleMul - 1 : 0;
+    const scaleMulForAttr = flameShape ? 1 : idle.scaleMul;
 
     this.writeSlot(index, {
       position: [
-        instance.position.x + flight.x + curve.x + orbit.x + drop.x,
-        instance.position.y + flight.y + curve.y + orbit.y + drop.y,
-        instance.position.z + flight.z + curve.z + orbit.z + drop.z,
+        instance.position.x + flight.x + curve.x + orbit.x + facing.x + drop.x,
+        instance.position.y + flight.y + curve.y + orbit.y + facing.y + drop.y,
+        instance.position.z + flight.z + curve.z + orbit.z + facing.z + drop.z,
       ],
-      scale: scale * burst.scaleMul * charge.scaleMul,
-      opacity: opacity * burst.opacityMul * charge.opacityMul,
+      scale: scale * burst.scaleMul * charge.scaleMul * scaleMulForAttr,
+      opacity: opacity * burst.opacityMul * charge.opacityMul * idle.opacityMul,
       rotation,
       stretch,
       color,
       uv,
+      seed,
+      noiseAmt,
+      flameShape,
+      breatheAmt,
     });
   }
 }

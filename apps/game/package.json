@@ -19,7 +19,8 @@
     "vfx:benchmark:coldbolt": "tsx scripts/vfxBenchmarkColdBolt.ts",
     "vfx:benchmark:lightbolt": "tsx scripts/vfxBenchmarkLightBolt.ts",
     "vfx:benchmark:fireball": "tsx scripts/vfxBenchmarkFireBall.ts",
-    "vfx:benchmark:soulstrike": "tsx scripts/vfxBenchmarkSoulStrike.ts"
+    "vfx:benchmark:soulstrike": "tsx scripts/vfxBenchmarkSoulStrike.ts",
+    "vfx:benchmark:firewall": "tsx scripts/vfxBenchmarkFireWall.ts"
   },
   "dependencies": {
     "@ragnarok/engine-core": "workspace:*",

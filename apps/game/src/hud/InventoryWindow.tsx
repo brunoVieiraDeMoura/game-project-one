@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../net/playerStore";
 import { gateway } from "../net/gateway";
 import { useItemCatalog, getItemDisplayName } from "../net/itemCatalog";
+import { itemIconUrl } from "../net/itemIcons";
 import { equipPending, precheckEquip, requestEquip, requestUnequip } from "../net/equipmentStore";
 import { useHudStore } from "./hudStore";
 import { IconSquare } from "../ui/rpg";
@@ -276,6 +277,7 @@ export function InventoryWindow() {
               }
               onInfo={it ? () => useItemInfoStore.getState().abrir(it.index) : undefined}
               indice={it?.index}
+              iconUrl={it ? itemIconUrl(nomes[it.itemId]?.icon) : undefined}
               lado={ladoSlot}
             />
           );
@@ -391,6 +393,7 @@ function Slot({
   onDoubleClick,
   onInfo,
   indice,
+  iconUrl,
   lado,
 }: {
   /** true = célula ocupa um item de verdade do inventário — distingue
@@ -406,6 +409,8 @@ function Slot({
   onDoubleClick?: () => void;
   onInfo?: () => void;
   indice?: number;
+  /** ícone de verdade (`net/itemIcons`) — ausente cai no quadrado por seed */
+  iconUrl?: string;
   /** lado do slot em px de tela — moldura, ícone e número saem daqui */
   lado: number;
 }) {
@@ -509,7 +514,13 @@ function Slot({
               item do RO passa longe disso. `loading` (nome ainda não veio do
               catálogo) desenha o anel em vez do quadrado colorido — nunca id,
               nunca aegis, regra absoluta da auditoria 2026-08-14. */}
-          <IconSquare seed={rotulo ? `item-${rotulo}` : undefined} loading={!rotulo} size={lado * 0.56} />
+          <IconSquare
+            seed={rotulo ? `item-${rotulo}` : undefined}
+            loading={!rotulo}
+            imageSrc={iconUrl}
+            size={lado * 0.56}
+            border={false}
+          />
         </div>
       )}
       {equipado && (

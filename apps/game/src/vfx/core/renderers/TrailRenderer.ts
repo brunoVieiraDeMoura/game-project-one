@@ -1,10 +1,11 @@
 import * as THREE from "three";
-import type { VfxInstanceRuntime } from "../types";
+import type { VfxInstanceRuntime, VfxWorldContext } from "../types";
 import { InstancedBillboardBase } from "./instancedBillboardBase";
 import { computeFlightOffset } from "./flightOffset";
 import { computeCurveOffset } from "./curveOffset";
 import { computeOrbitOffset } from "./orbitOffset";
 import { computeDropOffset } from "./dropOffset";
+import { createSeededRng } from "../particleMath";
 
 /**
  * `renderer:"trail"` — rastro atrás de uma instância em movimento, N slots
@@ -59,10 +60,19 @@ export class TrailRenderer extends InstancedBillboardBase {
     this.slots.set(instance.instanceId, indices);
     this.history.set(instance.instanceId, []);
     this.trySyncAtlas(instance.def);
-    this.writeFromInstance(instance);
+    this.writeFromInstance(instance, 0);
   }
 
-  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number): void {
+  // REVERTIDO (rodada "Fire Ball saindo estranho"/"Soul Strike sumiu"): a
+  // gravação em intervalo FIXO (tentativa de deixar o trail do Oráculo mais
+  // uniforme) trocava 1-ponto-por-quadro por 1-ponto-por-~16,7ms — em
+  // qualquer client rodando ACIMA de 60fps isso reduz a resolução real da
+  // história (menos pontos gravados que quadros renderizados), lendo como
+  // rastro mais picado/pobre pra QUALQUER skill com `trail` (Fire Ball, Fire
+  // Lance, Cold Bolt, Soul Strike) — risco genérico grande demais pro
+  // benefício, que já foi resolvido pro Oráculo de outro jeito (Hz/fase
+  // diferente por caveira). Volta a gravar 1 ponto por CHAMADA, como sempre.
+  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number, world: VfxWorldContext): void {
     const hist = this.history.get(instance.instanceId);
     if (!hist) return;
     // "voo" (Fire Ball etc.) desloca a posição LOCAL sem mexer na âncora —
@@ -70,7 +80,7 @@ export class TrailRenderer extends InstancedBillboardBase {
     // (mesmo helper genérico que Sprite/Particle usam, ver `flightOffset.ts`).
     const flight = computeFlightOffset(instance, elapsedMs);
     const curve = computeCurveOffset(instance, elapsedMs);
-    const orbit = computeOrbitOffset(instance, elapsedMs);
+    const orbit = computeOrbitOffset(instance, elapsedMs, world);
     const drop = computeDropOffset(instance, elapsedMs);
     hist.push({
       x: instance.position.x + flight.x + curve.x + orbit.x + drop.x,
@@ -78,7 +88,7 @@ export class TrailRenderer extends InstancedBillboardBase {
       z: instance.position.z + flight.z + curve.z + orbit.z + drop.z,
     });
     if (hist.length > HISTORY_CAP) hist.shift();
-    this.writeFromInstance(instance);
+    this.writeFromInstance(instance, elapsedMs);
   }
 
   onInstanceDestroy(instance: VfxInstanceRuntime): void {
@@ -107,7 +117,25 @@ export class TrailRenderer extends InstancedBillboardBase {
     return allocated;
   }
 
-  private writeFromInstance(instance: VfxInstanceRuntime): void {
+  /** `payload.trailNoiseAmt` (Oracle, pedido "ruído melhor") — pequena
+   * variação de escala/opacidade POR SEGMENTO, seedada por
+   * `instance.instanceId` + índice do segmento (determinística, mesmo
+   * princípio de `ParticleRenderer`/`idleFlicker.ts`) e animada devagar por
+   * `elapsedMs` — cada bolinha de rastro "cintila" um pouco em vez de
+   * parecer um arco geométrico perfeitamente liso. `0`/ausente = sem ruído
+   * nenhum, mesmo comportamento de sempre (Fire Ball/Fire Lance/Cold Bolt
+   * nunca passam este campo). */
+  private noiseMulFor(instance: VfxInstanceRuntime, i: number, elapsedMs: number): number {
+    const amt = Number(instance.spawnOptions.payload?.trailNoiseAmt ?? 0);
+    if (amt <= 0) return 1;
+    const rnd = createSeededRng(instance.instanceId * 733 + i * 131 + 1);
+    const phase = rnd() * Math.PI * 2;
+    const hz = 1.4 + rnd() * 0.9;
+    const wave = Math.sin((elapsedMs / 1000) * Math.PI * 2 * hz + phase);
+    return 1 + wave * amt;
+  }
+
+  private writeFromInstance(instance: VfxInstanceRuntime, elapsedMs: number): void {
     const indices = this.slots.get(instance.instanceId);
     const hist = this.history.get(instance.instanceId);
     if (!indices || !hist) return;
@@ -140,10 +168,11 @@ export class TrailRenderer extends InstancedBillboardBase {
       const histIndex = Math.max(0, hist.length - 1 - Math.round(t * (hist.length - 1)));
       const p = hist[histIndex]!;
       const fade = 1 - t;
+      const noiseMul = this.noiseMulFor(instance, i, elapsedMs);
       this.writeSlot(index, {
         position: [p.x, p.y, p.z],
-        scale: baseScale * (0.4 + 0.6 * fade) * critScale,
-        opacity: fade,
+        scale: baseScale * (0.4 + 0.6 * fade) * critScale * noiseMul,
+        opacity: fade * Math.max(0, noiseMul),
         color,
       });
     }

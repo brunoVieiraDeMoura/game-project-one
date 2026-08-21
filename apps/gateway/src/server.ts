@@ -97,6 +97,7 @@ io.on("connection", (socket) => {
 		ro.on("skill-ground-cast", (payload) => socket.emit("skill:ground-cast", payload));
 		ro.on("skill-ground", (payload) => socket.emit("skill:ground", payload));
 		ro.on("skill-ground-gone", (payload) => socket.emit("skill:ground-gone", payload));
+		ro.on("ghost-dome-block", (payload) => socket.emit("ghost-dome-block", payload));
 		ro.on("skill-cooldown", (payload) => socket.emit("skill:cooldown", payload));
 		ro.on("npc-dialog", (payload) => socket.emit("npc:dialog", payload));
 		ro.on("ground-item", (payload) => socket.emit("ground:item", payload));

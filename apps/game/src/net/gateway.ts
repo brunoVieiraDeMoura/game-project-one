@@ -131,7 +131,7 @@ export interface ServerEvents {
   "world:enter": (p: WorldEnter) => void;
   "self:move": (p: { from: Cell; to: Cell; startTime: number }) => void;
   /** teleporte/empurrão: nova célula do próprio personagem, sem caminhada */
-  "self:warp": (p: Cell) => void;
+  "self:warp": (p: Cell & { teleporte?: boolean }) => void;
   /**
    * O alvo está longe demais para bater.
    *
@@ -180,6 +180,16 @@ export interface ServerEvents {
     visible: boolean;
   }) => void;
   "skill:ground-gone": (p: { gid: number }) => void;
+  /**
+   * Cúpula Fantasma/Safety Wall bloqueou um ataque de VERDADE — sinal
+   * autoritativo do servidor (`rathena-patches/0001`), não a heurística
+   * "miss + mesma célula" antiga. `remainingHits` é só diagnóstico.
+   * `wasHit` (carga consumida veio de HIT real ou de MISS) só serve pra dar
+   * mais destaque visual ao VFX num bloqueio de HIT — dano final é sempre
+   * 0 nos dois casos. Ver `apps/gateway/src/protocol.ts:
+   * ServerEvents["ghost-dome-block"]` para o raciocínio completo.
+   */
+  "ghost-dome-block": (p: { sourceGid: number; targetGid: number; remainingHits: number; wasHit: boolean }) => void;
   /** recarga da skill; a duração é do servidor (ZC_SKILL_POSTDELAY) */
   "skill:cooldown": (p: { skillId: number; durationMs: number }) => void;
   "npc:dialog": (p: NpcDialogPayload) => void;

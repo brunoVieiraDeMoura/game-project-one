@@ -1,0 +1,111 @@
+From: game-project — Ghost Dome / Safety Wall block-notify (v3, 2026-08-20)
+
+Regra do projeto: TODA tentativa de ataque básico contra um alvo protegido
+por Safety Wall consome 1 carga — HIT, MISS ou dano 0, tanto faz. O contador
+representa quantidade de ataques básicos ABSORVIDOS pela existência da
+parede, não quantidade de hits que causaram dano. Jogador e mob se
+comportam exatamente igual (mesmo pipeline).
+
+## Histórico
+
+v1: decrementava em `battle_status_block_damage`, só alcançável com
+damage!=0 — MISS nunca consumia.
+
+v2: moveu pra `battle_weapon_attack()` (ANTES do hit/miss). Bug: `flag`
+naquele ponto é sempre `0`, hardcoded no único call site
+(`unit.cpp: unit_attack_timer_sub`), então `(flag&(BF_SHORT|BF_MAGIC))
+==BF_SHORT` nunca era verdade — pra NINGUÉM, jogador ou mob. Achado
+testando ataque de mob ao vivo (>12 MISS, 0 cargas consumidas).
+
+v3 (este patch): move pra `battle_calc_weapon_attack()`, logo depois de
+`initialize_weapon_data()` — ali `wd.flag` já tem o BF_SHORT/BF_LONG REAL
+(calculado dinamicamente por `battle_range_type`, baseado em distância/arma
+de verdade), e ainda é ANTES do "Lucky Dodge" e do hit/miss
+(`is_attack_hitting`). Esta função é o único ponto compartilhado por ataque
+básico de JOGADOR e de MOB (`unit_attack_timer_sub` → `battle_weapon_attack`
+→ `battle_calc_attack(BF_WEAPON,...)` → aqui, pra qualquer `block_list`
+atacante), gatilho restrito a `skill_id==0` (só ataque básico, nunca skill
+física tipo Bash — esta função também é usada por elas, com skill_id real).
+
+Decisão de bloqueio (`safetyWallBlock`) travada no mesmo ponto do
+decremento, aplicada nos 2 pontos de retorno desta função alcançáveis com
+skill_id==0 (infdef/plant e o final) — os outros returns (Lucky Dodge,
+NJ_ISSEN/GN_FIRE_EXPANSION_ACID) já têm damage==0 ou nunca rodam com
+skill_id==0.
+
+Continua reaproveitando clif_skill_nodamage()/ZC_USE_SKILL (0x011a) — mesmo
+mecanismo que SC_WEAPONBLOCKING já usa. Nenhum pacote novo, nenhuma mudança
+de protocolo. Client (gateway/game) não muda entre v2 e v3.
+
+--- a/src/map/battle.cpp (battle_status_block_damage)
++++ b/src/map/battle.cpp
+@@ -1439,7 +1439,7 @@ bool battle_status_block_damage(...)
+ 	// ATK_BLOCK Type
+-	if ((sce = sc->getSCE(SC_SAFETYWALL)) && (flag&(BF_SHORT | BF_MAGIC)) == BF_SHORT) {
++	// MG_SAFETYWALL saiu daqui — consumo/notificação agora em
++	// battle_calc_weapon_attack(). MH_STEINWAND fica como sempre foi.
++	if ((sce = sc->getSCE(SC_SAFETYWALL)) && (flag&(BF_SHORT | BF_MAGIC)) == BF_SHORT && sce->val2 != MG_SAFETYWALL) {
+ 		std::shared_ptr<s_skill_unit_group> group = skill_id2group(sce->val3);
+ 		if (group) {
+ 			d->dmg_lv = ATK_BLOCK;
+ 			switch (sce->val2) {
+-			case MG_SAFETYWALL: ... (removido, ~14 linhas)
+ 			case MH_STEINWAND:
+ 				...
+
+--- a/src/map/battle.cpp (battle_calc_weapon_attack)
++++ b/src/map/battle.cpp
+@@ -5421,6 +5421,29 @@ static struct Damage battle_calc_weapon_attack(...)
+ 	sd = BL_CAST(BL_PC, src);
+ 	tsd = BL_CAST(BL_PC, target);
++
++	// game-project (rathena-patches/0001, v3): consumo de carga por
++	// TENTATIVA de ataque básico (skill_id==0), independente de HIT/MISS.
++	// wd.flag JÁ tem o BF_SHORT/BF_LONG real (initialize_weapon_data logo
++	// acima) — diferente do `flag` cru de battle_weapon_attack (sempre 0).
++	bool safetyWallBlock = false;
++	if (skill_id == 0 && tsc && (wd.flag & (BF_SHORT | BF_MAGIC)) == BF_SHORT) {
++		if (status_change_entry* sce = tsc->getSCE(SC_SAFETYWALL); sce != nullptr && sce->val2 == MG_SAFETYWALL) {
++			std::shared_ptr<s_skill_unit_group> group = skill_id2group(sce->val3);
++			if (group) {
++				safetyWallBlock = true;
++				if (--group->val2 <= 0) {
++					clif_skill_nodamage(src, *target, MG_SAFETYWALL, 0);
++					skill_delunitgroup(group);
++				} else {
++					clif_skill_nodamage(src, *target, MG_SAFETYWALL, group->val2);
++				}
++			}
++		}
++	}
+
+ 	//Check for Lucky Dodge
+ 	if ((!skill_id || skill_id == PA_SACRIFICE) && ...) { ... }
+
+@@ -5796,6 +5819,10 @@ static struct Damage battle_calc_weapon_attack(...)
+ 	if(infdef){
+ 		battle_calc_attack_plant(&wd, src, target, skill_id, skill_lv);
++		if (safetyWallBlock) {
++			wd.damage = 0; wd.damage2 = 0; wd.dmg_lv = ATK_BLOCK;
++		}
+ 		return wd;
+ 	}
+
+@@ -5824,6 +5851,13 @@ static struct Damage battle_calc_weapon_attack(...)
+ 	battle_do_reflect(BF_WEAPON,&wd, src, target, skill_id, skill_lv);
+
++	// decisão travada no início desta função — força o bloqueio
++	// INDEPENDENTE do que o resto do cálculo produziu (hit real ou miss).
++	if (safetyWallBlock) {
++		wd.damage = 0; wd.damage2 = 0; wd.dmg_lv = ATK_BLOCK;
++	}
++
+ 	return wd;
+ }
+
+--- a/src/map/battle.cpp (battle_weapon_attack — REVERTIDO pra vanilla)
++++ b/src/map/battle.cpp
+@@ Toda a lógica de Safety Wall adicionada na v2 dentro de battle_weapon_attack()
+foi removida (o hook logo após o ammo-check, e o override logo após
+`wd = battle_calc_attack(BF_WEAPON,...)`) — função volta a ser idêntica ao
+vanilla. `flag` sempre 0 ali tornava aquele ponto inútil pra esta regra.

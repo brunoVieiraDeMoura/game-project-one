@@ -8,6 +8,7 @@ import { useWorldStore } from "../net/worldStore";
 import { useAimStore } from "../net/aimStore";
 import { castarEmAlvo } from "../net/acoes";
 import { getSkillDisplayName, SKILL_NAME_FALLBACK, useSkillCatalog } from "../net/skillCatalog";
+import { skillIconUrl } from "../net/skillIcons";
 import { useCooldownStore } from "../net/cooldownStore";
 import { useItemCatalog, isUsableItemType, getItemDisplayName } from "../net/itemCatalog";
 import { equipPending, requestEquip } from "../net/equipmentStore";
@@ -252,8 +253,8 @@ export function SkillBar() {
               iconSrc={
                 basico
                   ? `/assets/skills/auto-atack-${ataqueBasicoAtivo ? "on" : "off"}.png`
-                  : skill && catalog[skill.id]?.icon
-                    ? `/assets/skills/${catalog[skill.id]!.icon}`
+                  : skill
+                    ? skillIconUrl(catalog[skill.id]?.icon)
                     : undefined
               }
               detalhe={

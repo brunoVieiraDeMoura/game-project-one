@@ -43,6 +43,28 @@ const OMBRO = 0.3;
 const RETRATO_FPS = 24;
 
 /**
+ * Libera o contexto WebGL do retrato NA HORA do desmonte, sem esperar o R3F.
+ *
+ * `@react-three/fiber` já chama `gl.forceContextLoss()` sozinho no desmonte
+ * (`unmountComponentAtNode`, dist/events-*.js) — mas dentro de um
+ * `setTimeout(..., 500)`. Um retrato isolado sumindo e voltando cabe fácil
+ * nessa janela. O char-select não: ele é uma TELA INTEIRA de retratos (um por
+ * personagem da lista) que desmonta de uma vez quando o jogador clica para
+ * entrar, exatamente no instante em que o `PlayView` monta os PRÓPRIOS
+ * contextos (jogo + placa do jogador). Por 500 ms os dois lados ficam vivos
+ * ao mesmo tempo — é essa pilha, não um perdido isolado, que estoura o teto
+ * de ~16 do Chrome e derruba o contexto do JOGO (mesmo mecanismo já
+ * documentado em `core/diagnostics/rendererProbe.ts`, achado com dado real:
+ * "Context Lost × 19"). Forçar aqui, síncrono, tira o retrato da soma antes
+ * do `PlayView` sequer pedir o dele.
+ */
+function LiberarContextoAoDesmontar() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => () => gl.forceContextLoss(), [gl]);
+  return null;
+}
+
+/**
  * Pede um quadro em intervalo fixo — o motor do `frameloop="demand"`.
  *
  * Com `demand`, o R3F só desenha quando alguém chama `invalidate()`. Sem isto o
@@ -257,6 +279,7 @@ export function CharacterPortrait({
         style={{ position: "absolute", inset: 0 }}
       >
         <Pulso />
+        <LiberarContextoAoDesmontar />
         {/* Um contexto WebGL à parte, e foi o vai-e-vem deles que estourou o
             teto do Chrome e derrubou o contexto do JOGO. A sonda os põe na
             coluna `contextosVivos` do flight recorder; ela não dispara captura

@@ -34,14 +34,26 @@ attribute vec4 aFrameUv; // u0, v0, u1, v1
 attribute vec3 aColor;
 attribute float aOpacity;
 attribute float aRotation;
+// empacotado num vec3 SÓ (não 3 attributes separados) — WebGL conta 1 slot
+// de vertex attribute por VARIAVEL, não por componente (vec3/vec4 custam o
+// mesmo 1 slot que um float); MAX_VERTEX_ATTRIBS de alguns drivers (achado
+// real: SwiftShader/software renderer deste projeto, ver docs/claude-context/09)
+// fica perto do limite garantido do WebGL2 (16) — 3 floats soltos aqui
+// estourava ("Too many attributes"), 1 vec3 não.
+// x=seed, y=noiseAmt, z=flameShape (>0.5 = ligado), w=breatheAmt (respiração
+// ANCORADA NA BASE — pedido "começa em 0% na base, termina em 100% no
+// topo", ver docblock abaixo).
+attribute vec4 aFlameParams;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vOpacity;
+varying vec4 vFlameParams;
 void main() {
   vec2 frameUv = mix(aFrameUv.xy, aFrameUv.zw, uv);
   vUv = frameUv;
   vColor = aColor;
   vOpacity = aOpacity;
+  vFlameParams = aFlameParams;
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
   float c = cos(aRotation);
@@ -51,19 +63,126 @@ void main() {
   // (esticar antes da rotação enviesaria o losango pra uma direção diagonal em
   // vez de alongar reto na tela, ver docblock de dropStretch.ts).
   rotated.y *= aStretch;
+  // respiração "pra frente/pra trás" (pedido: crescer/encolher, NÃO o lean
+  // lateral de aRotation) ANCORADA na base do quad: uv.y vai de 0 (borda
+  // de baixo) a 1 (borda de cima) ANTES do stretch escalar — na borda de
+  // baixo o termo é 0 (posição intocada, "0% na base"), na borda de cima
+  // vira aFlameParams.w inteiro somado ao topo já esticado ("100% no
+  // topo", mesma amplitude que a antiga escala uniforme dava lá, só que sem
+  // mover a base junto). Ausente/0 = comportamento de sempre.
+  rotated.y += aFlameParams.w * 0.5 * aStretch * clamp(uv.y, 0.0, 1.0);
   vec3 worldOffset = (right * rotated.x + up * rotated.y) * aScale;
   gl_Position = projectionMatrix * viewMatrix * vec4(aOffset + worldOffset, 1.0);
 }`;
 
+/**
+ * `aFlameParams` (x=seed, y=noiseAmt, z=flameShape, w=breatheAmt — Fire
+ * Wall, pedido "muito circular, tem que parecer mais com chama" + "noise
+ * pra balançar/crepitar" + gradiente vertical vermelho escuro→laranja→
+ * amarelo + respiração ancorada na base) — modo OPT-IN por instância no
+ * placeholder procedural (sem atlas), MESMO espírito de `payload.flipX`/
+ * `payload.depthTest`: `z<=0.5` = comportamento de sempre (disco radial
+ * branco tingido por `vColor`), nenhuma outra skill muda. Empacotado num
+ * ÚNICO `vec4` (não 4 `attribute float` separados) — achado real ao testar
+ * ao vivo: attributes soltos estouravam `MAX_VERTEX_ATTRIBS` do driver
+ * ("Too many attributes (aFlameShape)", SwiftShader/software renderer
+ * deste projeto, ver docs/claude-context/09) porque `InstancedMesh` já
+ * consome 4 slots com `instanceMatrix` + 2 com `position`/`uv` da
+ * geometria — WebGL conta 1 slot por VARIÁVEL de attribute, não por
+ * componente, então 1 `vec4` custa o mesmo 1 slot que 1 `float` custava
+ * sozinho (e o mesmo que o `vec3` de antes, `w` novo veio "de graça").
+ *
+ * `w` (breatheAmt) resolve o pedido "essa animação balançando pra frente e
+ * pra trás... começa em 0% na base e termina em 100% no topo": ANTES, a
+ * respiração de escala (`idleFlicker.ts: scaleMul`) multiplicava o `aScale`
+ * inteiro, simétrico a partir do CENTRO do quad — a base descia junto
+ * quando a chama "crescia". Agora `SpriteRenderer.ts` NÃO dobra
+ * `idle.scaleMul` em `aScale` pra camadas `flameShape` — passa
+ * `scaleMul-1` aqui, e o `VERTEX` soma isso à posição já esticada
+ * PONDERADO por `uv.y` (0 na borda de baixo do quad, 1 na de cima): base
+ * fica intocada, topo recebe a amplitude cheia (mesma magnitude que a
+ * escala uniforme dava antes no topo, só que sem arrastar a base).
+ *
+ * `z>0.5` troca o disco por uma forma de CHAMA de verdade, calculada em
+ * `vUv.y` (0=base do quad, 1=ponta — mesmo eixo que `aStretch` já alonga):
+ * raio mais largo embaixo, afinando pra cima (`radiusAtY`), gradiente de
+ * cor fixo embutido no shader (vermelho escuro→laranja→amarelo, do
+ * pedido), e ruído 2D barato (`vnoise`, hash+interpolação bilinear, sem
+ * textura) perturbando tanto a borda quanto o raio — `x` (seed) desfasa o
+ * ruído por instância (senão todas as células "crepitariam" em sincronia
+ * perfeita, mesmo problema que idleFlicker.ts já resolve pra escala/
+ * opacidade) e `uTime` (já incrementado em `flush()` pra qualquer skill que
+ * use `ring`, aqui reaproveitado) anima o ruído no tempo — sem custo extra:
+ * mesmo `uniform` que já existia, só passou a ser lido no fragment também.
+ */
 const FRAGMENT = `
+uniform float uTime;
 uniform sampler2D uMap;
 uniform bool uHasAtlas;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vOpacity;
+varying vec4 vFlameParams; // x=seed, y=noiseAmt, z=flameShape (>0.5 = ligado), w=breatheAmt
+
+float vhash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(vhash(i), vhash(i + vec2(1.0, 0.0)), u.x), mix(vhash(i + vec2(0.0, 1.0)), vhash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
 void main() {
-  vec4 tex = uHasAtlas ? texture2D(uMap, vUv) : vec4(1.0, 1.0, 1.0, smoothstep(0.5, 0.0, distance(vUv, vec2(0.5))));
-  gl_FragColor = vec4(vColor * tex.rgb, tex.a * vOpacity);
+  if (uHasAtlas) {
+    vec4 tex = texture2D(uMap, vUv);
+    gl_FragColor = vec4(vColor * tex.rgb, tex.a * vOpacity);
+  } else if (vFlameParams.z > 0.5) {
+    float vNoiseAmt = vFlameParams.y;
+    float t = clamp(vUv.y, 0.0, 1.0);
+    float seedOff = vFlameParams.x * 41.0;
+    // 3ª rodada ("força mais ruído, mas mantém a forma reconhecível") — 4
+    // octaves agora (era 3): bojo grande (baixa freq, dá o formato geral) +
+    // aperto médio + rasgado fino (alta freq, textura de borda irregular
+    // "esfarrapada") — cada um pesa MENOS que o anterior (soma sempre
+    // controlada, nunca destrói a silhueta base). A curva corpo→ponta virou
+    // um mix CONTÍNUO (era um t<0.4?: com quina visível na derivada,
+    // uma pista geométrica a menos) em vez de troca abrupta.
+    float n1 = vnoise(vec2(t * 1.4 + seedOff, uTime * 0.3 + seedOff)) - 0.5;
+    float n2 = vnoise(vec2(t * 3.1 + seedOff * 1.7, uTime * 0.7 + seedOff)) - 0.5;
+    float n3 = vnoise(vec2(vUv.x * 9.0 + seedOff, t * 11.0 - uTime * 2.2 + seedOff)) - 0.5;
+    float n4 = vnoise(vec2(vUv.x * 18.0 + seedOff * 2.3, t * 22.0 - uTime * 3.4 + seedOff)) - 0.5;
+    float bulge = (n1 * 0.55 + n2 * 0.3 + n3 * 0.15) * 0.32 * vNoiseAmt;
+    float ragged = n4 * 0.09 * vNoiseAmt;
+    float sway = n1 * 0.1 * vNoiseAmt;
+    float bodyRadius = mix(0.4, 0.3, smoothstep(0.0, 0.4, t));
+    float tipRadius = mix(0.3, 0.04, pow(clamp((t - 0.4) / 0.6, 0.0, 1.0), 1.5));
+    float baseRadius = mix(bodyRadius, tipRadius, smoothstep(0.3, 0.5, t));
+    float radiusAtY = max(0.012, baseRadius + bulge + ragged);
+    float dx = abs(vUv.x - 0.5 + sway);
+    float edgeSoftness = 0.09 + 0.05 * vNoiseAmt;
+    float shapeAlpha = smoothstep(radiusAtY, radiusAtY - edgeSoftness, dx);
+    float verticalFade = smoothstep(0.0, 0.05, t) * smoothstep(1.0, 0.88, t);
+    float alpha = shapeAlpha * verticalFade;
+
+    // gradiente do pedido: mais clara (quase branca) na BASE, vermelho
+    // escuro na base, laranja subindo, amarelo na ponta — SEM parada branca
+    // (pedido: "tira a parte branca de baixo").
+    vec3 cDarkRed = vec3(0.55, 0.09, 0.04);
+    vec3 cOrange = vec3(1.0, 0.46, 0.09);
+    vec3 cYellow = vec3(1.0, 0.82, 0.36);
+    vec3 col;
+    if (t < 0.6) {
+      col = mix(cDarkRed, cOrange, t / 0.6);
+    } else {
+      col = mix(cOrange, cYellow, min(1.0, (t - 0.6) / 0.4));
+    }
+    gl_FragColor = vec4(col * vColor, alpha * vOpacity);
+  } else {
+    float a = smoothstep(0.5, 0.0, distance(vUv, vec2(0.5)));
+    gl_FragColor = vec4(vColor, a * vOpacity);
+  }
   if (gl_FragColor.a <= 0.001) discard;
 }`;
 
@@ -108,6 +227,8 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
   private colorAttr!: Float32Array;
   private opacityAttr!: Float32Array;
   private rotationAttr!: Float32Array;
+  /** x=seed, y=noiseAmt, z=flameShape, w=breatheAmt — empacotado num vec4 só, ver docblock do `FRAGMENT` acima. */
+  private flameParamsAttr!: Float32Array;
 
   /**
    * Achado da auditoria Fase 4 (relatório, seção C): `flush()` marcava os 6
@@ -155,6 +276,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     const colorAttr = new Float32Array(newCapacity * 3).fill(1);
     const opacityAttr = new Float32Array(newCapacity);
     const rotationAttr = new Float32Array(newCapacity);
+    const flameParamsAttr = new Float32Array(newCapacity * 4);
 
     // default do frame UV é "atlas inteiro" (u1=v1=1) — preenchido ANTES de
     // copiar o estado preservado, pra nunca sobrescrever um UV real por
@@ -172,6 +294,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     if (this.colorAttr) colorAttr.set(this.colorAttr);
     if (this.opacityAttr) opacityAttr.set(this.opacityAttr);
     if (this.rotationAttr) rotationAttr.set(this.rotationAttr);
+    if (this.flameParamsAttr) flameParamsAttr.set(this.flameParamsAttr);
 
     geometry.setAttribute("aOffset", new THREE.InstancedBufferAttribute(offset, 3));
     geometry.setAttribute("aScale", new THREE.InstancedBufferAttribute(scaleAttr, 1));
@@ -180,6 +303,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     geometry.setAttribute("aColor", new THREE.InstancedBufferAttribute(colorAttr, 3));
     geometry.setAttribute("aOpacity", new THREE.InstancedBufferAttribute(opacityAttr, 1));
     geometry.setAttribute("aRotation", new THREE.InstancedBufferAttribute(rotationAttr, 1));
+    geometry.setAttribute("aFlameParams", new THREE.InstancedBufferAttribute(flameParamsAttr, 4));
 
     const mesh = new THREE.InstancedMesh(geometry, material, newCapacity);
     mesh.frustumCulled = false;
@@ -205,6 +329,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     this.colorAttr = colorAttr;
     this.opacityAttr = opacityAttr;
     this.rotationAttr = rotationAttr;
+    this.flameParamsAttr = flameParamsAttr;
     this.capacity = newCapacity;
     // índices em [highWater, newCapacity) ficam DISPONÍVEIS mas fora da
     // free-list de propósito (lista "preguiçosa" — `acquireSlot` incrementa
@@ -251,6 +376,22 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
       stretch?: number;
       color?: readonly [number, number, number];
       uv?: readonly [number, number, number, number];
+      /** fase determinística por instância (`idleFlicker.ts`/`aFlameShape`
+       * já usam o mesmo `instanceId`-derivado) — ausente/`0` só importa pra
+       * quem lê `aSeed` no shader (hoje só o modo `flameShape`). */
+      seed?: number;
+      /** intensidade do ruído do modo `flameShape` (`aFlameParams.y`) — `0`/
+       * ausente = sem ruído, mesmo com `flameShape:true` (forma de chama
+       * "lisa"). */
+      noiseAmt?: number;
+      /** liga o modo "forma de chama" do placeholder procedural
+       * (`aFlameParams.z`, ver docblock do `FRAGMENT` acima) — `false`/
+       * ausente = disco radial de sempre, nenhuma outra skill muda. */
+      flameShape?: boolean;
+      /** respiração ancorada na base (`aFlameParams.w`) — `0`/ausente =
+       * quad não respira (só some se quem chama nunca passar isto). Só faz
+       * sentido junto com `flameShape:true`; ver docblock do `VERTEX`. */
+      breatheAmt?: number;
     },
   ): void {
     this.offset[index * 3] = data.position[0];
@@ -260,6 +401,10 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     this.stretchAttr[index] = data.stretch ?? 1;
     this.opacityAttr[index] = data.opacity;
     this.rotationAttr[index] = data.rotation ?? 0;
+    this.flameParamsAttr[index * 4] = data.seed ?? 0;
+    this.flameParamsAttr[index * 4 + 1] = data.noiseAmt ?? 0;
+    this.flameParamsAttr[index * 4 + 2] = data.flameShape ? 1 : 0;
+    this.flameParamsAttr[index * 4 + 3] = data.breatheAmt ?? 0;
     const color = data.color ?? [1, 1, 1];
     this.colorAttr[index * 3] = color[0];
     this.colorAttr[index * 3 + 1] = color[1];
@@ -308,6 +453,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
       ["aColor", 3],
       ["aOpacity", 1],
       ["aRotation", 1],
+      ["aFlameParams", 4],
     ];
     for (const [name, componentsPerVertex] of attrs) {
       const attr = this.mesh.geometry.getAttribute(name) as THREE.InstancedBufferAttribute;

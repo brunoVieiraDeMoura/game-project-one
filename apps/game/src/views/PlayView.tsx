@@ -50,10 +50,12 @@ import { aplicarNevoaDoCeu } from "../scene/skyFog";
 import { SKY_HORIZON, SKY_TOP } from "../scene/skyGradient.glsl";
 import { RetroFilter } from "../scene/RetroFilter";
 import { PerfProbe, PerfOverlay } from "../scene/PerfHud";
-import { SondaDeCena, SondaDeSuspense } from "../core/diagnostics/SondaDeCanvas";
+import { attachWebglContextRecovery } from "../core/webglContextRecovery";
+import { SondaDeCena, SondaDeSuspense, SondaDeRender } from "../core/diagnostics/SondaDeCanvas";
 import { PreCompilarProps } from "../play/PreCompilarProps";
 import { marcarPropsVisiveis } from "../core/diagnostics/cenaProbe";
 import { isolado } from "../core/diagnostics/isolamento";
+import { medir } from "../core/diagnostics/medir";
 import { scaleToWorld, useGameplayConfig } from "../play/useGameplayConfig";
 import { scatterDemoProps, findWalkableStart } from "../play/demoProps";
 import { DamageNumbers } from "../combat/DamageNumbers";
@@ -78,8 +80,10 @@ import { GroundItems, useGroundItems } from "../net/GroundItems";
 import { MapAmbience } from "../audio/mapAmbience";
 import { preloadAssets } from "../assets";
 import { preloadPropsDoMapa, urlsDoMapa } from "../props/registry";
+import { preloadWindowArt } from "../ui/preloadWindowArt";
 
 preloadAssets();
+preloadWindowArt();
 
 // culling por distância (mapas hex): render só o pedaço ao redor do player.
 // Raios/névoa vêm da config do game (admin /game-editor). Props renderizam ALÉM
@@ -926,18 +930,22 @@ function Scene({
   // demonstração, punhado de props) passa direto.
   const culled = map.terrainMode !== "smooth";
   const allProps = culled ? map.props : world.props;
-  const visibleProps = useMemo(() => {
-    // isolamento (Fase C, `?iso=semProps`): nenhum prop monta — hoje é sempre
-    // vazio em mapa real (`props: []` na migração), então isto só tem efeito
-    // visível no `smooth` legado/editor
-    if (isolado("semProps")) return [];
-    if (!culled) return allProps;
-    const r2 = PROP_RADIUS * PROP_RADIUS;
-    return allProps.filter((p) => {
-      const dx = p.position[0] - center.x, dz = p.position[2] - center.z;
-      return dx * dx + dz * dz <= r2;
-    });
-  }, [allProps, culled, center.x, center.z, PROP_RADIUS]);
+  const visibleProps = useMemo(
+    () =>
+      medir("props→cull", () => {
+        // isolamento (Fase C, `?iso=semProps`): nenhum prop monta — hoje é sempre
+        // vazio em mapa real (`props: []` na migração), então isto só tem efeito
+        // visível no `smooth` legado/editor
+        if (isolado("semProps")) return [];
+        if (!culled) return allProps;
+        const r2 = PROP_RADIUS * PROP_RADIUS;
+        return allProps.filter((p) => {
+          const dx = p.position[0] - center.x, dz = p.position[2] - center.z;
+          return dx * dx + dz * dz <= r2;
+        });
+      }),
+    [allProps, culled, center.x, center.z, PROP_RADIUS],
+  );
 
   /**
    * `visibleProps` muda a cada 16 unidades andadas (`useViewCenter`), e é
@@ -1043,6 +1051,7 @@ function Scene({
             mapas do rAthena, plano único no "smooth" legado. */}
         {/* nome é contrato com o GroundInteract: o clique mira o TOPO do terreno,
             não o plano de y=0 — sobre um bloco alto os dois estão longe um do outro */}
+        <SondaDeRender id="centro-vegetacao">
         <group name={TERRAIN_GROUP}>
           {isolado("semTerreno") ? null : isHex ? (
             <HexTerrain map={map} center={center} radius={TERRAIN_RADIUS} ground={gameplay} />
@@ -1146,6 +1155,7 @@ function Scene({
               </Suspense>
             ))}
         </group>
+        </SondaDeRender>
         {/* avança o relógio do vento (props/wind.ts) — UM useFrame pro mapa
             inteiro, nenhuma planta tem update individual */}
         <WindSystem />
@@ -1785,6 +1795,18 @@ export function PlayView() {
          * global, sem passe de render extra, sem tocar em nenhuma luz.
          */
         gl={{ toneMappingExposure: 1.25 }}
+        /**
+         * `attachWebglContextRecovery` direto aqui, não num componente filho
+         * (`useEffect`) — achado ao vivo: o `Context Lost` real acontece
+         * LOGO no login, durante `AquecerCena` (pico de compilação de
+         * shader), ANTES do primeiro commit do React terminar. `onCreated`
+         * dispara SÍNCRONO assim que o `WebGLRenderer` nasce, antes de
+         * qualquer filho montar — um `useEffect` de filho perdia essa
+         * janela (`ver core/webglContextRecovery.ts`). Canvas principal
+         * vive a sessão de jogo inteira; sem cleanup explícito aqui de
+         * propósito, o listener morre com a página/o canvas.
+         */
+        onCreated={(state) => attachWebglContextRecovery(state.gl)}
       >
         {/* Fora do Suspense: tem de valer já no primeiro quadro, antes de
             qualquer .gltf resolver.

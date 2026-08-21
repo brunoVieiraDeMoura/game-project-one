@@ -197,3 +197,16 @@ name" table; extend `ELEMENT_PALETTE` if a new element shows up.
   the server already sends the real count.
 - A new `VfxDefinition`/component per skill for something that's just "the generic shard
   with a different color" — check `MULTI_HIT_SHARD_VFX` / `COMBAT_HIT_VFX_ID` first.
+- Giving an existing `payload.*` field a new fallback/meaning without checking who else
+  already populates it — real incident: a fallback was added to `orbitOffset.ts` so Oracle's
+  orbs could read `payload.areaRadius` for their orbit radius; `migratedVfxBridge.ts` already
+  writes that same field on *every* impact-kind skill (for Fire Ball's smoke/ember spread
+  radius, unrelated to orbiting), so Fire Ball's core/glow/trail sprites silently picked up a
+  constant lateral offset too (an "orbit" with speed 0 is just a fixed displacement) — origin
+  *and* destination of the projectile shifted, with zero errors anywhere. `payload.*` is one
+  flat namespace shared by every layer of an instance, not scoped per-skill or per-renderer —
+  before making a shared renderer (`*Renderer.ts`, `*Offset.ts`) read an existing field for a
+  new purpose, `grep` every current reader/writer of that exact field name across `vfx/**`
+  first. If a skill needs a value another skill's field happens to already carry, give the
+  new use its own explicit field (or, like Oracle ended up doing, a skill-local constant) —
+  never share a field across two unrelated meanings.

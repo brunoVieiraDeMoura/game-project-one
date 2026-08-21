@@ -23,11 +23,13 @@
   "dependencies": {
     "@fastify/compress": "^9.1.0",
     "@fastify/cors": "^11.0.0",
+    "@fastify/multipart": "^9.0.0",
     "@ragnarok/game-data": "workspace:*",
     "@ragnarok/map-format": "workspace:*",
     "@supabase/supabase-js": "^2.110.7",
     "fastify": "^5.3.0",
     "mysql2": "^3.23.2",
+    "sharp": "^0.34.5",
     "yaml": "^2.7.0",
     "zod": "^3.24.0"
   },

@@ -28,4 +28,12 @@ export interface ItemRepository {
   create(item: Item): Promise<Item>;
   update(id: number, item: Item): Promise<Item | undefined>;
   remove(id: number): Promise<boolean>;
+  /**
+   * Ícone visual do item (`Item.icon`, um nome de arquivo em
+   * `public/assets/items/`) — separado de `update()` de propósito: quem tem
+   * esse campo em coluna própria acaba de ganhar upload de verdade
+   * (`POST /items/:id/icon`), os outros backends (JSON, Supabase legado)
+   * seguem sem ele. `undefined` = backend não suporta.
+   */
+  setIcon?(id: number, filename: string | null): Promise<Item | undefined>;
 }

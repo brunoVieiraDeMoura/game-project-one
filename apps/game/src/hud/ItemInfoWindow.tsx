@@ -4,6 +4,7 @@ import { useItemCatalog, getItemDisplayName, type ItemInfo } from "../net/itemCa
 import { useItemInfoStore } from "../net/itemInfoStore";
 import { CurvedBox } from "../ui/CurvedBox";
 import { IconSquare, LoadingRing } from "../ui/rpg";
+import { itemIconUrl } from "../net/itemIcons";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { CHROME, TYPE, WINDOW_SCALE } from "../ui/windowChrome";
 import { BOOK } from "../ui/travelbook";
@@ -156,7 +157,12 @@ function ColunaEsquerda({ item, info }: { item: { itemId: number; amount: number
       <div style={{ width: px(ICONE), height: px(ICONE), flex: "none" }}>
         {/* anel de loading enquanto o catálogo não respondeu — nunca o
             quadrado por seed de itemId (regra absoluta, auditoria 2026-08-14) */}
-        <IconSquare seed={info ? `item-${item.itemId}` : undefined} loading={!info} size={px(ICONE)} />
+        <IconSquare
+          seed={info ? `item-${item.itemId}` : undefined}
+          loading={!info}
+          imageSrc={itemIconUrl(info?.icon)}
+          size={px(ICONE)}
+        />
       </div>
       {info && (
         <>

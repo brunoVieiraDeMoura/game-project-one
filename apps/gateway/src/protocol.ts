@@ -74,8 +74,14 @@ export interface ServerEvents {
 		char: CharSummary | null;
 	}) => void;
 	"self:move": (payload: { from: Cell; to: Cell; startTime: number; speed: number }) => void;
-	/** o servidor pôs o personagem noutra célula sem andar (teleporte, empurrão) */
-	"self:warp": (payload: Cell) => void;
+	/**
+	 * o servidor pôs o personagem noutra célula sem andar (teleporte, empurrão).
+	 * `teleporte: true` (ZC_HIGHJUMP — Blink/Backslide) força o cliente a tratar
+	 * como snap seco mesmo quando o deslocamento é curto e/ou para trás em
+	 * relação ao rumo — sem a flag, `aplicarFixpos` pode confundir um empurrão
+	 * curto pra trás com "o servidor está atrasado" e não mover o personagem.
+	 */
+	"self:warp": (payload: Cell & { teleporte?: boolean }) => void;
 	/** o alvo está longe demais: o rAthena NÃO persegue por você (unit.cpp:3259) */
 	"attack:too-far": (payload: { gid: number; x: number; y: number; euX: number; euY: number; range: number }) => void;
 	/** o servidor recusou o disparo por falta de flecha (`ZC_ACTION_FAILURE`, `ARROWFAIL_NO_AMMO`) */
@@ -132,6 +138,37 @@ export interface ServerEvents {
 	"skill:ground-cast": (payload: SkillGroundCast) => void;
 	"skill:ground": (payload: SkillGround) => void;
 	"skill:ground-gone": (payload: { gid: number }) => void;
+	/**
+	 * Cúpula Fantasma/Safety Wall bloqueou um ataque de VERDADE — sinal
+	 * AUTORITATIVO do servidor (`rathena-patches/0001`), não heurística de
+	 * "miss + mesma célula". `ZC_USE_SKILL` (0x011a) real, mas SÓ pra
+	 * `SKID===MG_SAFETYWALL` (id 12, `skill_db.yml`) — por isso tem evento
+	 * próprio em vez de virar `skill:cast{kind:"buff"}` genérico (ver
+	 * `session.ts`, hook de `USE_SKILL`/`USE_SKILL2`).
+	 *
+	 * `remainingHits` é `group->val2` do rAthena JÁ DECREMENTADO (cargas que
+	 * sobram depois deste bloqueio; 0 = a Cúpula acabou de cair). É só pra
+	 * diagnóstico/log — o client NÃO deve usar isto pra decidir se um
+	 * bloqueio aconteceu (o próprio evento já é a prova; contar de novo no
+	 * client seria reintroduzir a mesma classe de suposição que este evento
+	 * existe pra eliminar).
+	 *
+	 * Sem `cell`: a célula nunca foi o que provava o bloqueio (era só a
+	 * aproximação heurística antiga) — o evento real não precisa dela.
+	 *
+	 * `wasHit` reaproveita o campo `result` do `ZC_USE_SKILL` (normalmente
+	 * "a skill funcionou") — aqui significa "a carga consumida veio de um
+	 * HIT de verdade" (`wd.damage+wd.damage2>0` antes do servidor zerar o
+	 * dano) vs. um MISS que também consumiu carga. Serve só pra dar mais
+	 * destaque visual ao VFX num bloqueio de HIT real — não é sinal de
+	 * dano nenhum, o dano final é sempre 0 nos dois casos.
+	 */
+	"ghost-dome-block": (payload: {
+		sourceGid: number;
+		targetGid: number;
+		remainingHits: number;
+		wasHit: boolean;
+	}) => void;
 	/**
 	 * Recarga da skill (ZC_SKILL_POSTDELAY, 0x43d). É o servidor que decide
 	 * quanto dura — o cliente só desenha. Chega DEPOIS do uso, junto com o
