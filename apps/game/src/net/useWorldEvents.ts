@@ -1000,6 +1000,8 @@ export function useWorldEvents(): void {
       y: number;
       subX: number;
       subY: number;
+      mobId?: number;
+      freshDrop?: boolean;
     }) => {
       useGroundItems.getState().put(p);
       // drop raro — correlação com a morte de monstro mais próxima (ver

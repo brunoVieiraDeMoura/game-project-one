@@ -1,5 +1,6 @@
 import { dropRateFor, ensureMonsterDrops } from "../net/monsterDropCatalog";
 import { playOneShot } from "./oneShotPool";
+import type { LootRarityTier } from "../vfx/loot/lootRarityTiers";
 
 /**
  * SFX de item — GLOBAIS, todas as classes/evoluções, sem portão
@@ -9,6 +10,25 @@ import { playOneShot } from "./oneShotPool";
 const MOVE = "/assets/audio/item/move-item.mp3";
 const RARE = "/assets/audio/item/rare-drop.mp3";
 const TAKE = "/assets/audio/item/take-item.mp3";
+
+/**
+ * Som de raridade da aura de drop (pedido do usuário 2026-08-21) — só
+ * épico/lendário/mítico tocam; comum/incomum/raro ficam mudos, mesma regra
+ * de "não chamar atenção" que a própria aura visual já segue pros tiers
+ * baixos (`vfx/loot/lootRarityVfxDefGpu.ts`). Chamado uma vez por drop,
+ * quando o tier RESOLVE de verdade (`vfx/loot/LootRarityAura.tsx`), nunca
+ * por frame.
+ */
+const RARITY_SFX: Partial<Record<LootRarityTier, string>> = {
+  epic: "/assets/audio/item/epic-drop.mp3",
+  legendary: "/assets/audio/item/legendary-drop.mp3",
+  mythic: "/assets/audio/item/mythic-drop.mp3",
+};
+
+export function tocarSomDeRaridade(tier: LootRarityTier): void {
+  const sfx = RARITY_SFX[tier];
+  if (sfx) playOneShot(sfx);
+}
 
 /**
  * Item mudou de container (inventário ↔ barra de atalhos) — chamar da

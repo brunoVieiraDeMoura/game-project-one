@@ -1529,6 +1529,15 @@ export class RoSession extends EventEmitter {
 					// célula não ficam empilhados no mesmo pixel
 					subX: pkt.subX ?? 0,
 					subY: pkt.subY ?? 0,
+					// campo custom (2026-08-21) — só ITEM_ENTRY/ITEM_FALL_ENTRY2 têm
+					// (patch em rathena/src/map/packets_struct.hpp); `undefined` nos
+					// outros dois opcodes, não patcheados e não usados neste PACKETVER.
+					mobId: pkt.mob_id,
+					// campo custom (2026-08-21) — flooritem_data.fresh_drop: `true` =
+					// rolagem de verdade na tabela do monstro, `false` = re-drop de
+					// item que um looter (mode_looter) tinha pego antes. Mesma
+					// disponibilidade que mobId (só ITEM_ENTRY/ITEM_FALL_ENTRY2).
+					freshDrop: pkt.fresh_drop === undefined ? undefined : Boolean(pkt.fresh_drop),
 				});
 			});
 		}

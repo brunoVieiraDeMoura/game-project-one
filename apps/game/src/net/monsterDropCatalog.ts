@@ -19,12 +19,21 @@ interface DropsDoMonstro {
 
 const porMobId: Record<number, DropsDoMonstro> = {};
 const pendentes = new Set<number>();
+const pendentesPromise = new Map<number, Promise<void>>();
 
-/** pede a tabela de drop de `mobId`, se ainda não tiver — idempotente, uma requisição por id */
-export function ensureMonsterDrops(mobId: number): void {
-  if (mobId <= 0 || porMobId[mobId] || pendentes.has(mobId)) return;
+/** pede a tabela de drop de `mobId`, se ainda não tiver — idempotente, uma requisição por id.
+ * Devolve uma Promise que resolve quando o dado está disponível (já em cache
+ * OU recém-buscado) — quem só dispara o pré-carregamento (`itemSfx.ts`) ignora
+ * o retorno; quem precisa SABER quando `dropRateFor` já responde de verdade
+ * (`vfx/loot/LootRarityAura.tsx`, que não tem outro jeito de re-renderizar
+ * depois de um fetch fora de um store reativo) usa o `await`. */
+export function ensureMonsterDrops(mobId: number): Promise<void> {
+  if (mobId <= 0) return Promise.resolve();
+  if (porMobId[mobId]) return Promise.resolve();
+  if (pendentes.has(mobId)) return pendentesPromise.get(mobId) ?? Promise.resolve();
+
   pendentes.add(mobId);
-  fetch(`${API_URL}/monsters/${mobId}`)
+  const promise = fetch(`${API_URL}/monsters/${mobId}`)
     .then((r) => (r.ok ? r.json() : null))
     .then((m: { drops?: MonsterDrop[]; mvpDrops?: MonsterDrop[] } | null) => {
       if (m) porMobId[mobId] = { drops: m.drops ?? [], mvpDrops: m.mvpDrops ?? [] };
@@ -32,7 +41,12 @@ export function ensureMonsterDrops(mobId: number): void {
     // monstro sem registro (id de player, npc etc. batendo aqui por engano) ou
     // rede fora do ar: não é motivo pra derrubar nada, só fica sem o dado
     .catch(() => undefined)
-    .finally(() => pendentes.delete(mobId));
+    .finally(() => {
+      pendentes.delete(mobId);
+      pendentesPromise.delete(mobId);
+    });
+  pendentesPromise.set(mobId, promise);
+  return promise;
 }
 
 /**
@@ -51,4 +65,5 @@ export function dropRateFor(mobId: number, itemId: number): number | undefined {
 export function __resetForTests(): void {
   for (const k of Object.keys(porMobId)) delete porMobId[Number(k)];
   pendentes.clear();
+  pendentesPromise.clear();
 }

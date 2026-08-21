@@ -75,6 +75,15 @@ export class SpriteRenderer extends InstancedBillboardBase {
     const scale = baseScale * (byTarget ? instance.targetScale : 1) * (instance.spawnOptions.scale ?? 1);
 
     let uv: readonly [number, number, number, number] = [0, 0, 1, 1];
+    // POR-INSTÂNCIA, nunca "todo mundo que usa este renderer" — achado real
+    // (leia1.txt, "Eletrocutar deixa toda skill de sprite com o raio dele"):
+    // antes desta correção, `hasAtlas` era um uniform do MATERIAL
+    // compartilhado (`instancedBillboardBase.ts`), então UMA instância de
+    // Eletrocutar resolvendo o atlas ligava a textura pra QUALQUER OUTRA
+    // instância do mesmo `InstancedMesh` (Fire Ball, Fire Wall, Cold Bolt…)
+    // até o renderer ser recriado. `hasAtlas` só fica `true` quando ESTA
+    // instância, com ESTE `def.atlas`, resolveu atlas+frame de verdade.
+    let hasAtlas = false;
     if (def.animation) {
       const frameResult = computeFrame(def.animation, elapsedMs);
       const atlas = def.atlas ? loadedAtlas(def.atlas) : undefined;
@@ -86,6 +95,7 @@ export class SpriteRenderer extends InstancedBillboardBase {
         // mesma textura/frame, espelhada. Genérico: qualquer skill com
         // atlas pode pedir isto, nunca um mecanismo novo por skill.
         uv = instance.spawnOptions.payload?.flipX === true ? [u1, v0, u0, v1] : [u0, v0, u1, v1];
+        hasAtlas = true;
       }
     }
 
@@ -160,6 +170,7 @@ export class SpriteRenderer extends InstancedBillboardBase {
       noiseAmt,
       flameShape,
       breatheAmt,
+      hasAtlas,
     });
   }
 }

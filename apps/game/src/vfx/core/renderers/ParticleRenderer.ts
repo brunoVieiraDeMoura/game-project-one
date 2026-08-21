@@ -14,6 +14,15 @@ import { computeCurveOffset } from "./curveOffset";
  * `buildAreaParticles`/`buildDecoys` (seed determinístico por instância),
  * só que a ANIMAÇÃO acontece aqui, escrita no slot a cada quadro em vez de
  * `@keyframes` CSS.
+ *
+ * LOD (T2, `core/importancia.ts`/`instance.lod`) reduz quantas das
+ * partículas ALOCADAS ficam ativas — mesmo mecanismo de
+ * `TrailRenderer.activeCountFor`: os slots em excesso continuam existindo
+ * (a contagem alocada na criação nunca muda), só ficam `writeInactiveSlot`.
+ * Único outro renderer com essa mesma estrutura (N slots por instância);
+ * Sprite/Ring/Beam/Cage são 1 slot/mesh por instância — não há "contagem"
+ * pra reduzir ali sem inventar um comportamento novo sem calibração real,
+ * então eles não ganham este tratamento (ver `docs/otimizacao-heuristicas.md`).
  */
 interface ParticleSpec {
   dx: number;
@@ -144,6 +153,16 @@ export class ParticleRenderer extends InstancedBillboardBase {
     for (const index of entry.indices) this.writeInactiveSlot(index);
   }
 
+  /** slots ALOCADOS nunca mudam (fixados na criação); só quantos ficam
+   * ATIVOS varia com LOD — mesma função de `TrailRenderer.activeCountFor`.
+   * Thresholds de LOD calibrados em `vfx/core/lod.ts`; enquanto ficarem no
+   * default (`Infinity`), `instance.lod` é sempre `"full"` e isto é no-op. */
+  private activeCountFor(instance: VfxInstanceRuntime, allocated: number): number {
+    if (instance.lod === "core") return Math.max(2, Math.round(allocated / 4));
+    if (instance.lod === "reduced") return Math.max(2, Math.round(allocated / 2));
+    return allocated;
+  }
+
   private writeFromInstance(instance: VfxInstanceRuntime, elapsedMs: number): void {
     const entry = this.slots.get(instance.instanceId);
     if (!entry) return;
@@ -165,10 +184,15 @@ export class ParticleRenderer extends InstancedBillboardBase {
     // que é crítico, só multiplica o que `hitVfxResolver.criticalScaleFor`
     // já resolveu.
     const critScale = instance.spawnOptions.scale ?? 1;
+    const activeCount = this.activeCountFor(instance, entry.indices.length);
 
     for (let i = 0; i < entry.indices.length; i++) {
-      const spec = entry.specs[i]!;
       const index = entry.indices[i]!;
+      if (i >= activeCount) {
+        this.writeInactiveSlot(index);
+        continue;
+      }
+      const spec = entry.specs[i]!;
       const cycle = ((elapsedMs - spec.delayMs) % spec.durMs) / spec.durMs;
       const alive = elapsedMs >= spec.delayMs;
       const fade = alive ? Math.sin(Math.max(0, Math.min(1, cycle)) * Math.PI) : 0;

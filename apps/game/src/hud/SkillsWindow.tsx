@@ -5,6 +5,7 @@ import { usePlayerStore } from "../net/playerStore";
 import { getSkillDisplayName, useSkillCatalog, type SkillInfo } from "../net/skillCatalog";
 import { skillIconUrl } from "../net/skillIcons";
 import { useHudStore } from "./hudStore";
+import { subscribeHudTick } from "./hudTick";
 import { IconSquare, LoadingRing } from "../ui/rpg";
 import { CHAR_FRAME, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { CHAT_ART } from "../ui/chatFrame";
@@ -699,20 +700,26 @@ function Icone({
  * `@keyframes` (o projeto é estilo inline, sem folha própria pra declarar
  * animação). Onda de seno em vez de opacidade linear: um pulso que acelera e
  * desacelera nas pontas lê como "vivo", linear lê como pisca-pisca de aviso.
+ *
+ * Relógio COMPARTILHADO (`hud/hudTick.ts`, T7) — sem taxa própria (roda todo
+ * quadro, igual antes). Antes usava o timestamp que o `requestAnimationFrame`
+ * cru passa pro callback como fase do seno; o tick compartilhado não repassa
+ * esse `t` (a maioria dos assinantes não usa), então a fase agora vem de
+ * `performance.now()` chamado aqui dentro — mesmo relógio monotônico, mesma
+ * curva, diferença de sub-milissegundo entre os dois é invisível num período
+ * de 450ms.
  */
 function PulsoDaEscolhida({ raio }: { raio: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    let raf = 0;
-    const passo = (t: number) => {
+    const passo = () => {
       if (ref.current) {
+        const t = performance.now();
         const alpha = 0.35 + (Math.sin(t / 450) * 0.5 + 0.5) * 0.4; // respira ~0.35..0.75
         ref.current.style.boxShadow = `0 0 ${raio}px rgba(232,187,84,${alpha})`;
       }
-      raf = requestAnimationFrame(passo);
     };
-    raf = requestAnimationFrame(passo);
-    return () => cancelAnimationFrame(raf);
+    return subscribeHudTick(passo);
   }, []);
   return <div ref={ref} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />;
 }

@@ -44,16 +44,27 @@ attribute float aRotation;
 // ANCORADA NA BASE — pedido "começa em 0% na base, termina em 100% no
 // topo", ver docblock abaixo).
 attribute vec4 aFlameParams;
+// POR-INSTÂNCIA, não uniform — achado real (leia1.txt, "Eletrocutar deixa
+// toda skill de sprite com o raio dele"): uHasAtlas como uniform de
+// MATERIAL (antes desta correção) valia pro InstancedMesh inteiro — uma
+// instância de Eletrocutar carregando o atlas ligava o branch de textura
+// pra TODA OUTRA instância do mesmo material (Fire Ball, Fire Wall, Cold
+// Bolt...) até o renderer ser recriado (reconnect). Cada instância decide
+// por si (SpriteRenderer.writeFromInstance, só true quando atlas+frame
+// resolveram de verdade), nunca uma decisão global.
+attribute float aHasAtlas;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vOpacity;
 varying vec4 vFlameParams;
+varying float vHasAtlas;
 void main() {
   vec2 frameUv = mix(aFrameUv.xy, aFrameUv.zw, uv);
   vUv = frameUv;
   vColor = aColor;
   vOpacity = aOpacity;
   vFlameParams = aFlameParams;
+  vHasAtlas = aHasAtlas;
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
   float c = cos(aRotation);
@@ -117,12 +128,17 @@ void main() {
  */
 const FRAGMENT = `
 uniform float uTime;
+// uMap continua um sampler SÓ (compartilhado) — hoje só existe 1 skill
+// com atlas de verdade (Eletrocutar), então "qual textura" nunca conflita.
+// Se uma SEGUNDA skill ganhar atlas próprio, isto precisa virar textura
+// por-instância (array/atlas-de-atlas) — fora de escopo aqui, documentado
+// pra não ser esquecido.
 uniform sampler2D uMap;
-uniform bool uHasAtlas;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vOpacity;
 varying vec4 vFlameParams; // x=seed, y=noiseAmt, z=flameShape (>0.5 = ligado), w=breatheAmt
+varying float vHasAtlas;
 
 float vhash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -135,7 +151,7 @@ float vnoise(vec2 p) {
 }
 
 void main() {
-  if (uHasAtlas) {
+  if (vHasAtlas > 0.5) {
     vec4 tex = texture2D(uMap, vUv);
     gl_FragColor = vec4(vColor * tex.rgb, tex.a * vOpacity);
   } else if (vFlameParams.z > 0.5) {
@@ -229,6 +245,8 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
   private rotationAttr!: Float32Array;
   /** x=seed, y=noiseAmt, z=flameShape, w=breatheAmt — empacotado num vec4 só, ver docblock do `FRAGMENT` acima. */
   private flameParamsAttr!: Float32Array;
+  /** POR-INSTÂNCIA (não uniform de material) — ver docblock do `VERTEX` acima. */
+  private hasAtlasAttr!: Float32Array;
 
   /**
    * Achado da auditoria Fase 4 (relatório, seção C): `flush()` marcava os 6
@@ -266,7 +284,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
       side: THREE.DoubleSide,
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
-      uniforms: { uTime: { value: 0 }, uMap: { value: getPlaceholderTexture() }, uHasAtlas: { value: false } },
+      uniforms: { uTime: { value: 0 }, uMap: { value: getPlaceholderTexture() } },
     });
 
     const offset = new Float32Array(newCapacity * 3);
@@ -277,6 +295,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     const opacityAttr = new Float32Array(newCapacity);
     const rotationAttr = new Float32Array(newCapacity);
     const flameParamsAttr = new Float32Array(newCapacity * 4);
+    const hasAtlasAttr = new Float32Array(newCapacity);
 
     // default do frame UV é "atlas inteiro" (u1=v1=1) — preenchido ANTES de
     // copiar o estado preservado, pra nunca sobrescrever um UV real por
@@ -295,6 +314,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     if (this.opacityAttr) opacityAttr.set(this.opacityAttr);
     if (this.rotationAttr) rotationAttr.set(this.rotationAttr);
     if (this.flameParamsAttr) flameParamsAttr.set(this.flameParamsAttr);
+    if (this.hasAtlasAttr) hasAtlasAttr.set(this.hasAtlasAttr);
 
     geometry.setAttribute("aOffset", new THREE.InstancedBufferAttribute(offset, 3));
     geometry.setAttribute("aScale", new THREE.InstancedBufferAttribute(scaleAttr, 1));
@@ -304,6 +324,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     geometry.setAttribute("aOpacity", new THREE.InstancedBufferAttribute(opacityAttr, 1));
     geometry.setAttribute("aRotation", new THREE.InstancedBufferAttribute(rotationAttr, 1));
     geometry.setAttribute("aFlameParams", new THREE.InstancedBufferAttribute(flameParamsAttr, 4));
+    geometry.setAttribute("aHasAtlas", new THREE.InstancedBufferAttribute(hasAtlasAttr, 1));
 
     const mesh = new THREE.InstancedMesh(geometry, material, newCapacity);
     mesh.frustumCulled = false;
@@ -330,6 +351,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     this.opacityAttr = opacityAttr;
     this.rotationAttr = rotationAttr;
     this.flameParamsAttr = flameParamsAttr;
+    this.hasAtlasAttr = hasAtlasAttr;
     this.capacity = newCapacity;
     // índices em [highWater, newCapacity) ficam DISPONÍVEIS mas fora da
     // free-list de propósito (lista "preguiçosa" — `acquireSlot` incrementa
@@ -392,6 +414,12 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
        * quad não respira (só some se quem chama nunca passar isto). Só faz
        * sentido junto com `flameShape:true`; ver docblock do `VERTEX`. */
       breatheAmt?: number;
+      /** ESTA instância deve amostrar `uMap` em vez do placeholder/forma
+       * procedural — `false`/ausente = comportamento de sempre (a imensa
+       * maioria). Só `SpriteRenderer.writeFromInstance` passa `true`, e só
+       * quando `def.atlas` + o frame do quadro atual realmente resolveram
+       * (ver docblock do `VERTEX` acima pro bug real que isto corrige). */
+      hasAtlas?: boolean;
     },
   ): void {
     this.offset[index * 3] = data.position[0];
@@ -405,6 +433,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     this.flameParamsAttr[index * 4 + 1] = data.noiseAmt ?? 0;
     this.flameParamsAttr[index * 4 + 2] = data.flameShape ? 1 : 0;
     this.flameParamsAttr[index * 4 + 3] = data.breatheAmt ?? 0;
+    this.hasAtlasAttr[index] = data.hasAtlas ? 1 : 0;
     const color = data.color ?? [1, 1, 1];
     this.colorAttr[index * 3] = color[0];
     this.colorAttr[index * 3 + 1] = color[1];
@@ -418,7 +447,12 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
   }
 
   /** tenta anexar o atlas real da definição — sem-op enquanto não existe
-   * (`loadedAtlas` devolve `undefined`, o placeholder continua valendo). */
+   * (`loadedAtlas` devolve `undefined`, o placeholder continua valendo).
+   * Só troca `uMap` (sampler compartilhado, ok enquanto só existir 1 skill
+   * com atlas — ver docblock do `FRAGMENT`) — NUNCA liga o branch de
+   * textura pra ninguém: isso é decisão por-instância agora
+   * (`aHasAtlas`/`writeSlot`, escrita por quem realmente resolveu
+   * atlas+frame em `SpriteRenderer.writeFromInstance`). */
   protected trySyncAtlas(def: VfxDefinition): void {
     if (!def.atlas || !this.material) return;
     void ensureAtlasLoaded(def.atlas).catch(() => {
@@ -427,7 +461,6 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
     const atlas = loadedAtlas(def.atlas);
     if (atlas) {
       this.material.uniforms.uMap!.value = atlas.texture;
-      this.material.uniforms.uHasAtlas!.value = true;
     }
   }
 
@@ -454,6 +487,7 @@ export abstract class InstancedBillboardBase implements VfxRenderer {
       ["aOpacity", 1],
       ["aRotation", 1],
       ["aFlameParams", 4],
+      ["aHasAtlas", 1],
     ];
     for (const [name, componentsPerVertex] of attrs) {
       const attr = this.mesh.geometry.getAttribute(name) as THREE.InstancedBufferAttribute;

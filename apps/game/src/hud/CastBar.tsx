@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { subscribeHudTick } from "./hudTick";
 import { useCastStore } from "../net/castStore";
 import { getSkillDisplayName, useSkillCatalog } from "../net/skillCatalog";
 import { BAR_FRAME_SLICE, FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
@@ -34,9 +35,11 @@ export function CastBar() {
 
   // O preenchimento e o relógio andam a cada quadro, mutando o DOM por ref —
   // `setState` 60×/s repintaria o HUD inteiro por causa de uma barra.
+  // Relógio COMPARTILHADO (`hud/hudTick.ts`, T7): sem taxa própria de rAF —
+  // roda todo quadro (default, sem throttle), igual ao `requestAnimationFrame`
+  // cru de antes.
   useEffect(() => {
     if (!atual) return;
-    let raf = 0;
     const passo = () => {
       const falta = atual.fim - performance.now();
       if (falta <= 0) {
@@ -46,10 +49,8 @@ export function CastBar() {
       const feito = 1 - falta / atual.duracaoMs;
       if (enchimento.current) enchimento.current.style.width = `${feito * 100}%`;
       if (relogio.current) relogio.current.textContent = (falta / 1000).toFixed(1);
-      raf = requestAnimationFrame(passo);
     };
-    raf = requestAnimationFrame(passo);
-    return () => cancelAnimationFrame(raf);
+    return subscribeHudTick(passo);
   }, [atual]);
 
   if (!atual) return null;

@@ -28,6 +28,7 @@ import {
 import { canvasDeColisao } from "./colisaoCanvas";
 import { ChatFrame } from "./ChatFrame";
 import { useHudStore } from "./hudStore";
+import { subscribeHudTick } from "./hudTick";
 
 const escala = MAP_WIDTH / MAP_PLATE.w;
 const px = (v: number) => v * escala;
@@ -57,6 +58,12 @@ const FRAME_ESCALA = 0.62;
  * Canvas2D e na mesma thread do jogo. 20 fps é mais que o minimapa porque aqui
  * a célula tem muito mais pixel — o passo do mob fica visível —, e ainda assim é
  * um terço do quadro do jogo.
+ *
+ * T7 (`docs/otimizacao-heuristicas.md`): mesma migração do minimapa — o gate
+ * manual (`now - ultimo < intervalo`) virou o parâmetro `hz` de
+ * `hud/hudTick.ts: subscribeHudTick`, relógio COMPARTILHADO do HUD em vez de
+ * um `requestAnimationFrame` próprio desta janela. Taxa efetiva continua
+ * 20fps, comportamento idêntico a antes.
  */
 const MAPA_FPS = 20;
 
@@ -147,18 +154,9 @@ export function MapWindow({
 
     const { width, height } = map.size;
     const grid = gridFor(map);
-    let raf = 0;
-    let ultimo = 0;
-    const intervalo = 1000 / MAPA_FPS;
 
     const loop = () => {
       const now = performance.now();
-      if (now - ultimo < intervalo) {
-        raf = requestAnimationFrame(loop);
-        return;
-      }
-      ultimo = now;
-
       const v = enquadrar(campo, { w: width, h: height }, zoom, panRef.current);
       const world = useWorldStore.getState();
 
@@ -250,11 +248,9 @@ export function MapWindow({
         coord.textContent = `${server.x}, ${server.y}`;
       }
 
-      raf = requestAnimationFrame(loop);
     };
 
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return subscribeHudTick(loop, MAPA_FPS);
   }, [aba, map, mapping, fonte, playerPos, zoom, campo.w, campo.h]);
 
   /**

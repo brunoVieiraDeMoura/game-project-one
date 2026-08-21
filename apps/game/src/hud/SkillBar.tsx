@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useHudStore } from "./hudStore";
+import { subscribeHudTick } from "./hudTick";
 import { useSkillBar, type SkillBarSlot } from "./skillBarStore";
 import { ATAQUE_BASICO, ATAQUE_BASICO_ID, baterNoAlvo, useAtaqueBasico } from "../net/ataqueBasico";
 import { useAttackStore } from "../net/attackStore";
@@ -520,6 +521,13 @@ function SkillSlot({
  * O quadro a quadro é feito MUTANDO o DOM por ref, não com `setState` — a conta
  * muda 60 vezes por segundo e repintar o HUD nesse ritmo custaria mais que a
  * cena. O componente só re-renderiza quando o servidor manda uma recarga nova.
+ *
+ * Relógio COMPARTILHADO (`hud/hudTick.ts`, T7): era o pior caso do problema
+ * que o tick resolve — CADA slot com recarga ativa tinha o PRÓPRIO
+ * `requestAnimationFrame`, então uma barra cheia de skills recarregando
+ * virava N loops idênticos rodando ao mesmo tempo. Sem taxa própria (roda
+ * todo quadro, igual antes) — é um cronômetro visual, precisa da mesma
+ * suavidade de sempre.
  */
 function Cooldown({ skillId, raio }: { skillId: number; raio: number }) {
   const fim = useCooldownStore((s) => s.ends[skillId]);
@@ -529,7 +537,6 @@ function Cooldown({ skillId, raio }: { skillId: number; raio: number }) {
 
   useEffect(() => {
     if (!fim || !total) return;
-    let raf = 0;
     const passo = () => {
       const falta = fim - performance.now();
       if (falta <= 0) {
@@ -546,10 +553,8 @@ function Cooldown({ skillId, raio }: { skillId: number; raio: number }) {
       if (texto.current) {
         texto.current.textContent = falta >= 1000 ? `${Math.ceil(falta / 1000)}` : (falta / 1000).toFixed(1);
       }
-      raf = requestAnimationFrame(passo);
     };
-    raf = requestAnimationFrame(passo);
-    return () => cancelAnimationFrame(raf);
+    return subscribeHudTick(passo);
   }, [skillId, fim, total]);
 
   if (!fim || !total) return null;

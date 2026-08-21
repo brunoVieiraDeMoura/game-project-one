@@ -155,6 +155,52 @@ Full verbatim content below, extracted from the project's CLAUDE.md history.
   (`link:legacy-map` grava a janela). Modelo de mob vem de
   `entities/mobModels.ts` (Poring 1002 → esqueleto) — aparência só, status/drop
   são do mob_db.
+- **`rathena/` ganhou uma EXCEÇÃO à regra "nada é tocado" (2026-08-21)**: as
+  duas structs que anunciam item no chão (`packet_dropflooritem`,
+  `PACKET_ZC_ITEM_ENTRY`, `packets_struct.hpp`) ganharam um campo custom
+  `uint16 mob_id` no FIM, preenchido em `clif_dropflooritem`/
+  `clif_getareachar_item` a partir de `flooritem_data.mob_id` — dado que o
+  servidor já calculava (`mob_setdropitem`, `map.hpp:495`) e simplesmente
+  descartava antes de chegar a qualquer pacote/log/tabela (nem `picklog`
+  guarda). Objetivo único: o cliente saber qual monstro gerou aquele drop
+  específico, pra cruzar com `GET /monsters/:id` (mesma tabela `mob_db_re`
+  que o admin edita) e achar a % REAL daquela entrada de loot — camada visual
+  de raridade de item (`vfx/loot/`), nunca gameplay. Os dois structs são
+  `__attribute__((packed))` e o tamanho do pacote é sempre `sizeof(p)` (nunca
+  uma tabela estática), então acrescentar o campo no fim é seguro. Espelhado
+  em `packages/ro-protocol/src/vendor/Network/PacketStructure.js`
+  (`PACKET.ZC.ITEM_ENTRY`/`ITEM_FALL_ENTRY2`, +1 `readUShort()` e `.size +2`
+  nos dois branches de PACKETVER) e em `apps/gateway` (`GroundItem.mobId`,
+  `protocol.ts`/`session.ts`). **Qualquer novo patch em `rathena/` precisa
+  disto**: depois de editar, rodar `wsl-setup.sh` de novo antes de
+  `wsl-build.sh` — o build compila a ÁRVORE DE DENTRO DO WSL
+  (`~/game-project/rathena`), não o `rathena/` do Windows direto; sem o
+  resync o binário novo não tem a mudança.
+  - **2º campo custom, `fresh_drop` (2026-08-21)**: mesmos dois pacotes
+    ganharam mais 1 byte (`uint8 fresh_drop`) depois de `mob_id` — `true` =
+    drop veio de rolagem de verdade na tabela do monstro, `false` = re-drop
+    de item que um monstro LOOTER (`mode_looter`, ex. Poring) tinha pego do
+    chão antes e devolveu ao morrer. Diferente de `mob_id`, este dado
+    PRECISOU de um 3º arquivo C++ além de `clif.cpp`: `map_addflooritem`
+    (`map.cpp:2007`) já recebia esse booleano como parâmetro
+    (`canShowEffect`, usado só pro efeito de pilar do drop retail,
+    PACKETVER≥20180418) mas nunca o guardava — o patch acrescenta
+    `fitem->fresh_drop = canShowEffect;` dentro da própria função e um campo
+    novo em `struct flooritem_data` (`map.hpp:495`), pra persistir o valor
+    além do instante do drop. Isso importa porque `clif_getareachar_item`
+    (item que já estava no chão quando você entrou em vista) não tem
+    `canShowEffect` NENHUM no rAthena original — sem persistir no struct, um
+    jogador que chega depois do momento do drop nunca saberia se era
+    fresco ou re-drop, e a aura de raridade sumiria pra qualquer um que não
+    estivesse olhando no instante exato do kill. `mob_id` continua correto
+    através de um re-drop (rAthena propaga o id do depositante ORIGINAL,
+    não do looter — `mob_setlootitem`, `mob.cpp:2528`), então a % resolvida
+    seria a mesma; é só o "mostrar o efeito de novo" que precisa ser calado.
+    Mesmo padrão de replicação: `packets_struct.hpp` (+1 byte nos 2
+    structs), `PacketStructure.js` (+1 `readUChar()`, `.size` +1 nos 4
+    branches), `apps/gateway` (`GroundItem.freshDrop`), cliente
+    (`GroundItemData.freshDrop` → `LootRarityAura`: `freshDrop === false`
+    nunca mostra aura nem toca som, `undefined` continua permissivo).
   - **São DOIS caches, e o servidor lê os dois** (map.cpp:3920):
     `db/re/map_cache.dat` tem só os 8 mapas específicos de renewal (entre eles
     `prt_fild08` e `prontera`) e `db/map_cache.dat` tem o acervo inteiro — 1.288

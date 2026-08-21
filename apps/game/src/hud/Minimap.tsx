@@ -7,6 +7,7 @@ import { interpolatedCell, useWorldStore } from "../net/worldStore";
 import { FRAME_FONT, FRAME_NUM_FONT, FRAME_NUM_VARIANT } from "../ui/charFrame";
 import { MINIMAP_WIDTH, MM_ART, MM_COLORS, MM_LAYOUT, MM_PLATE, MM_ZOOM, isDaytime } from "../ui/minimap";
 import { canvasDeColisao } from "./colisaoCanvas";
+import { subscribeHudTick } from "./hudTick";
 import { NotificationBell } from "./NotificationBell";
 
 const escala = MINIMAP_WIDTH / MM_PLATE.w;
@@ -23,9 +24,15 @@ const px = (v: number) => v * escala;
  * mundo parado.
  *
  * A 12 fps nada se perde: um mob anda uma célula a cada ~200 ms e a célula do
- * minimapa tem poucos pixels. O rAF continua sendo o relógio — é ele que faz o
- * laço parar quando a aba perde o foco; o limitador só decide quais quadros
- * desenham.
+ * minimapa tem poucos pixels.
+ *
+ * T7 (`docs/otimizacao-heuristicas.md`): o `requestAnimationFrame` deixou de
+ * ser PRÓPRIO — o gate manual (`now - ultimoDesenho < intervalo`) virou só o
+ * parâmetro `hz` de `hud/hudTick.ts: subscribeHudTick`, que faz a mesma
+ * conta no relógio COMPARTILHADO do HUD. A taxa efetiva continua 12fps,
+ * comportamento idêntico a antes — só o loop que roda por baixo é um só,
+ * compartilhado com o resto do HUD, em vez de um `requestAnimationFrame`
+ * exclusivo do minimapa.
  */
 const MINIMAPA_FPS = 12;
 
@@ -81,16 +88,8 @@ export function Minimap({ map, playerPos }: { map: GameMap; playerPos: React.Mut
     const janelaW = width / zoom;
     const janelaH = height / zoom;
 
-    let raf = 0;
-    let ultimoDesenho = 0;
-    const intervalo = 1000 / MINIMAPA_FPS;
     const loop = () => {
       const now = performance.now();
-      if (now - ultimoDesenho < intervalo) {
-        raf = requestAnimationFrame(loop);
-        return;
-      }
-      ultimoDesenho = now;
       const world = useWorldStore.getState();
 
       // onde está o personagem, em célula LOCAL do mapa
@@ -155,11 +154,9 @@ export function Minimap({ map, playerPos }: { map: GameMap; playerPos: React.Mut
         seta.style.transform = `translate(-50%,-50%) rotate(${anguloRef.current}rad)`;
       }
 
-      raf = requestAnimationFrame(loop);
     };
 
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return subscribeHudTick(loop, MINIMAPA_FPS);
   }, [map, playerPos, fonte, zoomIdx, lado]);
 
   const dia = isDaytime(hora.getHours());

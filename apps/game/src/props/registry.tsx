@@ -323,3 +323,37 @@ export function preloadPropsDoMapa(props: readonly { assetId: string }[]): numbe
   for (const url of urls) useGLTF.preload(url);
   return urls.length;
 }
+
+/**
+ * Descarta do cache do `useGLTF` as urls que o mapa ANTERIOR usava e o
+ * ATUAL não usa mais — T8 (`docs/otimizacao-heuristicas.md`), a metade
+ * "asset streaming/unload" da task. Chamado pelo `PlayView` a cada troca de
+ * mapa, com o `urlsDoMapa` do mapa que estava carregado antes.
+ *
+ * ## Isto NÃO libera VRAM — e é deliberado
+ *
+ * `useGLTF.clear(url)` só remove a ENTRADA do cache do drei
+ * (`@react-three/fiber: useLoader.clear`) — não chama `.dispose()` em nada.
+ * Os `BufferGeometry`/`Material`/`Texture` que aquele glTF produziu
+ * continuam existindo em VRAM enquanto QUALQUER instância montada ainda os
+ * referenciar. E é exatamente esse o caso aqui: prop, vegetação e tile hex
+ * COMPARTILHAM geometria entre milhares de instâncias via `InstancedMesh`
+ * (`VegetationInstancer`, `PropInstance`, `HexTerrain`) — a mesma regra de
+ * "quem usa não descarta" de `net/recursosCompartilhados.ts`. Descartar de
+ * verdade exigiria contagem de referência entre TODOS esses consumidores
+ * pra saber quando o último some, um refactor maior que o raio desta task
+ * (ver a nota completa em `docs/otimizacao-heuristicas.md`).
+ *
+ * O ganho real é RAM (heap JS): sem isto, o documento glTF PARSEADO de toda
+ * espécie que já apareceu numa sessão fica preso no cache do drei pra
+ * sempre — mesmo que nenhum mapa desde então a use. Evitar reparse de uma
+ * espécie que VOLTA a aparecer (o caso comum — o jogador volta pro mesmo
+ * tipo de mapa) não é o objetivo aqui; é o efeito colateral aceito de uma
+ * sessão que visita muitos mapas diferentes sem nunca liberar nada.
+ */
+export function descartarPropsForaDoMapa(urlsAntigas: readonly string[], urlsNovas: readonly string[]): void {
+  const novas = new Set(urlsNovas);
+  for (const url of urlsAntigas) {
+    if (!novas.has(url)) useGLTF.clear(url);
+  }
+}

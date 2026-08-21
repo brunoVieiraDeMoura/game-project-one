@@ -3,7 +3,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { useGLTF } from "@react-three/drei";
-import { PROP_CATALOG, PROP_IDS, PROP_URLS, SCATTER_CATEGORIES, SOLID_CATEGORIES, preloadPropsDoMapa } from "./registry";
+import {
+  PROP_CATALOG,
+  PROP_IDS,
+  PROP_URLS,
+  SCATTER_CATEGORIES,
+  SOLID_CATEGORIES,
+  descartarPropsForaDoMapa,
+  preloadPropsDoMapa,
+  urlsDoMapa,
+} from "./registry";
 
 /**
  * O CATÁLOGO descreve os modelos que existem — e o número bate com a geometria.
@@ -157,6 +166,54 @@ describe("preload dos props do mapa", () => {
     const espia = vi.spyOn(useGLTF, "preload").mockImplementation(() => {});
     expect(preloadPropsDoMapa([])).toBe(0);
     expect(espia).not.toHaveBeenCalled();
+    espia.mockRestore();
+  });
+});
+
+/**
+ * T8 (`docs/otimizacao-heuristicas.md`) — descarte do cache do `useGLTF` na
+ * troca de mapa. Só RAM (heap JS): `useGLTF.clear` não dá dispose em nada,
+ * só remove a entrada do cache — ver docblock de `descartarPropsForaDoMapa`.
+ */
+describe("descarte de props fora do mapa (T8)", () => {
+  it("descarta só as urls que SAÍRAM — não toca nas que continuam no mapa novo", () => {
+    const espia = vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
+    const a = PROP_IDS[0]!;
+    const b = PROP_IDS[1]!;
+    const c = PROP_IDS[2]!;
+    const antigas = urlsDoMapa([{ assetId: a }, { assetId: b }]);
+    const novas = urlsDoMapa([{ assetId: b }, { assetId: c }]); // b fica, a sai, c é novo
+
+    descartarPropsForaDoMapa(antigas, novas);
+
+    expect(espia).toHaveBeenCalledTimes(1);
+    expect(espia).toHaveBeenCalledWith(PROP_URLS[a]);
+    espia.mockRestore();
+  });
+
+  it("mapa novo usa o MESMO conjunto do antigo — não descarta nada", () => {
+    const espia = vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
+    const a = PROP_IDS[0]!;
+    const urls = urlsDoMapa([{ assetId: a }]);
+
+    descartarPropsForaDoMapa(urls, urls);
+
+    expect(espia).not.toHaveBeenCalled();
+    espia.mockRestore();
+  });
+
+  it("mapa antigo vazio (primeiro mapa da sessão) não descarta nada", () => {
+    const espia = vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
+    descartarPropsForaDoMapa([], urlsDoMapa([{ assetId: PROP_IDS[0]! }]));
+    expect(espia).not.toHaveBeenCalled();
+    espia.mockRestore();
+  });
+
+  it("mapa novo vazio (voltou pro login/preview) descarta TUDO do mapa antigo", () => {
+    const espia = vi.spyOn(useGLTF, "clear").mockImplementation(() => {});
+    const antigas = urlsDoMapa([{ assetId: PROP_IDS[0]! }, { assetId: PROP_IDS[1]! }]);
+    descartarPropsForaDoMapa(antigas, []);
+    expect(espia).toHaveBeenCalledTimes(antigas.length);
     espia.mockRestore();
   });
 });

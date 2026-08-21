@@ -11,6 +11,7 @@ import { GEO_CAIXA, GEO_PLANO, MATERIAL_INVISIVEL, materialDeIcone, materialOpac
 import { pegar } from "./acoes";
 import { useItemCatalog, getItemDisplayName } from "./itemCatalog";
 import { itemIconUrl } from "./itemIcons";
+import { LootRarityAura } from "../vfx/loot/LootRarityAura";
 
 /**
  * Itens caídos no chão.
@@ -28,6 +29,18 @@ export interface GroundItemData {
   y: number;
   subX: number;
   subY: number;
+  /** monstro que dropou (patch rAthena 2026-08-21: `mob_id` de
+   * `flooritem_data`, antes descartado antes de chegar em qualquer pacote —
+   * ver `docs/claude-context/01-rathena-connection-and-world-sync.md`).
+   * Ausente/`0` = item não veio de morte de monstro (jogado por jogador,
+   * recompensa etc.) — `vfx/loot/LootRarityAura` não desenha nada nesse caso. */
+  mobId?: number;
+  /** `flooritem_data.fresh_drop` (patch 2026-08-21): `true` = rolagem de
+   * verdade na tabela de loot do monstro; `false` = re-drop de item que um
+   * monstro looter (mode_looter, ex. Poring) tinha pego do chão antes —
+   * `vfx/loot/LootRarityAura` nunca mostra aura/toca som nesse caso, mesmo
+   * com `mobId`/chance válidos (pedido do usuário 2026-08-21). */
+  freshDrop?: boolean;
 }
 
 interface GroundItemsState {
@@ -109,7 +122,7 @@ function ItemNoChao({
   mapping,
   cellSize,
 }: {
-  item: { gid: number; itemId: number; x: number; y: number; subX: number; subY: number };
+  item: { gid: number; itemId: number; x: number; y: number; subX: number; subY: number; mobId?: number; freshDrop?: boolean };
   map: GameMap;
   mapping: LegacyMapping;
   cellSize: number;
@@ -147,6 +160,13 @@ function ItemNoChao({
 
   return (
     <group position={[world.x + offX, world.y, world.z + offZ]}>
+      <LootRarityAura
+        mobId={item.mobId}
+        freshDrop={item.freshDrop}
+        itemId={item.itemId}
+        position={{ x: world.x + offX, y: world.y, z: world.z + offZ }}
+      />
+
       {/**
        * Área de clique SEPARADA da caixinha desenhada.
        *
@@ -191,7 +211,14 @@ function ItemNoChao({
           caixinha colorida por id de sempre. */}
       {iconUrl ? (
         <Billboard position={[0, size * 0.6, 0]}>
-          <mesh scale={size * 1.6} raycast={() => null} geometry={GEO_PLANO} material={materialDeIcone(iconUrl)} />
+          {/* `renderOrder` alto — o ícone é transparente (alphaTest) igual às
+              camadas do VFX Core (glow/beam/ring), e o three ordena objetos
+              transparentes por distância à câmera; girando a câmera, quem
+              "ganha" o pixel podia trocar de lado (aura por cima do ícone).
+              Um renderOrder explícito vence o sort automático — o ícone
+              desenha por ÚLTIMO sempre, então fica em cima da aura
+              independente do ângulo (achado 2026-08-21, teste ao vivo). */}
+          <mesh scale={size * 1.6} raycast={() => null} renderOrder={10} geometry={GEO_PLANO} material={materialDeIcone(iconUrl)} />
         </Billboard>
       ) : (
         // caixa unitária escalada + material cacheado por COR: sem isso um campo

@@ -79,7 +79,7 @@ import { Projectile } from "../vfx/Projectile";
 import { GroundItems, useGroundItems } from "../net/GroundItems";
 import { MapAmbience } from "../audio/mapAmbience";
 import { preloadAssets } from "../assets";
-import { preloadPropsDoMapa, urlsDoMapa } from "../props/registry";
+import { descartarPropsForaDoMapa, preloadPropsDoMapa, urlsDoMapa } from "../props/registry";
 import { preloadWindowArt } from "../ui/preloadWindowArt";
 
 preloadAssets();
@@ -417,6 +417,63 @@ function SinalizaCenaPronta({ set }: { set: (v: boolean) => void }) {
 const MIRA_ALTURA_MOB = 0.62;
 const MIRA_ALTURA_ITEM = 0.2;
 
+/**
+ * Escreve o candidato DENTRO de `out` (mutação), em vez de devolver objeto
+ * novo — T6 (passada de GC, `docs/otimizacao-heuristicas.md`). Antes disto
+ * havia uma closure `candidato()` recriada por QUADRO, mais um objeto
+ * `Candidato` novo por MOB/ITEM por quadro (~25 entidades × 60 fps): exatamente
+ * o padrão de alocação em laço quente que o GC de produção mediu em 226 ms
+ * (`net/recursosCompartilhados.ts`). Função de MÓDULO, sem closure sobre
+ * nada do componente — todo contexto entra por parâmetro, mesmo princípio de
+ * `vfx/core/manager.ts: updateFrustum`/`passesFrustum` (objetos `THREE.*`
+ * reusados a nível de módulo, zero alocação em estado estável).
+ */
+function escreverCandidato(
+  out: Candidato,
+  gid: number,
+  x: number,
+  y: number,
+  atacando: boolean,
+  alturaDoAlvo: number,
+  map: GameMap,
+  mapping: LegacyMapping,
+  cam: THREE.Camera,
+  scratch: THREE.Vector3,
+  raioEntidade: number,
+  cellSize: number,
+  eu: THREE.Vector3,
+  larguraTela: number,
+  alturaTela: number,
+): void {
+  const w = cellToWorld(map, mapping, x, y);
+  // projeta o CORPO, não o pé — ver docblock original em `AssistenciaDeMira`
+  scratch.set(w.x, w.y + alturaDoAlvo, w.z);
+  const dxCam = w.x - cam.position.x;
+  const dzCam = w.z - cam.position.z;
+  const visivel = dxCam * dxCam + dzCam * dzCam <= raioEntidade * raioEntidade;
+  scratch.project(cam);
+  const naTela =
+    scratch.z >= -1 && scratch.z <= 1 && scratch.x >= -1 && scratch.x <= 1 && scratch.y >= -1 && scratch.y <= 1;
+  out.gid = gid;
+  out.px = (scratch.x * 0.5 + 0.5) * larguraTela;
+  out.py = (-scratch.y * 0.5 + 0.5) * alturaTela;
+  out.naTela = naTela;
+  out.visivel = visivel;
+  out.distanciaDoJogador = Math.hypot(w.x - eu.x, w.z - eu.z) / cellSize;
+  out.atacando = atacando;
+}
+
+/** candidato vazio reciclável — só criado quando o pool precisa CRESCER
+ * (mob/item novo entrando no alcance), nunca por quadro em regime. */
+function candidatoDoPool(pool: Candidato[], indice: number): Candidato {
+  let c = pool[indice];
+  if (!c) {
+    c = { gid: 0, px: 0, py: 0, naTela: false, visivel: false, distanciaDoJogador: 0, atacando: false };
+    pool[indice] = c;
+  }
+  return c;
+}
+
 function AssistenciaDeMira({
   map,
   mapping,
@@ -474,6 +531,18 @@ function AssistenciaDeMira({
   // rascunho reutilizado: projetar aloca um Vector3 por chamada, e isto roda
   // por candidato, por quadro
   const scratch = useMemo(() => new THREE.Vector3(), []);
+  /**
+   * Pools de `Candidato` reusados + arrays "view" reusados (T6, passada de
+   * GC) — crescem lazy até o pico de mob/item simultâneo já visto e depois
+   * ficam ali, sem realocar mais nada em regime; `.length = 0` só reseta o
+   * array-view, os OBJETOS do pool continuam vivos para o próximo quadro
+   * escrever por cima (`candidatoDoPool`). Mesmo espírito de
+   * `net/recursosCompartilhados.ts` — quem usa não descarta.
+   */
+  const mobPool = useMemo<Candidato[]>(() => [], []);
+  const mobs = useMemo<Candidato[]>(() => [], []);
+  const itemPool = useMemo<Candidato[]>(() => [], []);
+  const itens = useMemo<Candidato[]>(() => [], []);
 
   useFrame((estado) => {
     const p = ponteiro.current;
@@ -491,51 +560,31 @@ function AssistenciaDeMira({
     const agora = performance.now();
     const eu = playerPos.current;
 
-    /** célula do servidor → candidato já projetado na tela */
-    const candidato = (
-      gid: number,
-      x: number,
-      y: number,
-      atacando: boolean,
-      alturaDoAlvo: number,
-    ): Candidato => {
-      const w = cellToWorld(map, mapping, x, y);
-      // projeta o CORPO, não o pé. Mirar no monstro põe o ponteiro na altura do
-      // peito dele, e o pé fica dezenas de pixels abaixo — projetando o chão, o
-      // raio de assistência ficava quase todo ATRÁS do bicho, do lado por onde o
-      // mouse nunca chega. É o mesmo ponto do cilindro de clique (`NetEntity`),
-      // então o clique perto e o clique em cima concordam por construção.
-      scratch.set(w.x, w.y + alturaDoAlvo, w.z);
-      const dxCam = w.x - cam.position.x;
-      const dzCam = w.z - cam.position.z;
-      const visivel = dxCam * dxCam + dzCam * dzCam <= raioEntidade * raioEntidade;
-      scratch.project(cam);
-      // `z` fora de -1..1 é atrás da câmera; sem isto um alvo às costas do
-      // jogador reaparece projetado NA TELA, espelhado
-      const naTela =
-        scratch.z >= -1 &&
-        scratch.z <= 1 &&
-        scratch.x >= -1 &&
-        scratch.x <= 1 &&
-        scratch.y >= -1 &&
-        scratch.y <= 1;
-      return {
-        gid,
-        px: (scratch.x * 0.5 + 0.5) * tamanho.width,
-        py: (-scratch.y * 0.5 + 0.5) * tamanho.height,
-        naTela,
-        visivel,
-        distanciaDoJogador: Math.hypot(w.x - eu.x, w.z - eu.z) / cellSize,
-        atacando,
-      };
-    };
-
     const mundo = useWorldStore.getState();
-    const mobs: Candidato[] = [];
+    mobs.length = 0;
+    let iMob = 0;
     for (const gid of mundo.gids) {
       const e = mundo.entities[gid];
       if (!e || e.kind !== "mob" || gid === mundo.selfGid) continue;
-      mobs.push(candidato(gid, e.x, e.y, estaMeAtacando(gid, agora), cellSize * MIRA_ALTURA_MOB));
+      const c = candidatoDoPool(mobPool, iMob++);
+      escreverCandidato(
+        c,
+        gid,
+        e.x,
+        e.y,
+        estaMeAtacando(gid, agora),
+        cellSize * MIRA_ALTURA_MOB,
+        map,
+        mapping,
+        cam,
+        scratch,
+        raioEntidade,
+        cellSize,
+        eu,
+        tamanho.width,
+        tamanho.height,
+      );
+      mobs.push(c);
     }
 
     let mob = melhorAlvo(p, mobs);
@@ -554,8 +603,12 @@ function AssistenciaDeMira({
         const e = mundo.entities[mob.gid];
         if (!e) break;
         const w = cellToWorld(map, mapping, e.x, e.y);
-        const alvo = scratch.set(w.x, w.y + cellSize * MIRA_ALTURA_MOB, w.z).clone();
-        if (temLinhaDeVisada(cam.position, alvo, obstaculos.current)) break;
+        // sem `.clone()` (T6, passada de GC): `temLinhaDeVisada` só LÊ o
+        // vetor pra montar `dirVisada` (síncrono, não guarda referência —
+        // conferido em `play/pickGround.ts`), então escrever direto em
+        // `scratch` e passar ele mesmo é seguro, sem alocar Vector3 novo.
+        if (temLinhaDeVisada(cam.position, scratch.set(w.x, w.y + cellSize * MIRA_ALTURA_MOB, w.z), obstaculos.current))
+          break;
         excluidos.add(mob.gid);
         if (excluidos.size >= 6) {
           mob = null;
@@ -580,9 +633,28 @@ function AssistenciaDeMira({
      * depois de uma caçada, projetar dezenas de caixinhas por quadro para
      * descartá-las em seguida seria trabalho jogado fora.
      */
-    const itens: Candidato[] = [];
+    itens.length = 0;
+    let iItem = 0;
     for (const it of Object.values(useGroundItems.getState().items)) {
-      itens.push(candidato(it.gid, it.x, it.y, false, cellSize * MIRA_ALTURA_ITEM));
+      const c = candidatoDoPool(itemPool, iItem++);
+      escreverCandidato(
+        c,
+        it.gid,
+        it.x,
+        it.y,
+        false,
+        cellSize * MIRA_ALTURA_ITEM,
+        map,
+        mapping,
+        cam,
+        scratch,
+        raioEntidade,
+        cellSize,
+        eu,
+        tamanho.width,
+        tamanho.height,
+      );
+      itens.push(c);
     }
     let item = melhorAlvo(p, itens);
     if (item && obstaculos.current.length > 0) {
@@ -591,8 +663,9 @@ function AssistenciaDeMira({
         const it = useGroundItems.getState().items[item.gid];
         if (!it) break;
         const w = cellToWorld(map, mapping, it.x, it.y);
-        const alvo = scratch.set(w.x, w.y + cellSize * MIRA_ALTURA_ITEM, w.z).clone();
-        if (temLinhaDeVisada(cam.position, alvo, obstaculos.current)) break;
+        // sem `.clone()` — mesma razão do laço de mob acima.
+        if (temLinhaDeVisada(cam.position, scratch.set(w.x, w.y + cellSize * MIRA_ALTURA_ITEM, w.z), obstaculos.current))
+          break;
         excluidos.add(item.gid);
         if (excluidos.size >= 6) {
           item = null;
@@ -1619,6 +1692,18 @@ export function PlayView() {
     const t = setTimeout(() => setAssetsExpiraram(true), TETO_ASSETS_MS);
     return () => clearTimeout(t);
   }, [urlsMapa, mapId]);
+  /**
+   * T8 (`docs/otimizacao-heuristicas.md`) — descarta do cache do `useGLTF`
+   * as urls de prop/vegetação/hex que o mapa ANTERIOR usava e este não usa
+   * mais. Ref (não state): só precisa sobreviver entre renders pra comparar
+   * "antes" com "agora", nunca dispara render nenhum. Só RAM (heap JS), não
+   * VRAM — ver docblock de `descartarPropsForaDoMapa`.
+   */
+  const urlsMapaAnterior = useRef<string[]>([]);
+  useEffect(() => {
+    descartarPropsForaDoMapa(urlsMapaAnterior.current, urlsMapa);
+    urlsMapaAnterior.current = urlsMapa;
+  }, [urlsMapa]);
   /** o mapa ainda nem chegou (fetch + zod de 160.000 células) */
   const carregandoMapa = !IS_PREVIEW && !map && !error;
   const carregandoTerreno =
@@ -1806,7 +1891,93 @@ export function PlayView() {
          * vive a sessão de jogo inteira; sem cleanup explícito aqui de
          * propósito, o listener morre com a página/o canvas.
          */
-        onCreated={(state) => attachWebglContextRecovery(state.gl)}
+        onCreated={(state) => {
+          attachWebglContextRecovery(state.gl);
+          // INSTRUMENTAÇÃO TEMPORÁRIA — captura o Context Lost REAL do GAME
+          // canvas, independente do rendererProbe. Reverter depois do diagnóstico.
+          if (import.meta.env.DEV && typeof window !== "undefined") {
+            const gl = state.gl;
+            const canvas = gl.domElement;
+            const w = window as unknown as {
+              __gameCtxDiag?: {
+                glCaps: Record<string, unknown> | null;
+                frames: { t: number; drawCalls: number; triangles: number; geometries: number; textures: number; programs: number }[];
+                lostEvents: Record<string, unknown>[];
+                restoredEvents: Record<string, unknown>[];
+              };
+            };
+            if (!w.__gameCtxDiag) {
+              w.__gameCtxDiag = { glCaps: null, frames: [], lostEvents: [], restoredEvents: [] };
+              const ctx = gl.getContext();
+              const dbg = ctx.getExtension("WEBGL_debug_renderer_info") as
+                | { UNMASKED_VENDOR_WEBGL: number; UNMASKED_RENDERER_WEBGL: number }
+                | null;
+              w.__gameCtxDiag.glCaps = {
+                isWebGL2: typeof (ctx as WebGL2RenderingContext).createQuery === "function",
+                version: ctx.getParameter(ctx.VERSION),
+                shadingLanguageVersion: ctx.getParameter(ctx.SHADING_LANGUAGE_VERSION),
+                vendor: dbg ? ctx.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : ctx.getParameter(ctx.VENDOR),
+                renderer: dbg ? ctx.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : ctx.getParameter(ctx.RENDERER),
+                maxTextureSize: ctx.getParameter(ctx.MAX_TEXTURE_SIZE),
+                maxTextureImageUnits: ctx.getParameter(ctx.MAX_TEXTURE_IMAGE_UNITS),
+                maxCombinedTextureImageUnits: ctx.getParameter(ctx.MAX_COMBINED_TEXTURE_IMAGE_UNITS),
+                maxVertexAttribs: ctx.getParameter(ctx.MAX_VERTEX_ATTRIBS),
+                maxRenderbufferSize: ctx.getParameter(ctx.MAX_RENDERBUFFER_SIZE),
+              };
+              // amostra leve, ~5Hz, anel de 120 (~24s de histórico) — sem
+              // readback, só `gl.info` que o three já mantém atualizado
+              setInterval(() => {
+                const diag = w.__gameCtxDiag!;
+                diag.frames.push({
+                  t: Math.round(performance.now()),
+                  drawCalls: gl.info.render.calls,
+                  triangles: gl.info.render.triangles,
+                  geometries: gl.info.memory.geometries,
+                  textures: gl.info.memory.textures,
+                  programs: gl.info.programs?.length ?? 0,
+                });
+                if (diag.frames.length > 120) diag.frames.shift();
+              }, 200);
+            }
+            const snapshot = (motivo: string) => ({
+              t: Math.round(performance.now()),
+              motivo,
+              canvasW: canvas.width,
+              canvasH: canvas.height,
+              dpr: window.devicePixelRatio,
+              route: location.pathname,
+              gl: {
+                drawCalls: gl.info.render.calls,
+                triangles: gl.info.render.triangles,
+                geometries: gl.info.memory.geometries,
+                textures: gl.info.memory.textures,
+                programs: gl.info.programs?.length ?? 0,
+              },
+              ultimosFrames: [...w.__gameCtxDiag!.frames.slice(-30)],
+              heapMb: (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory?.usedJSHeapSize
+                ? Math.round(((performance as unknown as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize / 1048576) * 10) / 10
+                : null,
+            });
+            canvas.addEventListener(
+              "webglcontextlost",
+              (e) => {
+                w.__gameCtxDiag!.lostEvents.push({
+                  ...snapshot("webglcontextlost-nativo"),
+                  statusMessage: (e as unknown as { statusMessage?: string }).statusMessage ?? null,
+                  defaultPreventedAntes: e.defaultPrevented,
+                });
+              },
+              false,
+            );
+            canvas.addEventListener(
+              "webglcontextrestored",
+              () => {
+                w.__gameCtxDiag!.restoredEvents.push(snapshot("webglcontextrestored-nativo"));
+              },
+              false,
+            );
+          }
+        }}
       >
         {/* Fora do Suspense: tem de valer já no primeiro quadro, antes de
             qualquer .gltf resolver.

@@ -41,6 +41,22 @@ export interface VfxRenderer {
    * buffers (`needsUpdate` do `InstancedMesh`, projeção do `DomRenderer`). */
   flush(dt: number, world: VfxWorldContext): void;
   dispose(): void;
+  /**
+   * Garante que mesh/material do renderer já existam na cena ANTES do
+   * primeiro `onInstanceCreate` real — só precisa disto quem constrói o
+   * pool sob demanda (`Ring`/`Cage`: `acquire()` só monta o primeiro
+   * `buildEntry()` no primeiro cast de verdade). `Sprite`/`Particle`/
+   * `Trail`/`Beam` já criam mesh+material no PRÓPRIO construtor
+   * (`ensureCapacity(initialCapacity)`), então não implementam isto.
+   *
+   * Chamado pelo `VfxRoot` uma vez por geração de renderer, ANTES de
+   * `gl.compileAsync()` — é o que garante que o pool tenha pelo menos 1
+   * entrada real (mesh no grupo) pro `compileAsync` encontrar via
+   * `scene.traverse()`. Não ativa nada visível — o entry criado aqui só
+   * existe INVISÍVEL no `pool`, disponível pro primeiro `onInstanceCreate`
+   * de verdade reusar (mesmo caminho de `acquire()` de sempre).
+   */
+  warm?(): void;
   /** diagnóstico puro (Fase 5, "React/DOM persistent tree isolation") —
    * só `DomRenderer` implementa; desconecta/reconecta a árvore do
    * `document` sem desmontar React, pra o benchmark isolar custo de

@@ -102,6 +102,16 @@ export class RingRenderer implements VfxRenderer {
     return entry;
   }
 
+  /** ver docblock de `VfxRenderer.warm` — cria o primeiro `buildEntry()`
+   * sem ativar nada, só pra existir no grupo antes do `compileAsync` do
+   * `VfxRoot`. No-op se já existe pool ou instância viva (nunca duplica). */
+  warm(): void {
+    if (this.pool.length > 0 || this.entries.size > 0) return;
+    const entry = buildEntry();
+    this.group.add(entry.mesh);
+    this.pool.push(entry);
+  }
+
   onInstanceCreate(instance: VfxInstanceRuntime, world: VfxWorldContext): void {
     // `payload.areaRadius` (Fire Ball, 2026-08-19-v) — fallback pro raio REAL
     // da skill (`SplashArea` do `skill_db.yml`, já resolvido pro nível certo

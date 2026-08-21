@@ -16,7 +16,7 @@ import {
 import { useStatusCatalog } from "../net/statusCatalog";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { skillIconUrl } from "../net/skillIcons";
-import { subscribeStatusTick } from "./statusTick";
+import { subscribeHudTick } from "./hudTick";
 
 /**
  * Ícones de buff/debuff/skill-com-duração — "auditoria buffs/debuffs"
@@ -178,10 +178,10 @@ function StatusEffectIcon({
 
   const temTimer = effect.totalMs > 0 && effect.endsAt > 0;
 
-  // Contagem regressiva no relógio COMPARTILHADO (`hud/statusTick.ts`) — muta
+  // Contagem regressiva no relógio COMPARTILHADO (`hud/hudTick.ts`) — muta
   // o DOM direto (anel + texto) em vez de `setState` 60×/s, e não agenda o
-  // próprio `requestAnimationFrame` (1 loop pra todos os ícones, não 1 por
-  // ícone — pedido explícito 2026-08-14).
+  // próprio `requestAnimationFrame` (1 loop pro HUD inteiro, não 1 por
+  // ícone — pedido explícito 2026-08-14, generalizado em T7).
   useEffect(() => {
     if (!temTimer) return;
     const passo = () => {
@@ -206,7 +206,7 @@ function StatusEffectIcon({
       }
     };
     passo();
-    return subscribeStatusTick(passo);
+    return subscribeHudTick(passo);
   }, [effect.endsAt, effect.totalMs, effect.selfExpire, effect.efstId, gid, temTimer]);
 
   const nome = isBodyState

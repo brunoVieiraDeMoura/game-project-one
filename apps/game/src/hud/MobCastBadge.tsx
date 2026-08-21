@@ -3,7 +3,7 @@ import { IconSquare } from "../ui/rpg";
 import { useEntityCastStore } from "../net/entityCastStore";
 import { useSkillCatalog } from "../net/skillCatalog";
 import { skillIconUrl } from "../net/skillIcons";
-import { subscribeStatusTick } from "./statusTick";
+import { subscribeHudTick } from "./hudTick";
 
 /**
  * "Está castando X" — mesma composição visual dos slots fixos
@@ -17,7 +17,7 @@ import { subscribeStatusTick } from "./statusTick";
  *  - `useEntityCastStore` (zustand) decide se o badge existe — muda só
  *    quando um cast COMEÇA/TERMINA, não a cada quadro;
  *  - o anel de progresso muta o DOM direto no relógio COMPARTILHADO
- *    (`hud/statusTick.ts`), nunca `setState`/`requestAnimationFrame` próprio
+ *    (`hud/hudTick.ts`), nunca `setState`/`requestAnimationFrame` próprio
  *    (pedido explícito do sistema de status: "não criar rAF por ícone").
  */
 const MOB_CAST_STYLE_ID = "mob-cast-badge-style";
@@ -57,7 +57,7 @@ export function MobCastBadge({ gid, size = 32 }: { gid: number; size?: number })
       el.style.background = `conic-gradient(transparent 0deg ${decorrido}deg, rgba(10,6,4,0.6) ${decorrido}deg 360deg)`;
     };
     passo();
-    return subscribeStatusTick(passo);
+    return subscribeHudTick(passo);
   }, [cast]);
 
   if (!cast) return null;

@@ -126,6 +126,14 @@ export class CageRenderer implements VfxRenderer {
     return entry;
   }
 
+  /** ver docblock de `VfxRenderer.warm` — mesmo raciocínio do `RingRenderer`. */
+  warm(): void {
+    if (this.pool.length > 0 || this.entries.size > 0) return;
+    const entry = buildEntry();
+    this.groupParent.add(entry.group);
+    this.pool.push(entry);
+  }
+
   onInstanceCreate(instance: VfxInstanceRuntime, world: VfxWorldContext): void {
     const payload = instance.spawnOptions.payload;
     const radius = Number(payload?.radius ?? 1.1) * world.cellSize;

@@ -450,6 +450,19 @@ export interface GroundItem {
 	/** deslocamento dentro da célula (o RO espalha itens na mesma célula) */
 	subX: number;
 	subY: number;
+	/** monstro que dropou (campo custom do nosso patch em rathena/src/map/
+	 * packets_struct.hpp: `flooritem_data.mob_id`, antes calculado e
+	 * descartado antes de qualquer pacote — 2026-08-21). `undefined` nos 2
+	 * variantes de opcode não patcheados (`ITEM_FALL_ENTRY`/`ITEM_FALL_ENTRY3`,
+	 * não usados neste PACKETVER) ou `0` quando o item não veio de morte de
+	 * monstro (jogado por jogador, recompensa etc.). */
+	mobId?: number;
+	/** `flooritem_data.fresh_drop` (patch 2026-08-21): `true` = rolagem de
+	 * verdade na tabela de loot do monstro; `false` = re-drop de item que um
+	 * monstro looter (mode_looter, ex. Poring) tinha pego do chão antes.
+	 * `undefined` nos 2 opcodes não patcheados, mesma disponibilidade de
+	 * `mobId`. Gate pro VFX/SFX de raridade nunca repetir num re-drop. */
+	freshDrop?: boolean;
 }
 
 /** Janela de diálogo do NPC. */

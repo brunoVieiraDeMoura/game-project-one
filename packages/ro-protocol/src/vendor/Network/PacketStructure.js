@@ -4962,8 +4962,17 @@ PACKET.ZC.ITEM_ENTRY = function PACKET_ZC_ITEM_ENTRY(fp, end) {
 	this.count = fp.readShort();
 	this.subX = fp.readUChar();
 	this.subY = fp.readUChar();
+	// game-project custom field (2026-08-21) — flooritem_data.mob_id, source
+	// monster of this drop, appended by our rathena/ patch (packets_struct.hpp:
+	// PACKET_ZC_ITEM_ENTRY). Not part of retail protocol.
+	this.mob_id = fp.readUShort();
+	// game-project custom field (2026-08-21) — flooritem_data.fresh_drop:
+	// 1 = drop veio de uma rolagem de verdade na tabela de loot do monstro,
+	// 0 = re-drop de item que um monstro looter (mode_looter) tinha
+	// pego antes. Gate pro VFX/SFX de raridade nunca repetir num re-drop.
+	this.fresh_drop = fp.readUChar();
 };
-PACKET.ZC.ITEM_ENTRY.size = PACKETVER.value >= 20181121 ? 19 : 17;
+PACKET.ZC.ITEM_ENTRY.size = (PACKETVER.value >= 20181121 ? 19 : 17) + 3;
 
 // 0x9e
 PACKET.ZC.ITEM_FALL_ENTRY = function PACKET_ZC_ITEM_FALL_ENTRY(fp, end) {
@@ -10154,8 +10163,12 @@ PACKET.ZC.ITEM_FALL_ENTRY2 = function PACKET_ZC_ITEM_FALL_ENTRY2(fp, end) {
 	this.subX = fp.readUChar();
 	this.subY = fp.readUChar();
 	this.count = fp.readShort();
+	// game-project custom field (2026-08-21) — see PACKET.ZC.ITEM_ENTRY above.
+	this.mob_id = fp.readUShort();
+	// game-project custom field (2026-08-21) — see PACKET.ZC.ITEM_ENTRY above.
+	this.fresh_drop = fp.readUChar();
 };
-PACKET.ZC.ITEM_FALL_ENTRY2.size = PACKETVER.value >= 20181121 ? 21 : 19;
+PACKET.ZC.ITEM_FALL_ENTRY2.size = (PACKETVER.value >= 20181121 ? 21 : 19) + 3;
 
 // 0x856
 PACKET.ZC.NOTIFY_MOVEENTRY6 = function PACKET_ZC_NOTIFY_MOVEENTRY6(fp, end) {

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { descartarPersonagem, fundirSkinned } from "./entities/personagemGltf";
+import { intervalMsFor } from "./core/importancia";
 import { somarCustoDeAnimacao, somarCustoDeModelo } from "./core/diagnostics/rendererProbe";
 import { registrarEvento } from "./core/diagnostics/flightRecorder";
 import { compartilharTexturas } from "./gltfTexturas";
@@ -228,24 +229,31 @@ export function useCharacter(
   url: string,
   animationSpeed = 1,
   /**
-   * Enquanto isto for `false`, o mixer NÃO avança.
+   * Taxa alvo (Hz) em que o mixer avança — `0` (ou negativo) NUNCA avança,
+   * `60` avança todo quadro (padrão). T3 (`core/importancia.ts`, "Animation
+   * LOD"): generaliza o antigo gate booleano `ativoRef` (`false` = não
+   * anima) numa TAXA, pra reduzir a frequência de mob longe em vez de só
+   * ligar/desligar.
    *
-   * Entidade além da névoa é `visible = false` (ver `net/NetEntity`), e o three
-   * pula de graça o que está invisível no desenho e no passe de sombra — mas o
-   * `AnimationMixer` é nosso e continuava correndo. Com `area_size: 60` o
-   * servidor anuncia um quadrado de 121×121 células, várias vezes mais fundo que
-   * o raio da névoa: dezenas de esqueletos eram animados por quadro para
-   * ninguém ver.
+   * Entidade além da névoa é `visible = false` (ver `net/NetEntity`), e o
+   * three pula de graça o que está invisível no desenho e no passe de
+   * sombra — mas o `AnimationMixer` é nosso e continuava correndo. Com
+   * `area_size: 60` o servidor anuncia um quadrado de 121×121 células,
+   * várias vezes mais fundo que o raio da névoa: dezenas de esqueletos
+   * eram animados por quadro para ninguém ver. Isso continua valendo (Hz
+   * `0` no invisível); o que muda é que agora o visível-mas-longe também
+   * pode correr mais devagar, não só o invisível.
    *
-   * É um REF, não estado: quem sabe se a entidade está à vista é o `useFrame`
-   * dela, e passar isso por `setState` a 60 Hz seria o erro que este projeto
-   * evita em todo lugar. Como o hook do mixer é registrado ANTES do da entidade,
-   * ele lê o valor do quadro anterior — um quadro de atraso numa animação não
-   * tem consequência nenhuma.
+   * É um REF, não estado: quem sabe a taxa certa é o `useFrame` da
+   * entidade, e passar isso por `setState` a 60 Hz seria o erro que este
+   * projeto evita em todo lugar. Como o hook do mixer é registrado ANTES do
+   * da entidade, ele lê o valor do quadro anterior — um quadro de atraso
+   * numa animação não tem consequência nenhuma.
    *
-   * Sem o argumento, anima sempre (o próprio personagem, o retrato do HUD).
+   * Sem o argumento, anima sempre a 60 Hz (o próprio personagem, o retrato
+   * do HUD, monstro/NPC de demo sem culling de entidade).
    */
-  ativoRef?: React.RefObject<boolean> | React.MutableRefObject<boolean>,
+  taxaHzRef?: React.RefObject<number> | React.MutableRefObject<number>,
   /** qual conjunto de clips (ataque/conjuração) — a arma da classe decide, ver `entities/classModels` */
   family: WeaponFamily = "mage",
 ): CharacterHandle {
@@ -434,9 +442,27 @@ export function useCharacter(
     },
     [mixer, scene],
   );
+  /** acumulador de `dt` entre atualizações do mixer quando a taxa é reduzida
+   * — REF, nunca estado (mesmo motivo de `taxaHzRef`). Só usado abaixo de
+   * 60 Hz; no caminho comum (taxa cheia ou sem `taxaHzRef`) fica parado. */
+  const acumuladoRef = useRef(0);
   useFrame((_, dt) => {
-    // fora de vista, não anima (ver `ativoRef`)
-    if (ativoRef && ativoRef.current === false) return;
+    const hz = taxaHzRef ? taxaHzRef.current : 60;
+    // fora de vista (`0`/negativo) — nunca anima, mesmo comportamento de
+    // sempre do antigo `ativoRef === false`.
+    if (hz <= 0) return;
+    let dtEfetivo = dt;
+    if (hz < 60) {
+      // taxa reduzida: acumula `dt` até completar o intervalo da taxa e
+      // atualiza o mixer de UMA vez com o tempo acumulado — isso reduz a
+      // FREQUÊNCIA de `mixer.update` (o custo de CPU por segundo), não a
+      // VELOCIDADE da animação, que continua correndo em tempo real.
+      acumuladoRef.current += dt;
+      const intervaloS = intervalMsFor(hz) / 1000;
+      if (acumuladoRef.current < intervaloS) return;
+      dtEfetivo = acumuladoRef.current;
+      acumuladoRef.current = 0;
+    }
     mixer.timeScale = animSpeed.current; // "velocidade das animações" (editor do game)
     /**
      * CRONOMETRADO por entidade e SOMADO no quadro (`animacaoMs`).
@@ -448,10 +474,10 @@ export function useCharacter(
      */
     if (import.meta.env.DEV) {
       const t0 = performance.now();
-      mixer.update(dt);
+      mixer.update(dtEfetivo);
       somarCustoDeAnimacao(performance.now() - t0);
     } else {
-      mixer.update(dt);
+      mixer.update(dtEfetivo);
     }
   });
 

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { VfxInstanceRuntime, VfxWorldContext } from "../types";
 import type { VfxRenderer } from "./rendererTypes";
+import { computeIdleFlicker } from "./idleFlicker";
 
 /**
  * `renderer:"beam"` — coluna/raio: quad vertical esticado a partir da
@@ -189,7 +190,7 @@ export class BeamRenderer implements VfxRenderer {
     this.markColorDirty(index);
   }
 
-  onInstanceUpdate(instance: VfxInstanceRuntime): void {
+  onInstanceUpdate(instance: VfxInstanceRuntime, elapsedMs: number): void {
     const index = this.slots.get(instance.instanceId);
     if (index === undefined || !this.mesh) return;
     // "crítico = maior", mesmo campo universal que `SpriteRenderer`/
@@ -197,13 +198,23 @@ export class BeamRenderer implements VfxRenderer {
     // genérico" 2026-08-19) — um raio (Light Bolt) engrossa/alonga no
     // crítico pelo MESMO mecanismo, sem composição nova.
     const critScale = instance.spawnOptions.scale ?? 1;
-    const width = Number(instance.spawnOptions.payload?.width ?? 0.6) * instance.targetScale * critScale;
+    // `payload.idleFlicker` (loot rarity, 2026-08-21) — MESMO envelope que
+    // `SpriteRenderer` já usa (`idleFlicker.ts`, genérico por renderer, só
+    // lia `spawnOptions.payload` até agora); ausente = `{1,1,0}`, exatamente
+    // o comportamento de sempre pra Thunder Storm/Light Bolt/Frost Diver e
+    // qualquer outro `beam` existente, que nunca passam este campo.
+    const idle = computeIdleFlicker(instance, elapsedMs);
+    const width = Number(instance.spawnOptions.payload?.width ?? 0.6) * instance.targetScale * critScale * idle.scaleMul;
     const height = Number(instance.spawnOptions.payload?.height ?? 3) * instance.targetScale * critScale;
     _position.set(instance.position.x, instance.position.y, instance.position.z);
     _scale.set(width, height, 1);
     this.matrix.compose(_position, _quaternion, _scale);
     this.mesh.setMatrixAt(index, this.matrix);
     this.markMatrixDirty(index);
+    if (idle.opacityMul !== 1) {
+      this.opacityAttr[index] = idle.opacityMul;
+      this.markColorDirty(index);
+    }
   }
 
   onInstanceDestroy(instance: VfxInstanceRuntime): void {

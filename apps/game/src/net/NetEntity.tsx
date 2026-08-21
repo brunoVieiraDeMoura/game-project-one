@@ -26,6 +26,13 @@ import { atacar, castarEmAlvo } from "./acoes";
 import { pulsoDe } from "./combatAnim";
 import { PROPS_GROUP } from "../play/GroundInteract";
 import { TERRAIN_GROUP, temLinhaDeVisada } from "../play/pickGround";
+import { estaMeAtacando } from "./ameacas";
+import {
+  DEFAULT_IMPORTANCE_RATES,
+  DEFAULT_IMPORTANCE_THRESHOLDS,
+  importanceTierFor,
+  updateRateFor,
+} from "../core/importancia";
 
 /** de quanto em quanto tempo o `__netEntities` do DEV é atualizado */
 const DBG_INTERVALO_MS = 500;
@@ -56,6 +63,17 @@ const HITBOX_ALTURA = 1.25;
  * puro) para o vermelho realmente ler como vermelho de longe.
  */
 const GLOW_INIMIGO = "#e0402a";
+
+/**
+ * T3 (Animation LOD, `core/importancia.ts`) — thresholds/taxas por default
+ * NO-OP (`Infinity`/todo tier a 60Hz), mesma regra de `vfx/core/lod.ts`:
+ * "não quero calibrar no chute". O mecanismo fica pronto (mixer de mob
+ * longe já pode correr mais devagar); os números viram reais quando um
+ * benchmark headed (`VFX_BENCH_HEADED=1`) medir o ganho contra o custo
+ * visual de verdade.
+ */
+const ANIMATION_LOD_THRESHOLDS = DEFAULT_IMPORTANCE_THRESHOLDS;
+const ANIMATION_LOD_RATES = DEFAULT_IMPORTANCE_RATES;
 
 /**
  * Uma entidade do servidor desenhada na cena.
@@ -118,15 +136,16 @@ export function NetEntityView({
         ? { character: classModel!.character, scale: classModel!.scale }
         : mobModel(entity?.job ?? 0);
   /**
-   * "Esta entidade está à vista?" — escrito no `useFrame` abaixo, lido pelo
-   * mixer de animação (ver `assets.useCharacter`). Começa `true` para o primeiro
-   * quadro não nascer congelado.
+   * Taxa (Hz) em que o mixer desta entidade deve avançar — escrita no
+   * `useFrame` abaixo, lida pelo mixer de animação (ver
+   * `assets.useCharacter`, T3 "Animation LOD"). Começa em 60 para o primeiro
+   * quadro não nascer congelado nem "devagar".
    */
-  const aVista = useRef(true);
+  const taxaAnimacao = useRef(60);
   const { scene, play, playOnce } = useCharacter(
     CHARACTER_URLS[modelInfo.character],
     animationSpeed,
-    aVista,
+    taxaAnimacao,
     classModel?.family ?? "mage",
   );
   /**
@@ -251,12 +270,31 @@ export function NetEntityView({
     const cam = estado.camera.position;
     const dx = world.x - cam.x;
     const dz = world.z - cam.z;
-    const visivel = dx * dx + dz * dz <= raioEntidade * raioEntidade;
+    const distQuadCam = dx * dx + dz * dz;
+    const visivel = distQuadCam <= raioEntidade * raioEntidade;
     if (g.visible !== visivel) g.visible = visivel;
-    // o mixer de animação lê isto no quadro seguinte: o three pula sozinho o
-    // desenho e a sombra do que está invisível, mas o mixer é nosso
-    aVista.current = visivel;
-    if (!visivel) return;
+    if (!visivel) {
+      // fora de vista — o mixer de animação lê isto no quadro seguinte
+      // (`assets.useCharacter`): o three pula sozinho o desenho e a sombra
+      // do que está invisível, mas o mixer é nosso (T3, taxa 0 = nunca).
+      taxaAnimacao.current = 0;
+      return;
+    }
+    /**
+     * T3 (Animation LOD) — visível, mas quão importante AGORA?
+     *
+     * `isCritical` (alvo selecionado OU está te atacando, `net/ameacas`)
+     * nunca degrada: é quem o jogador está olhando ou de quem está
+     * apanhando, mesmo se a câmera girar e ele ficar tecnicamente mais
+     * longe por um instante. Thresholds/taxas em `ANIMATION_LOD_*` —
+     * no-op (todo tier a 60Hz) até calibração real (ver docblock acima).
+     */
+    const critico = useWorldStore.getState().target === gid || estaMeAtacando(gid, now);
+    const tier = importanceTierFor(
+      { isSelf: false, isCritical: critico, distanceToCamera: Math.sqrt(distQuadCam) },
+      ANIMATION_LOD_THRESHOLDS,
+    );
+    taxaAnimacao.current = updateRateFor(tier, ANIMATION_LOD_RATES);
 
     // Vira para onde está andando. Usa o deslocamento real do frame em vez do
     // `dir` do pacote: o rAthena só manda direção em alguns pacotes, e o
